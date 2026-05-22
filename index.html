@@ -35,6 +35,7 @@ main{max-width:1280px;margin:0 auto;padding:16px}
 .kpi-sub{font-size:10px;color:#aaa;margin-top:3px}
 .form-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 @media(max-width:600px){.form-row{grid-template-columns:1fr}}
+.form-row.cols2{grid-template-columns:repeat(2,1fr)}
 .form-row.cols3{grid-template-columns:repeat(3,1fr)}
 .form-row.cols4{grid-template-columns:repeat(4,1fr)}
 .fg{display:flex;flex-direction:column;gap:3px}
@@ -248,21 +249,22 @@ tr.total td{background:var(--light);font-weight:700}
       </div>
 
       <!-- 구역6: 경비 -->
-      <div class="sec">⑥ 경비 합계 입력 (백만원)</div>
-      <div class="warn-box">💡 노무비 총계는 ERP 파싱값(임금1~5)에 급여·잡급·퇴직급여를 더한 전체 금액을 직접 입력하세요. 나머지는 ERP에서 자동 파싱된 값으로 배부됩니다.</div>
-      <div class="form-row cols4">
-        <div class="fg"><label>원재료비 합계 (검증용)</label><input type="number" id="exp-raw" step="0.01" placeholder="예: 342.2" style="background:var(--input)"></div>
-        <div class="fg"><label>부재료비 합계 (검증용)</label><input type="number" id="exp-sub" step="0.01" placeholder="예: 26.4" style="background:var(--input)"></div>
-        <div class="fg"><label>경비 합계</label><input type="number" id="exp-exp" step="0.01" placeholder="예: 186.4" style="background:var(--input)"></div>
-        <div class="fg"><label>생산금액 합계</label><input type="number" id="exp-prod" step="0.01" placeholder="예: 893.2" style="background:var(--input)"></div>
-      </div>
-      <div class="form-row cols4" style="margin-top:8px">
+      <div class="sec">⑥ 경비·노무비 입력 (원 단위)</div>
+      <div class="warn-box">💡 ERP 최종마감 금액을 <b>원 단위 그대로</b> 입력하세요 (반올림 없이). 노무비 총계 = 임금(1~5) + 급여 + 잡급 + 퇴직급여. 원재료비·부재료비는 BOM으로 자동계산되므로 검증용입니다.</div>
+      <div class="form-row cols2">
         <div class="fg">
-          <label>노무비 총계 (백만원) *</label>
-          <input type="number" id="exp-labor" step="0.01" placeholder="예: 103.9"
+          <label>경비 합계 (원) *</label>
+          <input type="number" id="exp-exp" step="1" placeholder="예: 186382323"
+            style="background:var(--input);border-color:#1D9E75;border-width:2px">
+        </div>
+        <div class="fg">
+          <label>노무비 총계 (원) *</label>
+          <input type="number" id="exp-labor" step="1" placeholder="예: 103882088"
             oninput="updateLaborCalc()"
             style="background:var(--input);border-color:#1D9E75;border-width:2px">
         </div>
+      </div>
+      <div class="form-row cols3" style="margin-top:8px">
         <div class="fg">
           <label>ERP 파싱 임금(1~5) — 참고</label>
           <div class="calc-val" id="exp-labor-calc">—</div>
@@ -272,6 +274,12 @@ tr.total td{background:var(--light);font-weight:700}
           <div class="calc-val" id="exp-labor-gap">—</div>
         </div>
         <div class="fg"><label>비고</label><input type="text" id="exp-note" placeholder="특이사항"></div>
+      </div>
+      <div class="sec" style="font-size:11px;margin-top:12px">검증용 (선택 입력 — BOM 계산값과 비교)</div>
+      <div class="form-row cols3">
+        <div class="fg"><label>원재료비 합계 (원, 검증용)</label><input type="number" id="exp-raw" step="1" placeholder="예: 342236946" style="background:var(--gray)"></div>
+        <div class="fg"><label>부재료비 합계 (원, 검증용)</label><input type="number" id="exp-sub" step="1" placeholder="예: 26398419" style="background:var(--gray)"></div>
+        <div class="fg"><label>생산금액 합계 (원, 참고용)</label><input type="number" id="exp-prod" step="1" placeholder="예: 893201372" style="background:var(--gray)"></div>
       </div>
 
       <!-- 원가 미리보기 -->
@@ -759,7 +767,7 @@ window.parseErpQty = async () => {
 // 노무비 총계 입력 시 갭 자동계산
 // ════════════════════════════════════
 window.updateLaborCalc = function() {
-  const total = (parseFloat(document.getElementById('exp-labor').value) || 0) * 1000000;
+  const total = parseFloat(document.getElementById('exp-labor').value) || 0;
   const erp = window._parsed.erp;
   const erpTotal = erp ? (erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0) : 0;
   const gap = total - erpTotal;
@@ -1043,8 +1051,8 @@ window.saveAllData = async () => {
   const inv=window._parsed.inv;
   if(!prod&&!labor&&!inv){showToast('❌ 붙여넣기 데이터가 없습니다');return;}
 
-  const laborTotal=(parseFloat(document.getElementById('exp-labor').value)||0)*1000000;
-  const raw=parseFloat(document.getElementById('exp-raw').value)||0;
+  const laborTotal=parseFloat(document.getElementById('exp-labor').value)||0;
+  const raw=parseFloat(document.getElementById('exp-raw').value)||0; // 원단위
   const sub=parseFloat(document.getElementById('exp-sub').value)||0;
   const exp=parseFloat(document.getElementById('exp-exp').value)||0;
   const prodAmt=parseFloat(document.getElementById('exp-prod').value)||0;
@@ -1132,7 +1140,7 @@ window.loadExistingData = async () => {
   const snap=await getDoc(doc(db,'costData',month));
   if(!snap.exists())return;
   const d=snap.data();
-  document.getElementById('exp-labor').value=d.laborTotal?d.laborTotal/1000000:(d.erpLabor?.total?d.erpLabor.total/1000000:'');
+  document.getElementById('exp-labor').value=d.laborTotal||(d.erpLabor?.total||'');
   document.getElementById('exp-raw').value=d.raw||'';
   document.getElementById('exp-sub').value=d.sub||'';
   document.getElementById('exp-exp').value=d.exp||'';
@@ -1226,7 +1234,7 @@ window.loadProducts = async () => {
   const laborQtyBase=erp4+erp5+(erpOther>0?erpOther:0); // 수량배부
 
   // 경비 총액
-  const exp=(d.exp||0)*1000000;
+  const exp=(d.exp||0); // 원단위
 
   // 노무비 중량배부용: 저장된 제품별 투입원육 (누락보정 완료된 값)
   // 분모는 ERP수량 있는 제품의 투입원육 합계로 한정 → 배부누락 방지
@@ -1259,13 +1267,12 @@ window.loadProducts = async () => {
         else if(mat.mcode[0]==='4'||mat.mcode[0]==='5') subCost+=amt;
       }
     }
-    // 노무비: 중량배부(임금1~3) + 수량배부(임금4~5+기타)
-    const isQtyOnly=m&&m.laborRule==='qty_only';
+    // 노무비: 중량배부(임금1~3, 원육비율) + 수량배부(임금4~5+급여+잡급+퇴직, 수량비율)
+    // 메추리알 등 원육 없는 제품은 meatShare=0 → 자동으로 수량배부만 받음
     const meatShare=totalMeatKg>0?(meatInByCode[code]||0)/totalMeatKg:0;
     const qtyShare=totalQty>0?qty/totalQty:0;
-    const laborAlloc=laborTotal>0
-      ?(isQtyOnly?laborTotal*qtyShare:laborMeat*meatShare+laborQtyBase*qtyShare)
-      :0;
+    const isQtyOnly=!meatInByCode[code]; // 원육 0이면 수량배부만 (표시용)
+    const laborAlloc=laborMeat*meatShare+laborQtyBase*qtyShare;
     // 경비: 수량 비중 배부
     const expCost=exp*qtyShare;
 
@@ -1315,20 +1322,25 @@ window.loadHistory = async () => {
   const tbody=document.getElementById('history-body');
   if(!rows.length){tbody.innerHTML='<tr><td colspan="13" class="empty">데이터가 없습니다.</td></tr>';return;}
   tbody.innerHTML=rows.map((r,i)=>{
-    const laborTotal=r.erpLabor?.total||0;
-    const total=(r.raw||0)+(r.sub||0)+laborTotal+(r.exp||0);
-    const rate=r.prodAmt>0?total/r.prodAmt:0;
-    const rRaw=total>0?(r.raw||0)/total:0;
-    const rExp=total>0?(r.exp||0)/total:0;
+    // 모든 금액 원 단위
+    const laborTotal=r.laborTotal||r.erpLabor?.total||0;
+    const rawV=r.raw||0, subV=r.sub||0, expV=r.exp||0, prodV=r.prodAmt||0;
+    const total=rawV+subV+laborTotal+expV;
+    const rate=prodV>0?total/prodV:0;
+    const rRaw=total>0?rawV/total:0;
+    const rLabor=total>0?laborTotal/total:0;
     const prev=i>0?rows[i-1]:null;
-    const prevRate=prev&&prev.prodAmt>0?((prev.raw||0)+(prev.sub||0)+(prev.exp||0))/prev.prodAmt:null;
+    const prevLabor=prev?(prev.laborTotal||prev.erpLabor?.total||0):0;
+    const prevTotal=prev?((prev.raw||0)+(prev.sub||0)+prevLabor+(prev.exp||0)):0;
+    const prevRate=prev&&prev.prodAmt>0?prevTotal/prev.prodAmt:null;
     const diff=prevRate!==null?rate-prevRate:null;
+    const M=v=>fmt(v/1000000,1); // 백만원 표시
     return `<tr>
       <td class="c">${r.month}</td>
-      <td>${fmt(r.prodAmt,1)}</td><td>${fmt(r.raw)}</td><td>${fmt(r.sub)}</td>
-      <td>${laborTotal>0?fmt(laborTotal/1000000):'—'}</td><td>${fmt(r.exp)}</td><td>${fmt(total/1000000)}</td>
+      <td>${M(prodV)}</td><td>${M(rawV)}</td><td>${M(subV)}</td>
+      <td>${laborTotal>0?M(laborTotal):'—'}</td><td>${M(expV)}</td><td>${M(total)}</td>
       <td class="c ${rC(rate)}">${fmtP(rate)}</td>
-      <td class="c">${fmtP(rRaw)}</td><td class="c">—</td>
+      <td class="c">${fmtP(rRaw)}</td><td class="c">${fmtP(rLabor)}</td>
       <td class="c ${diff!=null?(diff>0?'bad':'ok'):''}">${diff!=null?(diff>=0?'+':'')+((diff)*100).toFixed(1)+'%p':'—'}</td>
       <td class="l">${r.note||''}</td>
       <td class="c">
@@ -1371,9 +1383,11 @@ window.loadDashboard = async () => {
     return;
   }
   const d=snap.data();
-  const total=(d.raw||0)+(d.sub||0)+(d.exp||0);
+  const dLabor=d.laborTotal||d.erpLabor?.total||0;
+  const total=(d.raw||0)+(d.sub||0)+dLabor+(d.exp||0);
   const rate=d.prodAmt>0?total/d.prodAmt:0;
-  document.getElementById('kpi-prod').textContent=fmt(d.prodAmt,1);
+  const M=v=>fmt(v/1000000,1);
+  document.getElementById('kpi-prod').textContent=M(d.prodAmt||0);
   document.getElementById('kpi-rate').textContent=fmtP(rate);
   document.getElementById('kpi-rate').className='kpi-val '+rC(rate);
 
@@ -1381,7 +1395,9 @@ window.loadDashboard = async () => {
   const pm=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;
   const prevSnap=await getDoc(doc(db,'costData',pm));
   const prev=prevSnap.exists()?prevSnap.data():null;
-  const prevRate=prev?((prev.raw||0)+(prev.sub||0)+(prev.exp||0))/(prev.prodAmt||1):null;
+  const prevLabor=prev?(prev.laborTotal||prev.erpLabor?.total||0):0;
+  const prevTotal=prev?((prev.raw||0)+(prev.sub||0)+prevLabor+(prev.exp||0)):0;
+  const prevRate=prev&&prev.prodAmt>0?prevTotal/prev.prodAmt:null;
   const diff=prevRate!==null?rate-prevRate:null;
   document.getElementById('kpi-diff').textContent=diff!==null?(diff>=0?'+':'')+((diff*100).toFixed(1))+'%p':'—';
 
@@ -1392,21 +1408,20 @@ window.loadDashboard = async () => {
   document.getElementById('kpi-status').textContent=
     [hasProd&&'생산',hasLabor&&'근무',hasInv&&'재고',(d.exp||d.raw)&&'경비'].filter(Boolean).join('·')||'미입력';
 
-  // 원가 구성
-  const items=[['원재료비',d.raw||0,prev?.raw],['부재료비',d.sub||0,prev?.sub],['노무비','—',prev],['경비',d.exp||0,prev?.exp],['합계',total,prev?((prev.raw||0)+(prev.sub||0)+(prev.exp||0)):null]];
+  // 원가 구성 (원 단위, 백만원 표시)
+  const items=[['원재료비',d.raw||0,prev?.raw||0],['부재료비',d.sub||0,prev?.sub||0],['노무비',dLabor,prevLabor],['경비',d.exp||0,prev?.exp||0],['합계',total,prevTotal]];
   document.getElementById('dashCostBody').innerHTML=items.map(([label,cv,pv])=>{
     const isT=label==='합계';
-    const cr=total>0&&cv!=='—'?cv/total:0;
-    const pTotal=prev?((prev.raw||0)+(prev.sub||0)+(prev.exp||0)):0;
-    const pr=pTotal>0&&pv&&pv!=='—'?pv/pTotal:0;
-    const diff=cv!=='—'&&pv&&pv!=='—'?cv-pv:null;
+    const cr=total>0?cv/total:0;
+    const pr=prevTotal>0&&pv?pv/prevTotal:0;
+    const dF=pv?cv-pv:null;
     return `<tr ${isT?'class="total"':''}>
       <td class="c">${label}</td>
-      <td>${cv==='—'?'—':fmt(cv)}</td>
-      <td class="c">${cv==='—'?'—':fmtP(isT?rate:cr)}</td>
-      <td>${pv&&pv!=='—'?fmt(pv):'—'}</td>
-      <td class="c">${pv&&pv!=='—'?fmtP(isT?prevRate:pr):'—'}</td>
-      <td class="c ${diff!=null?(diff>0?'bad':'ok'):''}">${diff!=null?(diff>=0?'+':'')+fmt(diff):'—'}</td>
+      <td>${M(cv)}</td>
+      <td class="c">${fmtP(isT?rate:cr)}</td>
+      <td>${pv?M(pv):'—'}</td>
+      <td class="c">${pv?fmtP(isT?prevRate:pr):'—'}</td>
+      <td class="c ${dF!=null?(dF>0?'bad':'ok'):''}">${dF!=null?(dF>=0?'+':'')+M(dF):'—'}</td>
     </tr>`;
   }).join('');
 
@@ -1434,7 +1449,7 @@ window.loadDashboard = async () => {
   };
   document.getElementById('dashProdBody').innerHTML=Object.entries(byName).map(([name,v])=>{
     const m_=findM(name);const share=totalMeat>0?v.meatIn/totalMeat:0;
-    const rawC=(d.raw||0)*1000000*share;const subC=(d.sub||0)*1000000*share;const expC=(d.exp||0)*1000000*share;
+    const rawC=(d.raw||0)*share;const subC=(d.sub||0)*share;const expC=(d.exp||0)*share;
     const totC=rawC+subC+expC;
     const sp=m_?m_.supplyPrice:0;
     const estQty=m_&&m_.weight>0?Math.round(v.meatOut*1000/(m_.weight*0.47)):0;
