@@ -193,7 +193,7 @@ tr.total td{background:var(--light);font-weight:700}
       <div class="sec">③ 재고평가 붙여넣기 (더존 ERP)</div>
       <div class="paste-box">
         <div class="pb-title">📋 더존 재고평가 엑셀 → 전체 복사 → 아래 붙여넣기</div>
-        <div class="pb-desc">원자재·부자재 계정구분 품목의 단가를 자동 추출합니다. (기초금액+입고금액)÷(기초수량+입고량) = 평균단가</div>
+        <div class="pb-desc">재고평가 전체를 붙여넣으면 자재별 <b>출고금액(그달 실제 소비액)</b>을 자동 추출합니다. BOM 비율로 제품별 배부됩니다.</div>
         <textarea id="paste-inv" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
         <div class="btn-row">
           <button class="btn btn-ok btn-sm" onclick="parseInventory()">⚡ 단가 추출</button>
@@ -203,7 +203,7 @@ tr.total td{background:var(--light);font-weight:700}
       </div>
       <div id="inv-table-wrap" style="display:none">
         <div class="tbl-wrap"><table>
-          <thead><tr><th>품목코드</th><th style="min-width:180px">품목명</th><th>계정</th><th>단위</th><th>평균단가(원)</th></tr></thead>
+          <thead><tr><th>품목코드</th><th style="min-width:180px">품목명</th><th>계정</th><th>단위</th><th>출고금액(원)</th></tr></thead>
           <tbody id="inv-table-body"></tbody>
         </table></div>
       </div>
@@ -377,6 +377,27 @@ tr.total td{background:var(--light);font-weight:700}
       </table></div>
     </div>
   </div>
+
+  <!-- BOM 관리 -->
+  <div class="card">
+    <div class="card-hdr">🧬 BOM 관리 (자재 구성)</div>
+    <div class="card-body">
+      <div class="info-box">제품별 BOM(자재 구성 + 원물양/EA)은 원·부재료비 계산의 기준입니다. 레시피 변경 시 여기서 수정하세요. 원물양/EA는 제품 1개당 자재 소요량(반제품 중량 기준)입니다.</div>
+      <div class="form-row" style="margin-bottom:10px">
+        <div class="fg"><label>제품 선택</label>
+          <select id="bom-product" onchange="loadBomEditor()"><option value="">— 제품 선택 —</option></select>
+        </div>
+        <div class="fg" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:8px">
+          <button class="btn btn-ok" onclick="saveBom()">💾 BOM 저장</button>
+          <button class="btn btn-primary btn-sm" onclick="addBomRow()">+ 자재 추가</button>
+        </div>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>자재코드</th><th style="min-width:220px">자재명</th><th>원물양/EA</th><th>구분</th><th>관리</th></tr></thead>
+        <tbody id="bom-editor-body"><tr><td colspan="5" class="empty">제품을 선택하세요</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
 </div>
 
 </main>
@@ -401,6 +422,7 @@ const db = getFirestore(app);
 // ── 전역 상태
 window._db = db;
 window._masters = [];
+window._bom = {};
 window._parsed = { prod: null, labor: null, inv: null, erp: null, erpQty: null };
 
 // ── 유틸
@@ -426,7 +448,7 @@ window.goTab = (name,btn) => {
   if(name==='dashboard') loadDashboard();
   if(name==='products')  loadProducts();
   if(name==='history')   loadHistory();
-  if(name==='settings')  loadMaster();
+  if(name==='settings')  { loadMaster(); loadBomProductList(); }
   if(name==='input')     loadExistingData();
 };
 
@@ -463,6 +485,11 @@ async function ensureMasters() {
   if(window._masters.length) return;
   const s = await getDocs(query(collection(db,'products'),orderBy('code')));
   s.forEach(d=>window._masters.push({id:d.id,...d.data()}));
+}
+async function ensureBom() {
+  if(Object.keys(window._bom).length) return;
+  const s = await getDocs(collection(db,'bom'));
+  s.forEach(d=>{window._bom[d.id]={...d.data()};});
 }
 async function loadMaster() {
   await loadRate();
@@ -536,6 +563,54 @@ window.recalcAllSupply = async () => {
     await setDoc(doc(db,'products',p.code),{...p,supplyPrice:Math.round(p.consumerPrice*r/100)});
   }
   showToast('✅ 전체 재계산 완료'); loadMaster();
+};
+
+// ════════════════════════════════════
+// BOM 관리
+// ════════════════════════════════════
+window._bomEditing = [];
+async function loadBomProductList() {
+  await ensureMasters();
+  await ensureBom();
+  const sel=document.getElementById('bom-product');
+  if(!sel)return;
+  sel.innerHTML='<option value="">— 제품 선택 —</option>' +
+    window._masters.map(m=>`<option value="${m.code}">${m.code} ${m.name}${window._bom[m.code]?' ✅':' (BOM없음)'}</option>`).join('');
+}
+window.loadBomEditor = () => {
+  const code=document.getElementById('bom-product').value;
+  const tbody=document.getElementById('bom-editor-body');
+  if(!code){tbody.innerHTML='<tr><td colspan="5" class="empty">제품을 선택하세요</td></tr>';return;}
+  const b=window._bom[code];
+  window._bomEditing = b ? JSON.parse(JSON.stringify(b.mats||[])) : [];
+  renderBomEditor();
+};
+function renderBomEditor() {
+  const tbody=document.getElementById('bom-editor-body');
+  if(!window._bomEditing.length){tbody.innerHTML='<tr><td colspan="5" class="empty">자재가 없습니다. [+ 자재 추가]를 눌러주세요.</td></tr>';return;}
+  tbody.innerHTML=window._bomEditing.map((m,i)=>{
+    const kind=m.mcode[0]==='1'?'원자재':m.mcode[0]==='2'?'반제품':m.mcode[0]==='4'?'부자재(파우치)':m.mcode[0]==='5'?'부자재(박스)':'기타';
+    return `<tr>
+      <td class="c"><input value="${m.mcode}" onchange="updBom(${i},'mcode',this.value)" style="width:80px;text-align:center;border:1px solid #ccc;border-radius:4px;padding:3px"></td>
+      <td class="l"><input value="${(m.mname||'').replace(/"/g,'&quot;')}" onchange="updBom(${i},'mname',this.value)" style="width:100%;border:1px solid #ccc;border-radius:4px;padding:3px"></td>
+      <td><input type="number" step="0.00000001" value="${m.perEa}" onchange="updBom(${i},'perEa',this.value)" style="width:110px;text-align:right;border:1px solid #ccc;border-radius:4px;padding:3px"></td>
+      <td class="c" style="color:#888">${kind}</td>
+      <td class="c"><button class="btn btn-bad btn-sm" onclick="delBomRow(${i})">삭제</button></td>
+    </tr>`;
+  }).join('');
+}
+window.updBom=(i,field,val)=>{ window._bomEditing[i][field]=field==='perEa'?parseFloat(val)||0:val.trim(); };
+window.addBomRow=()=>{ window._bomEditing.push({mcode:'',mname:'',perEa:0}); renderBomEditor(); };
+window.delBomRow=(i)=>{ window._bomEditing.splice(i,1); renderBomEditor(); };
+window.saveBom = async () => {
+  const code=document.getElementById('bom-product').value;
+  if(!code){showToast('❌ 제품을 선택하세요');return;}
+  const m=window._masters.find(x=>x.code===code);
+  const mats=window._bomEditing.filter(x=>x.mcode&&x.perEa>0);
+  await setDoc(doc(db,'bom',code),{code,name:m?m.name:code,mats});
+  window._bom[code]={code,name:m?m.name:code,mats};
+  showToast(`✅ ${code} BOM 저장 (자재 ${mats.length}종)`);
+  loadBomProductList();
 };
 
 // ════════════════════════════════════
@@ -827,8 +902,8 @@ window.parseInventory = () => {
   const raw=document.getElementById('paste-inv').value.trim();
   if(!raw){showToast('❌ 데이터를 붙여넣기 하세요');return;}
   const rows=raw.split('\n').map(r=>r.split('\t').map(c=>c.trim()));
-  // 헤더 찾기
-  let headerIdx=-1,codeCol=-1,nameCol=-1,acctCol=-1,unitCol=-1,initQtyCol=-1,initAmtCol=-1,inQtyCol=-1,inAmtCol=-1;
+  // 헤더 찾기 (출고금액 기준)
+  let headerIdx=-1,codeCol=-1,nameCol=-1,acctCol=-1,unitCol=-1,outAmtCol=-1,outQtyCol=-1;
   for(let i=0;i<Math.min(rows.length,5);i++){
     const row=rows[i];
     const cc=row.findIndex(c=>c==='품목'||c==='품목코드');
@@ -837,50 +912,46 @@ window.parseInventory = () => {
     if(cc>=0&&nc>=0&&ac>=0){
       headerIdx=i;codeCol=cc;nameCol=nc;acctCol=ac;
       unitCol=row.findIndex(c=>c==='재고단위');
-      initQtyCol=row.findIndex(c=>c==='기초수량');
-      initAmtCol=row.findIndex(c=>c==='기초금액');
-      inQtyCol=row.findIndex(c=>c==='입고량'||c==='입고수량');
-      inAmtCol=row.findIndex(c=>c==='입고금액');
+      outQtyCol=row.findIndex(c=>c==='출고수량'||c==='출고량');
+      outAmtCol=row.findIndex(c=>c==='출고금액');
       break;
     }
   }
+  // 재고평가 표준 컬럼: 품목(5)|품목명(6)|규격(7)|재고단위(8)|계정구분(9)|기초수량(10)|기초단가(11)|기초금액(12)|입고량(13)|입고금액(14)|출고수량(15)|출고금액(16) (0-index)
   const items=[];
   for(let i=(headerIdx>=0?headerIdx+1:1);i<rows.length;i++){
     const row=rows[i];
-    const code=String(row[codeCol]||'').replace(/'/g,'').trim();
-    const name=row[nameCol]||'';
-    const acct=row[acctCol]||'';
-    const unit=row[unitCol]||'';
+    const _cC = codeCol>=0?codeCol:(row.length>22?5:0);
+    const _nC = nameCol>=0?nameCol:(row.length>22?6:1);
+    const _aC = acctCol>=0?acctCol:(row.length>22?9:4);
+    const code=String(row[_cC]||'').replace(/'/g,'').trim();
+    const name=String(row[_nC]||'').trim();
+    const acct=String(row[_aC]||'').trim();
+    const unit=unitCol>=0?(row[unitCol]||''):(row.length>22?row[8]:row[3])||'';
     if(!code||!name)continue;
     if(!['원자재','부자재','원재료','부재료'].some(a=>acct.includes(a)))continue;
-    // 헤더로 컬럼 못찾으면 고정위치 사용 (품목(0)|품목명(1)|규격(2)|단위(3)|계정(4)|기초수량(5)|기초단가(6)|기초금액(7)|입고수량(8)|재고단가(9)|입고금액(10))
-    const _iQtyC = initQtyCol>=0 ? initQtyCol : 5;
-    const _iAmtC = initAmtCol>=0 ? initAmtCol : 7;
-    const _inQtyC = inQtyCol>=0 ? inQtyCol : 8;
-    const _inAmtC = inAmtCol>=0 ? inAmtCol : 10;
-    const initQty=parseFloat(String(row[_iQtyC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
-    const initAmt=parseFloat(String(row[_iAmtC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
-    const inQty=parseFloat(String(row[_inQtyC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
-    const inAmt=parseFloat(String(row[_inAmtC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
-    const totalQty=initQty+inQty;
-    const totalAmt=initAmt+inAmt;
-    if(totalAmt===0)continue;
-    const avgPrice=totalQty>0?totalAmt/totalQty:0;
-    items.push({code,name,acct,unit,avgPrice,totalQty,totalAmt});
+    // 출고금액 컬럼: 헤더로 찾거나, 28컬럼 전체본이면 col16(0-index), 축약본이면 끝에서 추정
+    let _oAmtC = outAmtCol>=0 ? outAmtCol : (row.length>22 ? 16 : -1);
+    let _oQtyC = outQtyCol>=0 ? outQtyCol : (row.length>22 ? 15 : -1);
+    const outAmt=_oAmtC>=0?(parseFloat(String(row[_oAmtC]||'0').replace(/,/g,'').replace(/\.$/,''))||0):0;
+    const outQty=_oQtyC>=0?(parseFloat(String(row[_oQtyC]||'0').replace(/,/g,'').replace(/\.$/,''))||0):0;
+    if(outAmt===0)continue;  // 출고 없는 자재 제외
+    items.push({code,name,acct,unit,outAmt,outQty});
   }
-  if(!items.length){showToast('❌ 원자재/부자재 데이터를 찾을 수 없습니다. 계정구분 컬럼을 확인하세요');return;}
+  if(!items.length){showToast('❌ 출고금액 데이터를 찾을 수 없습니다. 재고평가 전체(출고금액 포함)를 붙여넣어 주세요');return;}
   window._parsed.inv=items;
   const tbody=document.getElementById('inv-table-body');
   tbody.innerHTML=items.map(it=>`
     <tr><td class="c">${it.code}</td><td class="l">${it.name}</td>
     <td class="c">${it.acct}</td><td class="c">${it.unit}</td>
-    <td style="color:var(--ok);font-weight:700">${fmtN(Math.round(it.avgPrice))}</td></tr>`).join('');
+    <td style="color:var(--ok);font-weight:700">${fmtN(Math.round(it.outAmt))}</td></tr>`).join('');
   document.getElementById('inv-table-wrap').style.display='block';
   const rawItems=items.filter(it=>it.acct.includes('원'));
   const subItems=items.filter(it=>it.acct.includes('부'));
+  const totalOut=items.reduce((s,it)=>s+it.outAmt,0);
   const res=document.getElementById('inv-result');
   res.style.display='block';
-  res.innerHTML=`✅ 총 ${items.length}개 품목 단가 추출 — 원자재 ${rawItems.length}개 / 부자재 ${subItems.length}개`;
+  res.innerHTML=`✅ 총 ${items.length}개 자재 출고금액 추출 — 원자재 ${rawItems.length}개 / 부자재 ${subItems.length}개 / 합계 ${fmtN(Math.round(totalOut))}원`;
   updateStepIndicators();
 };
 
@@ -990,13 +1061,51 @@ window.saveAllData = async () => {
     prodByName[k].days.push(r.date);
   }
 
+  // ══ 제품코드별 투입원육 집계 (누락보정 + alias매칭) ══
+  await ensureMasters();
+  const findCode=(name)=>{
+    const nm=(name||'').trim();
+    for(const m of window._masters){
+      if((m.alias||[]).some(a=>nm===a||nm.includes(a)||a.includes(nm))) return m;
+    }
+    let best=null,bs=0;
+    for(const m of window._masters){
+      const kws=['시그니처','코스트코','트레이더스','미니','메추리알','FC','3kg','설도','홍두께','우둔'];
+      const sc=kws.filter(k=>nm.includes(k)&&m.name.includes(k)).length;
+      if(sc>bs){bs=sc;best=m;}
+    }
+    return best;
+  };
+  // 날짜별 그룹핑 (누락보정용)
+  const byDate={};
+  for(const r of actualProd){
+    if(!byDate[r.date])byDate[r.date]=[];
+    const m=findCode(r.prodName);
+    byDate[r.date].push({code:m?m.code:null, meatType:m?m.meatType:'', meatIn:r.meatIn, meatOut:r.meatOut});
+  }
+  // 제품코드별 투입원육 (보정 적용)
+  const meatInByCode={};
+  for(const [date,items] of Object.entries(byDate)){
+    for(const it of items){
+      if(!it.code||!it.meatType)continue; // 쇠고기류만
+      let mi=it.meatIn;
+      if(mi===0 && it.meatOut>0){
+        // 누락 → 같은날 같은원육종류 평균수율로 역산
+        let same=items.filter(x=>x.meatIn>0 && x.meatType===it.meatType).map(x=>x.meatOut/x.meatIn);
+        if(!same.length) same=items.filter(x=>x.meatIn>0 && x.meatType).map(x=>x.meatOut/x.meatIn);
+        if(same.length){ const avg=same.reduce((a,b)=>a+b,0)/same.length; mi=it.meatOut/avg; }
+      }
+      meatInByCode[it.code]=(meatInByCode[it.code]||0)+mi;
+    }
+  }
+
   const erp=window._parsed.erp;
   const erpQty=window._parsed.erpQty||{};
   await setDoc(doc(db,'costData',month),{
     month, raw, sub, exp, prodAmt, note,
     prodData: prod||[],
     laborData: labor||{},
-    invData: (inv||[]).map(({code,name,acct,unit,avgPrice})=>({code,name,acct,unit,avgPrice})),
+    invData: (inv||[]).map(({code,name,acct,unit,outAmt,outQty})=>({code,name,acct,unit,outAmt,outQty})),
     erpLabor: erp ? {
       임금1:erp[1]||0, 임금2:erp[2]||0, 임금3:erp[3]||0,
       임금4:erp[4]||0, 임금5:erp[5]||0,
@@ -1004,6 +1113,7 @@ window.saveAllData = async () => {
       total:laborTotal>0 ? laborTotal : (erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0)+(erp['급여']||0)+(erp['잡급']||0)+(erp['퇴직']||0)
     } : null,
     prodByName,
+    meatInByCode,
     laborTotal,
     erpQty,
     updatedAt: new Date().toISOString()
@@ -1073,106 +1183,126 @@ window.loadProducts = async () => {
   const month=document.getElementById('prodMonth').value||thisMonth();
   document.getElementById('prodMonth').value=month;
   await ensureMasters();
+  await ensureBom();
   const snap=await getDoc(doc(db,'costData',month));
   const tbody=document.getElementById('prod-detail-body');
   if(!snap.exists()){tbody.innerHTML='<tr><td colspan="10" class="empty">해당 월 데이터가 없습니다.</td></tr>';return;}
   const d=snap.data();
-  const actualProd=(d.prodData||[]).filter(r=>r.isActual);
-  if(!actualProd.length){tbody.innerHTML='<tr><td colspan="10" class="empty">생산 실적 데이터가 없습니다.</td></tr>';return;}
 
-  // 제품별 원육 중량·일수 집계
-  // 생산량 집계: 날짜별 원육중량 집계 (노무비 배부용)
-  const byName={};
-  for(const r of actualProd){
-    if(!byName[r.prodName])byName[r.prodName]={meatIn:0,meatOut:0,days:0};
-    byName[r.prodName].meatIn+=r.meatIn;
-    byName[r.prodName].meatOut+=r.meatOut;
-    byName[r.prodName].days++;
-  }
-
-  const findM_=(name)=>{
-    const nm=name.trim();
-    for(const m of window._masters){
-      if((m.alias||[]).some(a=>nm===a||nm.includes(a)||a.includes(nm))) return m;
-    }
-    let best=null,bs=0;
-    for(const m of window._masters){
-      const kws=['시그니처','코스트코','트레이더스','미니','메추리알','FC','3kg','설도','홍두께','우둔'];
-      const sc=kws.filter(k=>nm.includes(k)&&m.name.includes(k)).length;
-      if(sc>bs){bs=sc;best=m;}
-    }
-    return best;
-  };
-
-  // 원육 총 중량 (노무비 중량배부 기준 - 메추리알 제외)
-  const totalMeatIn=Object.entries(byName).reduce((s,[name,v])=>{
-    const m_=findM_(name);
-    return s+(m_&&m_.meatType?v.meatIn:0);
-  },0);
-
-  // ERP 생산실적 (품목코드별 수량)
+  // ERP 생산실적 (품목코드별 수량) — 원가계산의 기준
   const erpQty=d.erpQty||{};
-  const totalErpQty=Object.values(erpQty).reduce((s,v)=>s+v,0);
-  const raw=d.raw||0; const sub=d.sub||0;
-  const exp=d.exp||0; const prodAmt=d.prodAmt||0;
-
-  // ERP 노무비 데이터
-  const erpLabor=d.erpLabor||{};
-  const laborTotal=d.laborTotal||d.erpLabor?.total||0;
-  const erp1=(erpLabor.임금1||0),erp2=(erpLabor.임금2||0),erp3=(erpLabor.임금3||0);
-  const erp4=(erpLabor.임금4||0),erp5=(erpLabor.임금5||0);
-  const erpOther=laborTotal>0?laborTotal-(erp1+erp2+erp3+erp4+erp5):0;
-  const laborMeat=erp1+erp2+erp3;
-  const laborQtyBase=erp4+erp5+(erpOther>0?erpOther:0);
-
-  // 마스터 코드→제품 맵
-  const masterMap={};
-  window._masters.forEach(m=>masterMap[m.code]=m);
-
-  // ERP 수량 기준으로 행 생성
   if(!Object.keys(erpQty).length){
     tbody.innerHTML='<tr><td colspan="10" class="empty">⑤ ERP 생산실적 데이터가 없습니다. 데이터 입력 탭에서 붙여넣기 해주세요.</td></tr>';
     return;
   }
 
+  // 재고평가 출고금액 맵 (자재코드 → 출고금액)
+  const outAmt={};
+  (d.invData||[]).forEach(it=>{ outAmt[it.code]=(it.outAmt||0); });
+
+  // ══ BOM 4단계 계산 ══
+  // ① 이론사용량 = perEa × 생산수량 (제품별·자재별)
+  // ② 이론총사용량 = 자재별 모든제품 이론사용량 합
+  // ③ 비율 = 이론사용량 / 이론총사용량
+  // ④ 금액 = 비율 × 출고금액
+  const bom=window._bom;
+  // ② 이론총사용량
+  const theoryTotal={};
+  for(const [code,qty] of Object.entries(erpQty)){
+    const b=bom[code];
+    if(!b)continue;
+    for(const m of (b.mats||[])){
+      theoryTotal[m.mcode]=(theoryTotal[m.mcode]||0)+(m.perEa||0)*qty;
+    }
+  }
+
+  // 노무비 데이터
+  const erpLabor=d.erpLabor||{};
+  const laborTotal=d.laborTotal||d.erpLabor?.total||0;
+  const erp1=(erpLabor.임금1||0),erp2=(erpLabor.임금2||0),erp3=(erpLabor.임금3||0);
+  const erp4=(erpLabor.임금4||0),erp5=(erpLabor.임금5||0);
+  const erpOther=laborTotal>0?laborTotal-(erp1+erp2+erp3+erp4+erp5):0;
+  const laborMeat=erp1+erp2+erp3;          // 중량배부 (임금1~3)
+  const laborQtyBase=erp4+erp5+(erpOther>0?erpOther:0); // 수량배부
+
+  // 경비 총액
+  const exp=(d.exp||0)*1000000;
+
+  // 노무비 중량배부용: 저장된 제품별 투입원육 (누락보정 완료된 값)
+  // 분모는 ERP수량 있는 제품의 투입원육 합계로 한정 → 배부누락 방지
+  const meatInByCode=d.meatInByCode||{};
+  let totalMeatKg=0;
+  for(const code of Object.keys(erpQty)){
+    if(erpQty[code]>0) totalMeatKg+=(meatInByCode[code]||0);
+  }
+
   const totalQty=Object.values(erpQty).reduce((s,v)=>s+v,0);
-  // 수량배부용 총수량 (메추리알 포함 전체)
-  tbody.innerHTML=Object.entries(erpQty).filter(([,q])=>q>0).map(([code,qty])=>{
+
+  // 마스터 코드→제품 맵
+  const masterMap={};
+  window._masters.forEach(m=>masterMap[m.code]=m);
+
+  // 행 생성
+  let sumRaw=0,sumSub=0,sumLabor=0,sumExp=0,sumTotal=0;
+  const rowsHtml=Object.entries(erpQty).filter(([,q])=>q>0).map(([code,qty])=>{
     const m=masterMap[code];
-    // 생산량 집계에서 원육중량 찾기
-    let meatIn=0;
-    if(m){
-      for(const [pname,pv] of Object.entries(byName)){
-        const pm=findM_(pname);
-        if(pm&&pm.code===code){meatIn+=pv.meatIn;break;}
+    const b=bom[code];
+    // 원/부재료비: BOM 4단계
+    let rawCost=0, subCost=0;
+    if(b){
+      for(const mat of (b.mats||[])){
+        const tt=theoryTotal[mat.mcode]||0;
+        if(tt<=0)continue;
+        const ratio=((mat.perEa||0)*qty)/tt;
+        const amt=ratio*(outAmt[mat.mcode]||0);
+        if(mat.mcode[0]==='1'||mat.mcode[0]==='2') rawCost+=amt;
+        else if(mat.mcode[0]==='4'||mat.mcode[0]==='5') subCost+=amt;
       }
     }
-    const meatShare=totalMeatIn>0&&m&&m.meatType?meatIn/totalMeatIn:0;
-    const qtyShare=totalQty>0?qty/totalQty:0;
+    // 노무비: 중량배부(임금1~3) + 수량배부(임금4~5+기타)
     const isQtyOnly=m&&m.laborRule==='qty_only';
+    const meatShare=totalMeatKg>0?(meatInByCode[code]||0)/totalMeatKg:0;
+    const qtyShare=totalQty>0?qty/totalQty:0;
     const laborAlloc=laborTotal>0
       ?(isQtyOnly?laborTotal*qtyShare:laborMeat*meatShare+laborQtyBase*qtyShare)
       :0;
-    const rawCost=(raw||0)*1000000*meatShare;
-    const subCost=(sub||0)*1000000*meatShare;
-    const expCost=(exp||0)*1000000*(meatShare||qtyShare);
+    // 경비: 수량 비중 배부
+    const expCost=exp*qtyShare;
+
     const totalCost=rawCost+subCost+laborAlloc+expCost;
     const sp=m?m.supplyPrice:0;
-    const prodAmt_=sp*qty;
-    const rate=prodAmt_>0?totalCost/prodAmt_:0;
+    const unitCost=qty>0?totalCost/qty:0;
+    const rate=sp>0?unitCost/sp:0;  // 원가율 = 제품단가 / 공급단가
+
+    sumRaw+=rawCost;sumSub+=subCost;sumLabor+=laborAlloc;sumExp+=expCost;sumTotal+=totalCost;
+
     return `<tr>
       <td class="c">${code}</td>
-      <td class="l">${m?m.name:code}</td>
+      <td class="l">${m?m.name:code}${!b?' <span class="badge b-warn">BOM없음</span>':''}</td>
       <td class="c">${fmtN(qty)}</td>
       <td>${fmtN(sp)}</td>
       <td>${fmtN(Math.round(rawCost))}</td>
       <td style="${laborAlloc>0?'color:var(--ok);font-weight:700':''}">${fmtN(Math.round(laborAlloc))}<br><span style="font-size:10px;color:#aaa">${isQtyOnly?'수량배부':'중량+수량'}</span></td>
       <td>${fmtN(Math.round(expCost))}</td>
       <td style="font-weight:700">${fmtN(Math.round(totalCost))}</td>
-      <td>${qty>0?fmtN(Math.round(totalCost/qty)):'—'}</td>
+      <td>${qty>0?fmtN(Math.round(unitCost)):'—'}</td>
       <td class="c ${rC(rate)}">${fmtP(rate)}</td>
     </tr>`;
-  }).join('');
+  });
+
+  // 합계행
+  rowsHtml.push(`<tr class="total">
+    <td class="c" colspan="2">합계</td>
+    <td class="c">${fmtN(totalQty)}</td>
+    <td>—</td>
+    <td>${fmtN(Math.round(sumRaw))}</td>
+    <td>${fmtN(Math.round(sumLabor))}</td>
+    <td>${fmtN(Math.round(sumExp))}</td>
+    <td>${fmtN(Math.round(sumTotal))}</td>
+    <td>—</td><td>—</td>
+  </tr>`);
+
+  tbody.innerHTML=rowsHtml.join('');
 };
 
 // ════════════════════════════════════
