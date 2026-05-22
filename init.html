@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>제품 일괄 등록</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto; padding: 20px; background: #f5f5f5; }
+  .card { background: white; border-radius: 12px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+  h2 { color: #1F3864; margin-bottom: 8px; }
+  p { color: #666; font-size: 14px; margin-bottom: 24px; }
+  button { width: 100%; padding: 16px; background: #1D9E75; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; }
+  button:hover { background: #178a64; }
+  button:disabled { background: #aaa; cursor: not-allowed; }
+  #log { margin-top: 20px; padding: 16px; background: #f8f8f8; border-radius: 8px; font-size: 13px; line-height: 2; display: none; max-height: 400px; overflow-y: auto; }
+  .ok  { color: #1D9E75; }
+  .err { color: #C00000; }
+  .done { color: #1F3864; font-weight: 700; font-size: 15px; }
+  .warn { color: #ED7D31; font-weight: 700; margin-top: 16px; padding: 12px; background: #FFF2CC; border-radius: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>🏭 제품 마스터 일괄 등록</h2>
+  <p>순수본 제조원가 관리 사이트의 Firebase에 제품 20개를 한 번에 등록합니다.<br>버튼을 한 번만 클릭하세요.</p>
+  <button id="btn" onclick="registerAll()">📦 제품 20개 일괄 등록 시작</button>
+  <div id="log"></div>
+  <div class="warn" id="warn" style="display:none">
+    ⚠️ 등록 완료 후 이 페이지(init.html)는 GitHub에서 삭제하세요.<br>
+    저장소 → init.html 클릭 → 휴지통 아이콘 → 커밋
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCw3KlYX6A-OMbAojirXdluNeU7g6286cM",
+  authDomain: "ssbon-64b4f.firebaseapp.com",
+  projectId: "ssbon-64b4f",
+  storageBucket: "ssbon-64b4f.firebasestorage.app",
+  messagingSenderId: "797947388860",
+  appId: "1:797947388860:web:4baf3cc586cdec9fc501b9"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+const products = [
+  { code:"600001", name:"[본죽]미니쇠고기장조림 70(5입_설도)",     spec:"70g*5입",  weight:350,  consumerPrice:17500, supplyPrice:11900 },
+  { code:"600003", name:"[본죽]미니쇠고기장조림 70(설도)",          spec:"70g",      weight:70,   consumerPrice:3500,  supplyPrice:2380  },
+  { code:"600006", name:"[본죽]쇠고기장조림 170_코코_4입(홍두께)",  spec:"170g*4입", weight:680,  consumerPrice:18990, supplyPrice:12913 },
+  { code:"600007", name:"[본죽]쇠고기장조림 170_코코_4입(설도)",    spec:"170g*4입", weight:680,  consumerPrice:18990, supplyPrice:12913 },
+  { code:"600010", name:"[본죽]쇠고기장조림 130g 낱개(설도)",       spec:"130g",     weight:130,  consumerPrice:4900,  supplyPrice:3332  },
+  { code:"600013", name:"[본죽]쇠고기장조림 120g 낱개(설도)",       spec:"120g",     weight:120,  consumerPrice:4900,  supplyPrice:3332  },
+  { code:"600014", name:"[본죽]쇠고기장조림 130g 마트용(설도)",     spec:"130g",     weight:130,  consumerPrice:4900,  supplyPrice:3332  },
+  { code:"600015", name:"[본죽]쇠고기장조림 460_트레(설도)",        spec:"460g",     weight:460,  consumerPrice:13350, supplyPrice:9078  },
+  { code:"600017", name:"[본죽]3kg FC 쇠고기장조림(홍두께)",        spec:"3000g",    weight:3000, consumerPrice:54000, supplyPrice:36720 },
+  { code:"600018", name:"[본죽]미니쇠고기장조림 70g(5입_우둔)",     spec:"70g*5입",  weight:350,  consumerPrice:17500, supplyPrice:11900 },
+  { code:"600019", name:"[본죽]미니쇠고기장조림 70g 낱개(우둔)",    spec:"70g",      weight:70,   consumerPrice:3500,  supplyPrice:2380  },
+  { code:"600020", name:"[본죽]쇠고기장조림 170_코코_4입(우둔)",    spec:"170g*4입", weight:350,  consumerPrice:18990, supplyPrice:12913 },
+  { code:"600021", name:"[본죽]쇠고기장조림 130g 낱개(우둔)",       spec:"130g",     weight:130,  consumerPrice:4900,  supplyPrice:3332  },
+  { code:"600022", name:"[본죽]쇠고기장조림 120g 낱개(우둔)",       spec:"120g",     weight:120,  consumerPrice:4900,  supplyPrice:3332  },
+  { code:"600023", name:"[본죽]쇠고기장조림 130g 마트용(우둔)",     spec:"130g",     weight:130,  consumerPrice:4900,  supplyPrice:3332  },
+  { code:"600024", name:"[본죽]쇠고기장조림 460_트레(우둔)",        spec:"460g",     weight:460,  consumerPrice:13350, supplyPrice:9078  },
+  { code:"600025", name:"[본죽]3kg FC 쇠고기장조림(우둔)",          spec:"3000g",    weight:3000, consumerPrice:54145, supplyPrice:36819 },
+  { code:"600026", name:"[본죽]쇠고기장조림 460_트레(홍두께)",      spec:"460g",     weight:460,  consumerPrice:13350, supplyPrice:9078  },
+  { code:"600027", name:"[본죽]메추리알장조림 180g",                spec:"180g",     weight:180,  consumerPrice:4900,  supplyPrice:3332  },
+  { code:"600028", name:"[본죽]쇠고기장조림 130g 낱개(홍두께)",     spec:"130g",     weight:130,  consumerPrice:4900,  supplyPrice:3332  },
+];
+
+window.registerAll = async function() {
+  const btn = document.getElementById('btn');
+  const log = document.getElementById('log');
+  btn.disabled = true;
+  btn.textContent = '등록 중...';
+  log.style.display = 'block';
+  log.innerHTML = '';
+
+  let ok = 0, fail = 0;
+  for (const p of products) {
+    try {
+      await setDoc(doc(db, 'products', p.code), p);
+      log.innerHTML += `<div class="ok">✅ ${p.code} ${p.name}</div>`;
+      ok++;
+    } catch(e) {
+      log.innerHTML += `<div class="err">❌ ${p.code} 실패: ${e.message}</div>`;
+      fail++;
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+
+  log.innerHTML += `<div class="done">━━━━━━━━━━━━━━━━━━━━<br>완료! 성공 ${ok}개 / 실패 ${fail}개</div>`;
+  btn.textContent = '✅ 등록 완료';
+  document.getElementById('warn').style.display = 'block';
+};
+</script>
+</body>
+</html>
