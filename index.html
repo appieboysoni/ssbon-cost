@@ -145,7 +145,8 @@ tr.total td{background:var(--light);font-weight:700}
         <div class="step" id="step1">① 생산량 집계</div>
         <div class="step" id="step2">② 근무내역</div>
         <div class="step" id="step3">③ 재고평가</div>
-        <div class="step" id="step4">④ 경비</div>
+        <div class="step" id="step4">④ ERP 노무비</div>
+        <div class="step" id="step5">⑤ 경비</div>
       </div>
 
       <!-- 구역1: 생산량 집계 -->
@@ -206,8 +207,28 @@ tr.total td{background:var(--light);font-weight:700}
         </table></div>
       </div>
 
-      <!-- 구역4: 경비 -->
-      <div class="sec">④ 경비 합계 입력 (백만원)</div>
+      <!-- 구역4: ERP 노무비 -->
+      <div class="sec">④ ERP 노무비 전표 붙여넣기</div>
+      <div class="paste-box">
+        <div class="pb-title">📋 ERP → 노무비 전표 화면 → 전체 복사 → 아래 붙여넣기</div>
+        <div class="pb-desc">계정명 | 회계일자 | NO | 적요(1~5공정) | 거래처 | 차변 — 1~5공정 임금·무사고수당·급여·잡급·퇴직급여 자동 파싱</div>
+        <textarea id="paste-erp" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-ok btn-sm" onclick="parseErpLabor()">⚡ 노무비 분석</button>
+          <button class="btn btn-primary btn-sm" onclick="clearPaste('paste-erp','erp-result','erp-table-wrap')">🗑️ 초기화</button>
+        </div>
+        <div class="paste-result" id="erp-result"></div>
+      </div>
+      <div id="erp-table-wrap" style="display:none">
+        <div class="info-box" id="erp-summary"></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>항목</th><th>금액(원)</th><th>배부기준</th></tr></thead>
+          <tbody id="erp-table-body"></tbody>
+        </table></div>
+      </div>
+
+      <!-- 구역5: 경비 -->
+      <div class="sec">⑤ 경비 합계 입력 (백만원)</div>
       <div class="form-row cols4">
         <div class="fg"><label>원재료비 합계 (검증용)</label><input type="number" id="exp-raw" step="0.01" placeholder="예: 342.2" style="background:var(--input)"></div>
         <div class="fg"><label>부재료비 합계 (검증용)</label><input type="number" id="exp-sub" step="0.01" placeholder="예: 26.4" style="background:var(--input)"></div>
@@ -343,7 +364,7 @@ const db = getFirestore(app);
 // ── 전역 상태
 window._db = db;
 window._masters = [];
-window._parsed = { prod: null, labor: null, inv: null };
+window._parsed = { prod: null, labor: null, inv: null, erp: null };
 
 // ── 유틸
 const fmt = (n,d=2) => (n==null||isNaN(n)) ? '—' : Number(n).toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -492,18 +513,67 @@ window.clearPaste = (textareaId,resultId,tableId) => {
 
 function updateStepIndicators() {
   const p=window._parsed;
-  const s1=document.getElementById('step1');
-  const s2=document.getElementById('step2');
-  const s3=document.getElementById('step3');
-  const s4=document.getElementById('step4');
-  s1.className='step'+(p.prod?` done`:'');
-  s2.className='step'+(p.labor?` done`:'');
-  s3.className='step'+(p.inv?` done`:'');
-  const expRaw=parseFloat(document.getElementById('exp-raw')?.value)||0;
+  document.getElementById('step1').className='step'+(p.prod?' done':'');
+  document.getElementById('step2').className='step'+(p.labor?' done':'');
+  document.getElementById('step3').className='step'+(p.inv?' done':'');
+  document.getElementById('step4').className='step'+(p.erp?' done':'');
   const expExp=parseFloat(document.getElementById('exp-exp')?.value)||0;
-  s4.className='step'+((expRaw||expExp)?` done`:'');
-  if(p.prod&&p.labor&&p.inv) updateCostPreview();
+  const expProd=parseFloat(document.getElementById('exp-prod')?.value)||0;
+  document.getElementById('step5').className='step'+((expExp||expProd)?' done':'');
+  if(p.prod&&p.erp) updateCostPreview();
 }
+
+// ════════════════════════════════════
+// 구역4: ERP 노무비 파싱
+// ════════════════════════════════════
+window.parseErpLabor = () => {
+  const raw=document.getElementById('paste-erp').value.trim();
+  if(!raw){showToast('❌ 데이터를 붙여넣기 하세요');return;}
+  const rows=raw.split('\n').map(r=>r.split('\t').map(c=>c.trim()));
+  const labor={1:0,2:0,3:0,4:0,5:0,급여:0,잡급:0,퇴직:0};
+  for(const row of rows){
+    if(row.some(c=>c==='계정명'||c==='적요')) continue;
+    if(row.length<5) continue;
+    const 적요=row[3]||'';
+    const 차변Str=row[5]||row[4]||'';
+    const 차변=parseInt(차변Str.replace(/,/g,''))||0;
+    if(차변===0) continue;
+    let matched=false;
+    for(let i=1;i<=5;i++){
+      if(적요.includes(`${i}공정`)){labor[i]+=차변;matched=true;break;}
+    }
+    if(!matched){
+      if(적요.includes('잡급')) labor['잡급']+=차변;
+      else if(적요.includes('퇴직')) labor['퇴직']+=차변;
+      else if(적요.includes('급여')) labor['급여']+=차변;
+    }
+  }
+  const total=labor[1]+labor[2]+labor[3]+labor[4]+labor[5]+labor['급여']+labor['잡급']+labor['퇴직'];
+  if(total===0){showToast('❌ 노무비 데이터를 찾을 수 없습니다');return;}
+  window._parsed.erp=labor;
+  document.getElementById('exp-labor-calc').textContent=fmtN(total)+'원';
+  const items=[
+    ['임금1 (해동·전처리)',labor[1],'원육 중량 기준'],
+    ['임금2 (자숙)',labor[2],'원육 중량 기준'],
+    ['임금3 (파쇄)',labor[3],'원육 중량 기준'],
+    ['임금4 (내포장)',labor[4],'수량 기준'],
+    ['임금5 (외포장)',labor[5],'수량 기준'],
+    ['급여 (관리직)',labor['급여'],'수량 기준'],
+    ['잡급 (알바)',labor['잡급'],'수량 기준'],
+    ['퇴직급여',labor['퇴직'],'수량 기준'],
+  ].filter(([,v])=>v>0);
+  document.getElementById('erp-table-body').innerHTML=items.map(([label,amt,rule])=>
+    `<tr><td class="l">${label}</td><td style="color:var(--ok);font-weight:700">${fmtN(amt)}</td><td class="c" style="color:#888">${rule}</td></tr>`).join('');
+  const labor13=labor[1]+labor[2]+labor[3];
+  const labor45=labor[4]+labor[5]+labor['급여']+labor['잡급']+labor['퇴직'];
+  document.getElementById('erp-summary').innerHTML=
+    `✅ 노무비 총계: <b>${fmtN(total)}원</b> &nbsp;|&nbsp; 중량배부(1~3공정): ${fmtN(labor13)}원 &nbsp;|&nbsp; 수량배부(4~5+기타): ${fmtN(labor45)}원`;
+  document.getElementById('erp-table-wrap').style.display='block';
+  const res=document.getElementById('erp-result');
+  res.style.display='block';
+  res.innerHTML=`✅ 총 노무비 ${fmtN(total)}원 파싱 완료`;
+  updateStepIndicators();
+};
 
 // ════════════════════════════════════
 // 구역1: 생산량 집계 파싱
@@ -789,11 +859,18 @@ window.saveAllData = async () => {
     prodByName[k].days.push(r.date);
   }
 
+  const erp=window._parsed.erp;
   await setDoc(doc(db,'costData',month),{
     month, raw, sub, exp, prodAmt, note,
     prodData: prod||[],
     laborData: labor||{},
     invData: (inv||[]).map(({code,name,acct,unit,avgPrice})=>({code,name,acct,unit,avgPrice})),
+    erpLabor: erp ? {
+      임금1:erp[1]||0, 임금2:erp[2]||0, 임금3:erp[3]||0,
+      임금4:erp[4]||0, 임금5:erp[5]||0,
+      급여:erp['급여']||0, 잡급:erp['잡급']||0, 퇴직:erp['퇴직']||0,
+      total:(erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0)+(erp['급여']||0)+(erp['잡급']||0)+(erp['퇴직']||0)
+    } : null,
     prodByName,
     updatedAt: new Date().toISOString()
   });
@@ -816,7 +893,15 @@ window.loadExistingData = async () => {
   document.getElementById('exp-exp').value=d.exp||'';
   document.getElementById('exp-prod').value=d.prodAmt||'';
   document.getElementById('exp-note').value=d.note||'';
-  if(d.prodData?.length){window._parsed.prod=d.prodData;showToast('기존 생산량 데이터 불러옴');}
+  if(d.prodData?.length){window._parsed.prod=d.prodData;}
+  if(d.erpLabor){
+    window._parsed.erp={
+      1:d.erpLabor.임금1||0, 2:d.erpLabor.임금2||0, 3:d.erpLabor.임금3||0,
+      4:d.erpLabor.임금4||0, 5:d.erpLabor.임금5||0,
+      급여:d.erpLabor.급여||0, 잡급:d.erpLabor.잡급||0, 퇴직:d.erpLabor.퇴직||0
+    };
+    document.getElementById('exp-labor-calc').textContent=fmtN(d.erpLabor.total||0)+'원';
+  }
   if(d.laborData&&Object.keys(d.laborData).length){window._parsed.labor=d.laborData;}
   if(d.invData?.length){window._parsed.inv=d.invData;}
   updateStepIndicators();
@@ -831,7 +916,7 @@ window.deleteMonthData = async () => {
   if(!confirm(`${month} 데이터를 삭제합니다. 계속하시겠습니까?`))return;
   await deleteDoc(doc(db,'costData',month));
   showToast(`🗑️ ${month} 삭제 완료`);
-  window._parsed={prod:null,labor:null,inv:null};
+  window._parsed={prod:null,labor:null,inv:null,erp:null};
   updateStepIndicators();
   loadHistory();
 };
@@ -923,7 +1008,8 @@ window.loadHistory = async () => {
   const tbody=document.getElementById('history-body');
   if(!rows.length){tbody.innerHTML='<tr><td colspan="13" class="empty">데이터가 없습니다.</td></tr>';return;}
   tbody.innerHTML=rows.map((r,i)=>{
-    const total=(r.raw||0)+(r.sub||0)+(r.exp||0);
+    const laborTotal=r.erpLabor?.total||0;
+    const total=(r.raw||0)+(r.sub||0)+laborTotal+(r.exp||0);
     const rate=r.prodAmt>0?total/r.prodAmt:0;
     const rRaw=total>0?(r.raw||0)/total:0;
     const rExp=total>0?(r.exp||0)/total:0;
@@ -933,7 +1019,7 @@ window.loadHistory = async () => {
     return `<tr>
       <td class="c">${r.month}</td>
       <td>${fmt(r.prodAmt,1)}</td><td>${fmt(r.raw)}</td><td>${fmt(r.sub)}</td>
-      <td>—</td><td>${fmt(r.exp)}</td><td>${fmt(total)}</td>
+      <td>${laborTotal>0?fmt(laborTotal/1000000):'—'}</td><td>${fmt(r.exp)}</td><td>${fmt(total/1000000)}</td>
       <td class="c ${rC(rate)}">${fmtP(rate)}</td>
       <td class="c">${fmtP(rRaw)}</td><td class="c">—</td>
       <td class="c ${diff!=null?(diff>0?'bad':'ok'):''}">${diff!=null?(diff>=0?'+':'')+((diff)*100).toFixed(1)+'%p':'—'}</td>
