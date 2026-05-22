@@ -716,7 +716,7 @@ window.parseInventory = () => {
       unitCol=row.findIndex(c=>c==='재고단위');
       initQtyCol=row.findIndex(c=>c==='기초수량');
       initAmtCol=row.findIndex(c=>c==='기초금액');
-      inQtyCol=row.findIndex(c=>c==='입고량');
+      inQtyCol=row.findIndex(c=>c==='입고량'||c==='입고수량');
       inAmtCol=row.findIndex(c=>c==='입고금액');
       break;
     }
@@ -730,10 +730,15 @@ window.parseInventory = () => {
     const unit=row[unitCol]||'';
     if(!code||!name)continue;
     if(!['원자재','부자재','원재료','부재료'].some(a=>acct.includes(a)))continue;
-    const initQty=parseFloat(String(row[initQtyCol]||'0').replace(/,/g,''))||0;
-    const initAmt=parseFloat(String(row[initAmtCol]||'0').replace(/,/g,''))||0;
-    const inQty=parseFloat(String(row[inQtyCol]||'0').replace(/,/g,''))||0;
-    const inAmt=parseFloat(String(row[inAmtCol]||'0').replace(/,/g,''))||0;
+    // 헤더로 컬럼 못찾으면 고정위치 사용 (품목(0)|품목명(1)|규격(2)|단위(3)|계정(4)|기초수량(5)|기초단가(6)|기초금액(7)|입고수량(8)|재고단가(9)|입고금액(10))
+    const _iQtyC = initQtyCol>=0 ? initQtyCol : 5;
+    const _iAmtC = initAmtCol>=0 ? initAmtCol : 7;
+    const _inQtyC = inQtyCol>=0 ? inQtyCol : 8;
+    const _inAmtC = inAmtCol>=0 ? inAmtCol : 10;
+    const initQty=parseFloat(String(row[_iQtyC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
+    const initAmt=parseFloat(String(row[_iAmtC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
+    const inQty=parseFloat(String(row[_inQtyC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
+    const inAmt=parseFloat(String(row[_inAmtC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
     const totalQty=initQty+inQty;
     const totalAmt=initAmt+inAmt;
     if(totalAmt===0)continue;
