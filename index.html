@@ -384,7 +384,19 @@
       </div>
 
       <div class="section-title">② 제품별 생산실적 입력</div>
-      <p style="font-size:12px;color:#888;margin-bottom:10px">생산수량(ea)만 입력하면 생산금액이 자동 계산됩니다. (생산금액 = 수량 × 공급단가)</p>
+
+      <!-- ERP 파일 업로드 영역 -->
+      <div style="background:#EBF3E8;border:1.5px dashed #1D9E75;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <span style="font-size:13px;font-weight:700;color:#1D9E75">📂 더존 ERP 실적 파일 불러오기</span>
+          <input type="file" id="erpFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="readErpFile(this)">
+          <button class="btn btn-success btn-sm" onclick="document.getElementById('erpFileInput').click()">엑셀 파일 선택</button>
+          <span style="font-size:12px;color:#666">품목코드 6으로 시작하는 완제품만 자동 인식 · 생산입고 수량 자동 입력</span>
+        </div>
+        <div id="erpResult" style="margin-top:8px;font-size:12px;color:#1D9E75;display:none"></div>
+      </div>
+
+      <p style="font-size:12px;color:#888;margin-bottom:10px">파일 불러오기 후 수량 확인 · 수정 가능합니다. 생산금액은 수량 × 공급단가로 자동계산됩니다.</p>
 
       <div class="table-wrap">
         <table>
@@ -403,7 +415,7 @@
 
       <div class="btn-row">
         <button class="btn btn-success" onclick="saveCostData()">💾 저장</button>
-        <button class="btn btn-primary" onclick="loadInputForm()">🔄 불러오기</button>
+        <button class="btn btn-primary" onclick="loadInputForm()">🔄 초기화</button>
       </div>
     </div>
   </div>
@@ -558,6 +570,9 @@
 </main>
 
 <div id="toast"></div>
+
+<!-- SheetJS 엑셀 파싱 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <!-- Firebase SDK -->
 <script type="module">
@@ -757,6 +772,96 @@ window.clearMasterForm = function() {
 // ════════════════════════════════════════════
 // 원가 입력
 // ════════════════════════════════════════════
+// ════════════════════════════════════════════
+// ERP 엑셀 파일 파싱
+// ════════════════════════════════════════════
+window.readErpFile = function(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      // 헤더 행 찾기 (품목 or 품목코드 가 있는 행)
+      let headerIdx = -1;
+      let codeCol = -1, qtyCol = -1;
+
+      for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        const row = rows[i].map(c => String(c).trim());
+        // 품목코드 컬럼 찾기
+        const cIdx = row.findIndex(c => c === '품목' || c === '품목코드');
+        // 생산입고 컬럼 찾기
+        const qIdx = row.findIndex(c => c.includes('생산입고'));
+        if (cIdx >= 0 && qIdx >= 0) {
+          headerIdx = i; codeCol = cIdx; qtyCol = qIdx;
+          break;
+        }
+      }
+
+      // 헤더 못 찾으면 첫 번째 행 기준으로 추측
+      if (headerIdx < 0) {
+        for (let i = 0; i < Math.min(rows.length, 5); i++) {
+          const row = rows[i].map(c => String(c).trim());
+          for (let j = 0; j < row.length; j++) {
+            if (/^[36]\d{5}$/.test(row[j])) {
+              headerIdx = i - 1;
+              // 코드 컬럼 번호는 j
+              codeCol = j;
+              break;
+            }
+          }
+          if (headerIdx >= 0) break;
+        }
+      }
+
+      // 데이터 추출: 6으로 시작하는 품목코드만
+      const result = {};
+      for (let i = (headerIdx >= 0 ? headerIdx + 1 : 1); i < rows.length; i++) {
+        const row = rows[i];
+        const code = String(row[codeCol] || '').trim().replace(/'/g, '');
+        if (!/^6\d{5}$/.test(code)) continue;
+        const qty = parseFloat(String(row[qtyCol] || '0').replace(/,/g, '')) || 0;
+        if (qty <= 0) continue;
+        result[code] = (result[code] || 0) + qty;
+      }
+
+      // 입력칸에 값 채우기
+      let matched = 0, unmatched = [];
+      Object.entries(result).forEach(([code, qty]) => {
+        const input = document.getElementById(`pqty-${code}`);
+        if (input) {
+          input.value = qty;
+          // supplyPrice 찾아서 자동계산 트리거
+          const master = window._masters.find(m => m.code === code);
+          if (master) calcAmt(code, master.supplyPrice);
+          matched++;
+        } else {
+          unmatched.push(code);
+        }
+      });
+
+      const resultDiv = document.getElementById('erpResult');
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = `✅ <b>${matched}개 품목</b> 수량 자동 입력 완료` +
+        (unmatched.length > 0 ? ` | ⚠️ 미매칭: ${unmatched.join(', ')}` : '');
+
+      // 파일 입력 초기화
+      input.value = '';
+      showToast(`✅ ERP 실적 ${matched}개 품목 자동 입력 완료`);
+
+    } catch(err) {
+      showToast('❌ 파일 읽기 실패: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+};
+
 window.loadInputForm = async function() {
   // 마스터 로드
   if (!window._masters.length) {
