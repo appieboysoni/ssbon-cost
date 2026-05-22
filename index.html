@@ -153,7 +153,7 @@ tr.total td{background:var(--light);font-weight:700}
       <div class="sec">① 생산량 집계 붙여넣기</div>
       <div class="paste-box">
         <div class="pb-title">📋 병현님 생산량 집계 엑셀 → 전체 복사(Ctrl+A, Ctrl+C) → 아래 붙여넣기</div>
-        <div class="pb-desc">컬럼: 생산일수 | 생산일자 | 제품명 | 작업인원 | 원육사용량(KG) | 완제품원료육중량(KG) | 원육수율 | FullCapa | 비고<br>노란색 계획 행 포함해도 됩니다 — 원육수율 0%는 자동 제외됩니다.</div>
+        <div class="pb-desc">컬럼: 생산일수 | 생산일자 | 제품명 | 작업인원 | 원육사용량(KG) | 완제품원료육중량(KG) | 원육수율 | FullCapa | 비고<br>노란색 계획 행 포함해도 됩니다 — 원육사용량이 있으면 실적으로 인정, 원육사용량도 0이면 제외됩니다.</div>
         <textarea id="paste-prod" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
         <div class="btn-row">
           <button class="btn btn-ok btn-sm" onclick="parseProdData()">⚡ 생산량 분석</button>
@@ -615,9 +615,9 @@ window.parseProdData = () => {
       note=row[8]||'';
     }
     if(!prodName||!dateStr) continue;
-    // 계획(수율=0) 포함 저장, 계산 시 제외
+    // 원육 사용량이 있으면 실적으로 인정 (수율 0%여도)
     if(meatIn>0||meatOut>0){
-      results.push({date:dateStr,prodName,workers,meatIn,meatOut,yield_,note,isActual:yield_>0});
+      results.push({date:dateStr,prodName,workers,meatIn,meatOut,yield_,note,isActual:meatIn>0});
     }
   }
   if(!results.length){showToast('❌ 인식된 데이터가 없습니다. 형식을 확인하세요');return;}
@@ -628,7 +628,7 @@ window.parseProdData = () => {
   tbody.innerHTML=results.map(r=>`<tr style="${!r.isActual?'background:#fffde7':''}">
     <td class="c">${r.date}</td><td class="l">${r.prodName}</td><td class="c">${r.workers}</td>
     <td>${fmtN(r.meatIn)}</td><td>${fmtN(r.meatOut)}</td>
-    <td class="c ${r.isActual?'ok':'warn'}">${r.isActual?r.yield_.toFixed(1)+'%':'계획'}</td>
+    <td class="c ${r.isActual?'ok':'warn'}">${r.isActual?(r.yield_>0?r.yield_.toFixed(1)+'%':'원육투입'):'계획'}</td>
     <td class="l">${r.note}</td></tr>`).join('');
   document.getElementById('prod-table-wrap').style.display='block';
   const res=document.getElementById('prod-result');
