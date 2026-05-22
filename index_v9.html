@@ -665,7 +665,7 @@ window.parseErpQty = async () => {
     const m=masterMap[code];
     return `<tr>
       <td class="c">${code}</td>
-      <td class="l">${m?m.name:nameCol>=0?rows.find(r=>String(r[codeCol]).replace(/'/g,'').trim()===code)?.[nameCol]||'—':'—':'—'}</td>
+      <td class="l">${m?m.name:code}</td>
       <td style="font-weight:700;color:var(--ok)">${fmtN(qty)} ea</td>
       <td class="c">${m?'<span class="badge b-ok">✅ 매칭</span>':'<span class="badge b-warn">⚠️ 미매칭</span>'}</td>
     </tr>`;
