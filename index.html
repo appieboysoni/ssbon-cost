@@ -358,7 +358,7 @@
       <div class="section-title">① 원가 집계 (백만원 단위)</div>
       <div class="form-grid">
         <div class="form-group">
-          <label>원재료비 합계 (백만원)</label>
+          <label>원재료비 합계 (백만원) — 검증용</label>
           <input type="number" id="inp-raw" step="0.01" placeholder="예: 289.4">
         </div>
         <div class="form-group">
@@ -380,6 +380,28 @@
         <div class="form-group">
           <label>비고</label>
           <input type="text" id="inp-note" placeholder="특이사항 입력">
+        </div>
+      </div>
+
+      <div class="section-title">① - 원육 단가 입력 (더존 재고평가 기준 — 원/kg)</div>
+      <div style="background:#EBF3E8;border-radius:8px;padding:14px 16px;margin-bottom:8px;">
+        <p style="font-size:12px;color:#555;margin-bottom:10px">재고평가 시트의 원육 평균단가를 입력하면 제품별 원재료비가 직접 계산됩니다.</p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>설도 단가 (원/kg)</label>
+            <input type="number" id="inp-price-설도" step="1" placeholder="예: 13087" style="background:#EBF3E8;">
+          </div>
+          <div class="form-group">
+            <label>홍두께 단가 (원/kg)</label>
+            <input type="number" id="inp-price-홍두께" step="1" placeholder="예: 13922" style="background:#EBF3E8;">
+          </div>
+          <div class="form-group">
+            <label>우둔 단가 (원/kg)</label>
+            <input type="number" id="inp-price-우둔" step="1" placeholder="예: 13529" style="background:#EBF3E8;">
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;">
+            <div id="meatPriceCalcResult" style="font-size:12px;color:#1D9E75;padding:8px 0;line-height:1.8"></div>
+          </div>
         </div>
       </div>
 
@@ -521,8 +543,21 @@
           <input type="text" id="m-spec" placeholder="예: 70g*5입">
         </div>
         <div class="form-group">
-          <label>중량(g)</label>
+          <label>중량(g) — 완제품 기준</label>
           <input type="number" id="m-weight" placeholder="예: 350">
+        </div>
+        <div class="form-group">
+          <label>원육 종류</label>
+          <select id="m-meattype" style="padding:9px 12px;border:1.5px solid #BFBFBF;border-radius:6px;font-size:14px;background:#FFF2CC;outline:none;">
+            <option value="">선택 안함 (메추리알 등)</option>
+            <option value="설도">설도</option>
+            <option value="홍두께">홍두께</option>
+            <option value="우둔">우둔</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>원육 투입량 (g/ea) — 1개 생산 시 투입되는 원육량</label>
+          <input type="number" id="m-meatweight" placeholder="예: 277 (130g 제품의 경우 약 277g 투입)">
         </div>
         <div class="form-group">
           <label>소비자가격(원) *</label>
@@ -561,6 +596,8 @@
               <th style="min-width:220px">품목명</th>
               <th>규격</th>
               <th>중량(g)</th>
+              <th>원육종류</th>
+              <th>원육투입(g/ea)</th>
               <th>소비자가격</th>
               <th>공급단가 (소비자가×%)</th>
               <th>관리</th>
@@ -710,18 +747,19 @@ async function loadMaster() {
 
   const tbody = document.getElementById('masterBody');
   if (!window._masters.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">등록된 제품이 없습니다. 위에서 추가하세요.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">등록된 제품이 없습니다. 위에서 추가하세요.</td></tr>';
     return;
   }
-  const rate = parseFloat(document.getElementById('supplyRate').value) || 68;
   tbody.innerHTML = window._masters.map(p => `
     <tr>
       <td class="text-center">${p.code}</td>
       <td class="text-left">${p.name}</td>
       <td class="text-center">${p.spec||''}</td>
-      <td>${fmtN(p.weight)}</td>
-      <td>${fmtN(p.consumerPrice)}</td>
-      <td style="color:#1D9E75;font-weight:700">${fmtN(p.supplyPrice)} <span style="font-size:11px;color:#aaa">(${p.consumerPrice>0?((p.supplyPrice/p.consumerPrice)*100).toFixed(1):'—'}%)</span></td>
+      <td class="text-center">${fmtN(p.weight)}</td>
+      <td class="text-center">${p.meatType||'—'}</td>
+      <td class="text-center" style="color:#1D9E75;font-weight:700">${p.meatWeight ? fmtN(p.meatWeight)+'g' : '—'}</td>
+      <td class="text-right">${fmtN(p.consumerPrice)}</td>
+      <td class="text-right" style="color:#1D9E75;font-weight:700">${fmtN(p.supplyPrice)} <span style="font-size:11px;color:#aaa">(${p.consumerPrice>0?((p.supplyPrice/p.consumerPrice)*100).toFixed(1):'—'}%)</span></td>
       <td class="text-center">
         <button class="btn btn-primary btn-sm" onclick="editMaster('${p.id}')">수정</button>
         <button class="btn btn-danger btn-sm" onclick="deleteMaster('${p.id}')">삭제</button>
@@ -741,6 +779,8 @@ window.saveMaster = async function() {
     code, name,
     spec: document.getElementById('m-spec').value.trim(),
     weight: parseFloat(document.getElementById('m-weight').value)||0,
+    meatType: document.getElementById('m-meattype').value || '',
+    meatWeight: parseFloat(document.getElementById('m-meatweight').value)||0,
     consumerPrice: consumer,
     supplyPrice: supply,
   };
@@ -753,11 +793,13 @@ window.saveMaster = async function() {
 window.editMaster = function(id) {
   const p = window._masters.find(x => x.id === id);
   if (!p) return;
-  document.getElementById('m-code').value     = p.code;
-  document.getElementById('m-name').value     = p.name;
-  document.getElementById('m-spec').value     = p.spec||'';
-  document.getElementById('m-weight').value   = p.weight||'';
-  document.getElementById('m-consumer').value = p.consumerPrice||'';
+  document.getElementById('m-code').value       = p.code;
+  document.getElementById('m-name').value       = p.name;
+  document.getElementById('m-spec').value       = p.spec||'';
+  document.getElementById('m-weight').value     = p.weight||'';
+  document.getElementById('m-meattype').value   = p.meatType||'';
+  document.getElementById('m-meatweight').value = p.meatWeight||'';
+  document.getElementById('m-consumer').value   = p.consumerPrice||'';
   previewSupply();
   document.querySelector('#tab-master .section-title').scrollIntoView({behavior:'smooth'});
 };
@@ -770,7 +812,8 @@ window.deleteMaster = async function(id) {
 };
 
 window.clearMasterForm = function() {
-  ['m-code','m-name','m-spec','m-weight','m-consumer'].forEach(id => document.getElementById(id).value='');
+  ['m-code','m-name','m-spec','m-weight','m-meatweight','m-consumer'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('m-meattype').value = '';
   document.getElementById('m-supply-preview').textContent = '소비자가격 입력 시 자동계산';
 };
 
@@ -853,7 +896,6 @@ window.parseErpPaste = function() {
 };
 
 window.loadInputForm = async function() {
-  // 마스터 로드
   if (!window._masters.length) {
     const q = query(collection(db, 'products'), orderBy('code'));
     const snap = await getDocs(q);
@@ -863,7 +905,6 @@ window.loadInputForm = async function() {
   const month = document.getElementById('inputMonth').value || thisMonth();
   document.getElementById('inputMonth').value = month;
 
-  // 기존 데이터 로드
   let existing = {};
   const snap = await getDoc(doc(db, 'costData', month));
   if (snap.exists()) {
@@ -874,15 +915,20 @@ window.loadInputForm = async function() {
     document.getElementById('inp-exp').value   = d.exp   || '';
     document.getElementById('inp-prod').value  = d.prod  || '';
     document.getElementById('inp-note').value  = d.note  || '';
+    if (d.meatPrices) {
+      document.getElementById('inp-price-설도').value   = d.meatPrices['설도']   || '';
+      document.getElementById('inp-price-홍두께').value = d.meatPrices['홍두께'] || '';
+      document.getElementById('inp-price-우둔').value   = d.meatPrices['우둔']   || '';
+    }
     existing = d.products || {};
   } else {
-    ['inp-raw','inp-sub','inp-labor','inp-exp','inp-prod','inp-note'].forEach(id => document.getElementById(id).value='');
+    ['inp-raw','inp-sub','inp-labor','inp-exp','inp-prod','inp-note',
+     'inp-price-설도','inp-price-홍두께','inp-price-우둔'].forEach(id => document.getElementById(id).value='');
   }
 
-  // 제품별 입력 테이블
   const tbody = document.getElementById('prodInputBody');
   if (!window._masters.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty">제품마스터에 제품을 먼저 등록하세요</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">제품마스터에 제품을 먼저 등록하세요</td></tr>';
     return;
   }
   tbody.innerHTML = window._masters.map(p => `
@@ -903,6 +949,31 @@ window.calcAmt = function(code, supplyPrice) {
   const qty = parseFloat(document.getElementById(`pqty-${code}`).value) || 0;
   const disp = document.getElementById(`pamt-disp-${code}`);
   disp.textContent = qty > 0 ? fmtN(Math.round(qty * supplyPrice)) + ' 원' : '—';
+  updateMeatCalcPreview();
+};
+
+window.updateMeatCalcPreview = function() {
+  const prices = {
+    '설도':   parseFloat(document.getElementById('inp-price-설도')?.value)   || 0,
+    '홍두께': parseFloat(document.getElementById('inp-price-홍두께')?.value) || 0,
+    '우둔':   parseFloat(document.getElementById('inp-price-우둔')?.value)   || 0,
+  };
+  if (!prices['설도'] && !prices['홍두께'] && !prices['우둔']) {
+    document.getElementById('meatPriceCalcResult').innerHTML = '';
+    return;
+  }
+  let totalMeatCost = 0;
+  window._masters.forEach(p => {
+    const qty = parseFloat(document.getElementById(`pqty-${p.code}`)?.value) || 0;
+    if (qty > 0 && p.meatType && p.meatWeight && prices[p.meatType]) {
+      totalMeatCost += qty * (p.meatWeight / 1000) * prices[p.meatType];
+    }
+  });
+  const inputRaw = parseFloat(document.getElementById('inp-raw').value) || 0;
+  const diff = inputRaw > 0 ? ((totalMeatCost/1000000 - inputRaw) / inputRaw * 100).toFixed(1) : null;
+  document.getElementById('meatPriceCalcResult').innerHTML =
+    `원육비 직접계산: <b>${fmtN(Math.round(totalMeatCost))}원</b>` +
+    (diff !== null ? ` &nbsp;|&nbsp; 더존 대비 <b style="color:${Math.abs(parseFloat(diff))<5?'#1D9E75':'#C00000'}">${diff>0?'+':''  }${diff}%</b>` : '');
 };
 
 window.saveCostData = async function() {
@@ -916,15 +987,27 @@ window.saveCostData = async function() {
   const prod  = parseFloat(document.getElementById('inp-prod').value)  || 0;
   const note  = document.getElementById('inp-note').value.trim();
 
+  const meatPrices = {
+    '설도':   parseFloat(document.getElementById('inp-price-설도').value)   || 0,
+    '홍두께': parseFloat(document.getElementById('inp-price-홍두께').value) || 0,
+    '우둔':   parseFloat(document.getElementById('inp-price-우둔').value)   || 0,
+  };
+
   const products = {};
   window._masters.forEach(p => {
     const qty = parseFloat(document.getElementById(`pqty-${p.code}`)?.value) || 0;
-    const amt = qty > 0 ? Math.round(qty * p.supplyPrice) : 0;
-    if (qty > 0) products[p.code] = { qty, amt };
+    if (qty > 0) {
+      const amt = Math.round(qty * p.supplyPrice);
+      let rawCost = 0;
+      if (p.meatType && p.meatWeight && meatPrices[p.meatType]) {
+        rawCost = Math.round(qty * (p.meatWeight / 1000) * meatPrices[p.meatType]);
+      }
+      products[p.code] = { qty, amt, rawCost };
+    }
   });
 
   await setDoc(doc(db, 'costData', month), {
-    month, raw, sub, labor, exp, prod, note,
+    month, raw, sub, labor, exp, prod, note, meatPrices,
     total: raw + sub + labor + exp,
     products,
     updatedAt: new Date().toISOString()
@@ -1101,13 +1184,14 @@ window.loadProductDetail = async function() {
   const snap = await getDoc(doc(db, 'costData', month));
   const tbody = document.getElementById('productDetailBody');
   if (!snap.exists()) {
-    tbody.innerHTML = '<tr><td colspan="11" class="empty">해당 월 데이터가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="empty">해당 월 데이터가 없습니다.</td></tr>';
     return;
   }
   const cur = snap.data();
   const total   = cur.total || 0;
   const prodMil = cur.prod  || 0;
   const prodData = cur.products || {};
+  const hasMeatPrice = cur.meatPrices && (cur.meatPrices['설도'] || cur.meatPrices['홍두께'] || cur.meatPrices['우둔']);
   const masterMap = {};
   window._masters.forEach(p => masterMap[p.code] = p);
 
@@ -1115,32 +1199,45 @@ window.loadProductDetail = async function() {
     .filter(([,v]) => v.qty > 0 || v.amt > 0)
     .map(([code, v]) => {
       const m = masterMap[code] || {};
-      const share = prodMil > 0 ? v.amt / prodMil : 0;
-      const rawAmt   = cur.raw   * 1000000 * share;
+      const share = prodMil > 0 ? v.amt / (prodMil * 1000000) : 0;
+      // 원재료비: 직접계산(rawCost) 우선, 없으면 비례배분
+      const rawAmt   = (hasMeatPrice && v.rawCost) ? v.rawCost : cur.raw * 1000000 * share;
+      const subAmt   = cur.sub   * 1000000 * share;
       const laborAmt = cur.labor * 1000000 * share;
       const expAmt   = cur.exp   * 1000000 * share;
-      const totalAmt = total * 1000000 * share;
+      const totalAmt = rawAmt + subAmt + laborAmt + expAmt;
       const unitCost = v.qty > 0 ? totalAmt / v.qty : 0;
+      const prodAmt  = v.amt || 0;
       const rate     = m.supplyPrice > 0 && v.qty > 0 ? unitCost / m.supplyPrice : 0;
-      return { code, m, v, rawAmt, laborAmt, expAmt, totalAmt, unitCost, rate };
+      const isDirectCalc = hasMeatPrice && v.rawCost > 0;
+      return { code, m, v, rawAmt, subAmt, laborAmt, expAmt, totalAmt, unitCost, prodAmt, rate, isDirectCalc };
     });
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="empty">제품별 생산실적이 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="empty">제품별 생산실적이 없습니다.</td></tr>';
     return;
   }
+
+  // 헤더 업데이트 - 원재료비 계산방식 표시
+  const rawHeader = hasMeatPrice ? '원재료비<br><span style="font-size:10px;color:#1D9E75">직접계산</span>' : '원재료비<br><span style="font-size:10px;color:#aaa">비례배분</span>';
+  document.querySelector('#tab-products thead tr').innerHTML = `
+    <th>품목코드</th><th style="min-width:200px">품목명</th><th>공급단가</th>
+    <th>생산수량(ea)</th><th>생산금액(원)</th><th>${rawHeader}</th>
+    <th>부재료비</th><th>노무비</th><th>경  비</th><th>합계원가</th><th>제품단가</th><th>원가율</th>`;
+
   tbody.innerHTML = rows.map(r => `
     <tr>
       <td class="text-center">${r.code}</td>
       <td class="text-left">${r.m.name||r.code}</td>
-      <td>${fmtN(r.m.supplyPrice)}</td>
-      <td>${fmtN(r.v.qty)}</td>
-      <td>${fmtN(r.v.amt*10000)}</td>
-      <td>${fmtN(Math.round(r.rawAmt))}</td>
-      <td>${fmtN(Math.round(r.laborAmt))}</td>
-      <td>${fmtN(Math.round(r.expAmt))}</td>
-      <td>${fmtN(Math.round(r.totalAmt))}</td>
-      <td>${fmtN(Math.round(r.unitCost))}</td>
+      <td class="text-right">${fmtN(r.m.supplyPrice)}</td>
+      <td class="text-right">${fmtN(r.v.qty)}</td>
+      <td class="text-right">${fmtN(r.prodAmt)}</td>
+      <td class="text-right" style="${r.isDirectCalc?'color:#1D9E75;font-weight:700':''}">${fmtN(Math.round(r.rawAmt))}</td>
+      <td class="text-right">${fmtN(Math.round(r.subAmt))}</td>
+      <td class="text-right">${fmtN(Math.round(r.laborAmt))}</td>
+      <td class="text-right">${fmtN(Math.round(r.expAmt))}</td>
+      <td class="text-right" style="font-weight:700">${fmtN(Math.round(r.totalAmt))}</td>
+      <td class="text-right">${fmtN(Math.round(r.unitCost))}</td>
       <td class="text-center ${rateClass(r.rate)}">${fmtPct(r.rate)}</td>
     </tr>`).join('');
 };
