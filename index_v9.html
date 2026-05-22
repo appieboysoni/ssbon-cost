@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>순수본 제조원가 관리</title>
+<style>
+:root {
+  --primary:#1F3864; --mid:#2F5496; --light:#D6E4F7;
+  --input:#FFF2CC; --calc:#EBF3E8;
+  --ok:#1D9E75; --warn:#ED7D31; --bad:#C00000;
+  --gray:#F2F2F2; --border:#BFBFBF; --white:#FFFFFF;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Malgun Gothic',Arial,sans-serif;background:#f0f2f5;color:#222;font-size:13px}
+header{background:var(--primary);color:#fff;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+header h1{font-size:16px;font-weight:700}
+.hdr-month{font-size:12px;background:rgba(255,255,255,.15);padding:3px 10px;border-radius:12px}
+nav{background:var(--mid);display:flex;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex-shrink:0;padding:11px 18px;background:none;border:none;color:rgba(255,255,255,.7);font-size:12px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;font-family:inherit}
+nav button.active{color:#fff;border-bottom-color:#FFC000;font-weight:700}
+nav button:hover{color:#fff;background:rgba(255,255,255,.1)}
+main{max-width:1280px;margin:0 auto;padding:16px}
+.tab{display:none}.tab.active{display:block}
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:14px;overflow:hidden}
+.card-hdr{background:var(--mid);color:#fff;padding:10px 16px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
+.card-body{padding:14px 16px}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+@media(max-width:768px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-top:4px solid var(--mid)}
+.kpi.warn{border-top-color:var(--warn)}.kpi.bad{border-top-color:var(--bad)}.kpi.ok{border-top-color:var(--ok)}
+.kpi-lbl{font-size:10px;color:#888;margin-bottom:4px}
+.kpi-val{font-size:24px;font-weight:700;color:var(--primary);line-height:1}
+.kpi-sub{font-size:10px;color:#aaa;margin-top:3px}
+.form-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(max-width:600px){.form-row{grid-template-columns:1fr}}
+.form-row.cols3{grid-template-columns:repeat(3,1fr)}
+.form-row.cols4{grid-template-columns:repeat(4,1fr)}
+.fg{display:flex;flex-direction:column;gap:3px}
+.fg label{font-size:11px;color:#555;font-weight:600}
+.fg input,.fg select{padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--input);outline:none;font-family:inherit}
+.fg input:focus,.fg select:focus{border-color:var(--mid)}
+.fg .calc-val{padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--calc);color:var(--ok);font-weight:700}
+.btn{padding:8px 16px;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--mid)}
+.btn-ok{background:var(--ok);color:#fff}.btn-ok:hover{background:#178a64}
+.btn-warn{background:var(--warn);color:#fff}
+.btn-bad{background:var(--bad);color:#fff}
+.btn-sm{padding:5px 10px;font-size:11px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--light);color:var(--primary);font-weight:700;padding:8px 6px;text-align:center;border:1px solid var(--border);white-space:nowrap}
+td{padding:7px 6px;border:1px solid #e8e8e8;text-align:right;white-space:nowrap}
+td.c{text-align:center}td.l{text-align:left}
+tr:nth-child(even) td{background:var(--gray)}
+tr.total td{background:var(--light);font-weight:700}
+.ok{color:var(--ok);font-weight:700}.warn{color:var(--warn);font-weight:700}.bad{color:var(--bad);font-weight:700}
+.badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700}
+.b-ok{background:#d4edda;color:#155724}.b-warn{background:#fff3cd;color:#856404}.b-bad{background:#f8d7da;color:#721c24}
+.sec{font-size:12px;font-weight:700;color:var(--mid);border-left:3px solid var(--mid);padding-left:8px;margin:14px 0 8px}
+.paste-box{background:var(--calc);border:1.5px dashed var(--ok);border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.paste-box .pb-title{font-size:12px;font-weight:700;color:var(--ok);margin-bottom:6px}
+.paste-box .pb-desc{font-size:11px;color:#555;margin-bottom:8px}
+.paste-box textarea{width:100%;height:90px;padding:7px;border:1px solid #ccc;border-radius:5px;font-size:11px;font-family:monospace;resize:vertical;background:#fff}
+.paste-result{font-size:11px;color:var(--ok);margin-top:6px;display:none}
+.month-bar{display:flex;align-items:center;gap:12px;background:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:14px}
+.month-bar label{font-size:12px;font-weight:700;color:var(--primary)}
+.month-bar input[type=month]{padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--input);outline:none}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:8px;font-size:12px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none}
+#toast.show{opacity:1}
+.loading{text-align:center;padding:30px;color:#aaa}.empty{text-align:center;padding:20px;color:#bbb}
+.step-indicator{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap}
+.step{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;background:var(--gray);color:#888;display:flex;align-items:center;gap:5px}
+.step.done{background:#d4edda;color:#155724}.step.active{background:var(--light);color:var(--primary)}
+.warn-box{background:#FFF2CC;border:1px solid #FFC000;border-radius:8px;padding:10px 14px;font-size:11px;color:#856404;margin-bottom:10px}
+.info-box{background:var(--calc);border-radius:8px;padding:10px 14px;font-size:11px;color:#155724;margin-bottom:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏭 순수본 제조원가 관리</h1>
+  <span class="hdr-month" id="hdrMonth">—</span>
+</header>
+<nav>
+  <button class="active" onclick="goTab('dashboard',this)">📊 대시보드</button>
+  <button onclick="goTab('input',this)">📥 데이터 입력</button>
+  <button onclick="goTab('products',this)">📦 제품별 원가</button>
+  <button onclick="goTab('history',this)">📅 월별 이력</button>
+  <button onclick="goTab('settings',this)">⚙️ 설정</button>
+</nav>
+<main>
+
+<!-- ══ 대시보드 ══ -->
+<div id="tab-dashboard" class="tab active">
+  <div class="month-bar">
+    <label>조회 기준월</label>
+    <input type="month" id="dashMonth" onchange="loadDashboard()">
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-lbl">생산금액</div><div class="kpi-val" id="kpi-prod">—</div><div class="kpi-sub">백만원</div></div>
+    <div class="kpi" id="kpi-rate-card"><div class="kpi-lbl">제조원가율</div><div class="kpi-val" id="kpi-rate">—</div><div class="kpi-sub">생산금액 대비</div></div>
+    <div class="kpi warn"><div class="kpi-lbl">전월 대비</div><div class="kpi-val" id="kpi-diff">—</div><div class="kpi-sub">원가율 변동</div></div>
+    <div class="kpi"><div class="kpi-lbl">데이터 상태</div><div class="kpi-val" id="kpi-status" style="font-size:14px">—</div><div class="kpi-sub">입력 완료 항목</div></div>
+  </div>
+  <div class="card">
+    <div class="card-hdr">📋 원가 구성 (당월 vs 전월)</div>
+    <div class="card-body">
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>항목</th><th>당월 금액(백만)</th><th>당월 비율</th><th>전월 금액(백만)</th><th>전월 비율</th><th>증감</th></tr></thead>
+        <tbody id="dashCostBody"><tr><td colspan="6" class="loading">로딩중...</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hdr">🏷️ 제품별 원가율</div>
+    <div class="card-body">
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>품목명</th><th>공급단가</th><th>원가율</th><th>원재료비</th><th>노무비</th><th>경비</th><th>판단</th></tr></thead>
+        <tbody id="dashProdBody"><tr><td colspan="7" class="loading">로딩중...</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 데이터 입력 ══ -->
+<div id="tab-input" class="tab">
+  <div class="card">
+    <div class="card-hdr">📥 월간 데이터 입력</div>
+    <div class="card-body">
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="fg">
+          <label>작업월 *</label>
+          <input type="month" id="inputMonth" onchange="loadExistingData()">
+        </div>
+        <div class="fg" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:8px">
+          <button class="btn btn-ok" onclick="saveAllData()">💾 전체 저장</button>
+          <button class="btn btn-bad" onclick="deleteMonthData()">🗑️ 당월 삭제</button>
+        </div>
+      </div>
+
+      <!-- 입력 진행 상태 -->
+      <div class="step-indicator">
+        <div class="step" id="step1">① 생산량 집계</div>
+        <div class="step" id="step2">② 근무내역</div>
+        <div class="step" id="step3">③ 재고평가</div>
+        <div class="step" id="step4">④ ERP 노무비</div>
+        <div class="step" id="step5">⑤ ERP 생산실적</div>
+        <div class="step" id="step6">⑥ 경비</div>
+      </div>
+
+      <!-- 구역1: 생산량 집계 -->
+      <div class="sec">① 생산량 집계 붙여넣기</div>
+      <div class="paste-box">
+        <div class="pb-title">📋 병현님 생산량 집계 엑셀 → 전체 복사(Ctrl+A, Ctrl+C) → 아래 붙여넣기</div>
+        <div class="pb-desc">컬럼: 생산일수 | 생산일자 | 제품명 | 작업인원 | 원육사용량(KG) | 완제품원료육중량(KG) | 원육수율 | FullCapa | 비고<br>노란색 계획 행 포함해도 됩니다 — 원육사용량이 있으면 실적으로 인정, 원육사용량도 0이면 제외됩니다.</div>
+        <textarea id="paste-prod" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-ok btn-sm" onclick="parseProdData()">⚡ 생산량 분석</button>
+          <button class="btn btn-primary btn-sm" onclick="clearPaste('paste-prod','prod-result','prod-table-wrap')">🗑️ 초기화</button>
+        </div>
+        <div class="paste-result" id="prod-result"></div>
+      </div>
+      <div id="prod-table-wrap" style="display:none">
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>날짜</th><th>제품명</th><th>인원</th><th>원육(kg)</th><th>완제품원육(kg)</th><th>수율</th><th>비고</th></tr></thead>
+          <tbody id="prod-table-body"></tbody>
+        </table></div>
+      </div>
+
+      <!-- 구역2: 근무내역 -->
+      <div class="sec">② 근무내역 붙여넣기</div>
+      <div class="paste-box">
+        <div class="pb-title">📋 근무내역 엑셀(운영팀 데이터 시트) → 전체 복사 → 아래 붙여넣기</div>
+        <div class="pb-desc">사번 | 성명 | 월/일 | 근태 | 출근 | 퇴근 | 정상 | 연장 | 야간 등 — 날짜별 공수를 자동 집계합니다.</div>
+        <textarea id="paste-labor" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-ok btn-sm" onclick="parseLaborData()">⚡ 공수 분석</button>
+          <button class="btn btn-primary btn-sm" onclick="clearPaste('paste-labor','labor-result','labor-table-wrap')">🗑️ 초기화</button>
+        </div>
+        <div class="paste-result" id="labor-result"></div>
+      </div>
+      <div id="labor-table-wrap" style="display:none">
+        <div class="info-box" id="labor-summary"></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>날짜</th><th>정규공수(h)</th><th>연장공수(h)</th><th>야간공수(h)</th><th>총공수(h)</th></tr></thead>
+          <tbody id="labor-table-body"></tbody>
+        </table></div>
+      </div>
+
+      <!-- 구역3: 재고평가 -->
+      <div class="sec">③ 재고평가 붙여넣기 (더존 ERP)</div>
+      <div class="paste-box">
+        <div class="pb-title">📋 더존 재고평가 엑셀 → 전체 복사 → 아래 붙여넣기</div>
+        <div class="pb-desc">원자재·부자재 계정구분 품목의 단가를 자동 추출합니다. (기초금액+입고금액)÷(기초수량+입고량) = 평균단가</div>
+        <textarea id="paste-inv" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-ok btn-sm" onclick="parseInventory()">⚡ 단가 추출</button>
+          <button class="btn btn-primary btn-sm" onclick="clearPaste('paste-inv','inv-result','inv-table-wrap')">🗑️ 초기화</button>
+        </div>
+        <div class="paste-result" id="inv-result"></div>
+      </div>
+      <div id="inv-table-wrap" style="display:none">
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>품목코드</th><th style="min-width:180px">품목명</th><th>계정</th><th>단위</th><th>평균단가(원)</th></tr></thead>
+          <tbody id="inv-table-body"></tbody>
+        </table></div>
+      </div>
+
+      <!-- 구역4: ERP 노무비 -->
+      <div class="sec">④ ERP 노무비 전표 붙여넣기</div>
+      <div class="paste-box">
+        <div class="pb-title">📋 ERP → 노무비 전표 화면 → 전체 복사 → 아래 붙여넣기</div>
+        <div class="pb-desc">계정명 | 회계일자 | NO | 적요(1~5공정) | 거래처 | 차변 — 1~5공정 임금·무사고수당·급여·잡급·퇴직급여 자동 파싱</div>
+        <textarea id="paste-erp" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-ok btn-sm" onclick="parseErpLabor()">⚡ 노무비 분석</button>
+          <button class="btn btn-primary btn-sm" onclick="clearPaste('paste-erp','erp-result','erp-table-wrap')">🗑️ 초기화</button>
+        </div>
+        <div class="paste-result" id="erp-result"></div>
+      </div>
+      <div id="erp-table-wrap" style="display:none">
+        <div class="info-box" id="erp-summary"></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>항목</th><th>금액(원)</th><th>배부기준</th></tr></thead>
+          <tbody id="erp-table-body"></tbody>
+        </table></div>
+      </div>
+
+      <!-- 구역5: ERP 생산실적 -->
+      <div class="sec">⑤ ERP 생산실적 붙여넣기</div>
+      <div class="paste-box">
+        <div class="pb-title">📋 더존 ERP → 재고평가 또는 생산실적 화면 → 품목코드 6으로 시작하는 완제품만 자동 추출</div>
+        <div class="pb-desc">품목코드 | 품목명 | 생산입고 수량 — 6으로 시작하는 품목코드만 자동 인식하여 생산수량으로 사용합니다.</div>
+        <textarea id="paste-erpqty" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-ok btn-sm" onclick="parseErpQty()">⚡ 생산수량 분석</button>
+          <button class="btn btn-primary btn-sm" onclick="clearPaste('paste-erpqty','erpqty-result','erpqty-table-wrap')">🗑️ 초기화</button>
+        </div>
+        <div class="paste-result" id="erpqty-result"></div>
+      </div>
+      <div id="erpqty-table-wrap" style="display:none">
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>품목코드</th><th style="min-width:200px">품목명</th><th>생산수량(ea)</th><th>매칭 제품</th></tr></thead>
+          <tbody id="erpqty-table-body"></tbody>
+        </table></div>
+      </div>
+
+      <!-- 구역6: 경비 -->
+      <div class="sec">⑥ 경비 합계 입력 (백만원)</div>
+      <div class="warn-box">💡 노무비 총계는 ERP 파싱값(임금1~5)에 급여·잡급·퇴직급여를 더한 전체 금액을 직접 입력하세요. 나머지는 ERP에서 자동 파싱된 값으로 배부됩니다.</div>
+      <div class="form-row cols4">
+        <div class="fg"><label>원재료비 합계 (검증용)</label><input type="number" id="exp-raw" step="0.01" placeholder="예: 342.2" style="background:var(--input)"></div>
+        <div class="fg"><label>부재료비 합계 (검증용)</label><input type="number" id="exp-sub" step="0.01" placeholder="예: 26.4" style="background:var(--input)"></div>
+        <div class="fg"><label>경비 합계</label><input type="number" id="exp-exp" step="0.01" placeholder="예: 186.4" style="background:var(--input)"></div>
+        <div class="fg"><label>생산금액 합계</label><input type="number" id="exp-prod" step="0.01" placeholder="예: 893.2" style="background:var(--input)"></div>
+      </div>
+      <div class="form-row cols4" style="margin-top:8px">
+        <div class="fg">
+          <label>노무비 총계 (백만원) *</label>
+          <input type="number" id="exp-labor" step="0.01" placeholder="예: 103.9"
+            oninput="updateLaborCalc()"
+            style="background:var(--input);border-color:#1D9E75;border-width:2px">
+        </div>
+        <div class="fg">
+          <label>ERP 파싱 임금(1~5) — 참고</label>
+          <div class="calc-val" id="exp-labor-calc">—</div>
+        </div>
+        <div class="fg">
+          <label>급여+잡급+퇴직 (자동계산)</label>
+          <div class="calc-val" id="exp-labor-gap">—</div>
+        </div>
+        <div class="fg"><label>비고</label><input type="text" id="exp-note" placeholder="특이사항"></div>
+      </div>
+
+      <!-- 원가 미리보기 -->
+      <div id="cost-preview" style="display:none;margin-top:14px">
+        <div class="sec">📊 원가 계산 미리보기</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>품목명</th><th>수량(ea)</th><th>공급단가</th><th>원재료비</th><th>노무비</th><th>경비</th><th>합계원가</th><th>제품단가</th><th>원가율</th></tr></thead>
+          <tbody id="preview-body"></tbody>
+        </table></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ 제품별 원가 ══ -->
+<div id="tab-products" class="tab">
+  <div class="month-bar">
+    <label>조회 기준월</label>
+    <input type="month" id="prodMonth" onchange="loadProducts()">
+    <button class="btn btn-bad btn-sm" onclick="deleteMonthDataFromProd()">🗑️ 이 달 삭제</button>
+  </div>
+  <div class="card">
+    <div class="card-hdr">📦 제품별 원가 상세</div>
+    <div class="card-body">
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>품목코드</th><th style="min-width:200px">품목명</th><th>생산수량</th><th>공급단가</th><th>원재료비</th><th>노무비<br><span style="font-size:10px;font-weight:400">(중량/수량 배부)</span></th><th>경비</th><th>합계원가</th><th>제품단가</th><th>원가율</th></tr></thead>
+        <tbody id="prod-detail-body"><tr><td colspan="10" class="loading">월을 선택하세요</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 월별 이력 ══ -->
+<div id="tab-history" class="tab">
+  <div class="card">
+    <div class="card-hdr">📅 월별 원가 이력</div>
+    <div class="card-body">
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>연월</th><th>생산금액(백만)</th><th>원재료비</th><th>부재료비</th><th>노무비</th><th>경비</th><th>제조원가</th><th>원가율</th><th>원재료비율</th><th>노무비율</th><th>전월대비</th><th>비고</th><th>관리</th></tr></thead>
+        <tbody id="history-body"><tr><td colspan="13" class="loading">로딩중...</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 설정 ══ -->
+<div id="tab-settings" class="tab">
+
+  <!-- 제품마스터 -->
+  <div class="card">
+    <div class="card-hdr">📦 제품 마스터</div>
+    <div class="card-body">
+      <div class="sec">제품 추가 / 수정</div>
+      <div class="form-row cols4">
+        <div class="fg"><label>품목코드 *</label><input type="text" id="m-code" placeholder="예: 600001"></div>
+        <div class="fg"><label>품목명 *</label><input type="text" id="m-name" placeholder="예: 시그니처 130g"></div>
+        <div class="fg"><label>규격</label><input type="text" id="m-spec" placeholder="예: 130g"></div>
+        <div class="fg"><label>중량(g)</label><input type="number" id="m-weight" placeholder="예: 130"></div>
+      </div>
+      <div class="form-row cols4" style="margin-top:8px">
+        <div class="fg"><label>원육 종류</label>
+          <select id="m-meattype">
+            <option value="">없음 (메추리알 등)</option>
+            <option value="설도">설도</option>
+            <option value="홍두께">홍두께</option>
+            <option value="우둔">우둔</option>
+          </select>
+        </div>
+        <div class="fg"><label>생산집계 별칭 (생산량 집계 파일의 제품명과 매칭)</label>
+          <input type="text" id="m-alias" placeholder="예: 시그니처 130g(메추리알), 코스트코680g">
+        </div>
+        <div class="fg"><label>소비자가격(원)</label><input type="number" id="m-consumer" placeholder="예: 4900" oninput="previewSupply()"></div>
+        <div class="fg"><label>공급단가 (소비자가 × <span id="rateLabel">68</span>%)</label><div class="calc-val" id="m-supply-preview">소비자가 입력 시 자동계산</div></div>
+        <div class="fg"><label>노무비 배부 기준</label>
+          <select id="m-labor-rule">
+            <option value="standard">표준 (임금1~3:중량 / 임금4:수량)</option>
+            <option value="qty_only">수량 기준만 (메추리알 등)</option>
+          </select>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ok" onclick="saveMaster()">💾 저장</button>
+        <button class="btn btn-primary btn-sm" onclick="clearMasterForm()">초기화</button>
+        <button class="btn btn-warn" onclick="recalcAllSupply()">🔄 전체 공급단가 재계산</button>
+      </div>
+
+      <!-- 공급단가 비율 -->
+      <div style="background:var(--input);border:1px solid #FFC000;border-radius:8px;padding:10px 14px;margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:var(--primary)">⚙️ 공급단가 비율 (연 1회)</span>
+        <input type="number" id="supplyRate" value="68" min="1" max="100" step="0.1"
+          style="width:70px;padding:5px 8px;border:1.5px solid #FFC000;border-radius:6px;font-size:13px;font-weight:700;text-align:center;background:#fff"
+          oninput="document.getElementById('rateLabel').textContent=this.value;previewSupply()">
+        <span style="font-size:12px;font-weight:700">%</span>
+        <button class="btn btn-warn btn-sm" onclick="saveRate()">💾 저장</button>
+        <span id="rateSaved" style="font-size:11px;color:var(--ok);display:none">✅ 저장됨</span>
+      </div>
+
+      <div class="sec" style="margin-top:16px">등록된 제품 목록</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>코드</th><th style="min-width:200px">품목명</th><th>규격</th><th>중량</th><th>원육종류</th><th>생산집계 별칭</th><th>노무비기준</th><th>소비자가</th><th>공급단가</th><th>관리</th></tr></thead>
+        <tbody id="master-body"><tr><td colspan="9" class="loading">로딩중...</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+</main>
+<div id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, getDocs, collection, orderBy, query, deleteDoc }
+  from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCw3KlYX6A-OMbAojirXdluNeU7g6286cM",
+  authDomain: "ssbon-64b4f.firebaseapp.com",
+  projectId: "ssbon-64b4f",
+  storageBucket: "ssbon-64b4f.firebasestorage.app",
+  messagingSenderId: "797947388860",
+  appId: "1:797947388860:web:4baf3cc586cdec9fc501b9"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ── 전역 상태
+window._db = db;
+window._masters = [];
+window._parsed = { prod: null, labor: null, inv: null, erp: null, erpQty: null };
+
+// ── 유틸
+const fmt = (n,d=2) => (n==null||isNaN(n)) ? '—' : Number(n).toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtN = n => (!n&&n!==0) ? '—' : Number(n).toLocaleString('ko-KR');
+const fmtP = n => (n==null||isNaN(n)) ? '—' : (n*100).toFixed(1)+'%';
+const rC = r => !r||isNaN(r) ? '' : r>=1 ? 'bad' : r>=0.85 ? 'warn' : 'ok';
+const badge = r => !r||isNaN(r) ? '' : r>=1 ? '<span class="badge b-bad">🔴 검토필요</span>' : r>=0.85 ? '<span class="badge b-warn">🟡 주의</span>' : '<span class="badge b-ok">🟢 양호</span>';
+const thisMonth = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
+
+window.showToast = (msg,dur=2500) => {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),dur);
+};
+
+// ── 탭
+window.goTab = (name,btn) => {
+  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(e=>e.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='dashboard') loadDashboard();
+  if(name==='products')  loadProducts();
+  if(name==='history')   loadHistory();
+  if(name==='settings')  loadMaster();
+  if(name==='input')     loadExistingData();
+};
+
+// ════════════════════════════════════
+// 공급단가 비율
+// ════════════════════════════════════
+async function loadRate() {
+  try {
+    const s = await getDoc(doc(db,'settings','supplyRate'));
+    const r = s.exists() ? s.data().rate : 68;
+    document.getElementById('supplyRate').value = r;
+    document.getElementById('rateLabel').textContent = r;
+    return r;
+  } catch { return 68; }
+}
+window.saveRate = async () => {
+  const r = parseFloat(document.getElementById('supplyRate').value)||68;
+  await setDoc(doc(db,'settings','supplyRate'),{rate:r});
+  document.getElementById('rateLabel').textContent = r;
+  const m=document.getElementById('rateSaved'); m.style.display='inline';
+  setTimeout(()=>m.style.display='none',2000);
+  showToast(`✅ 공급단가 비율 ${r}% 저장`);
+};
+window.previewSupply = () => {
+  const c=parseFloat(document.getElementById('m-consumer').value)||0;
+  const r=parseFloat(document.getElementById('supplyRate').value)||68;
+  document.getElementById('m-supply-preview').textContent = c>0 ? fmtN(Math.round(c*r/100))+'원' : '소비자가 입력 시 자동계산';
+};
+
+// ════════════════════════════════════
+// 제품 마스터
+// ════════════════════════════════════
+async function ensureMasters() {
+  if(window._masters.length) return;
+  const s = await getDocs(query(collection(db,'products'),orderBy('code')));
+  s.forEach(d=>window._masters.push({id:d.id,...d.data()}));
+}
+async function loadMaster() {
+  await loadRate();
+  const s = await getDocs(query(collection(db,'products'),orderBy('code')));
+  window._masters=[];
+  s.forEach(d=>window._masters.push({id:d.id,...d.data()}));
+  const tbody=document.getElementById('master-body');
+  if(!window._masters.length){tbody.innerHTML='<tr><td colspan="9" class="empty">등록된 제품이 없습니다.</td></tr>';return;}
+  tbody.innerHTML=window._masters.map(p=>`
+    <tr>
+      <td class="c">${p.code}</td><td class="l">${p.name}</td><td class="c">${p.spec||''}</td>
+      <td class="c">${fmtN(p.weight)}g</td><td class="c">${p.meatType||'—'}</td>
+      <td class="l" style="font-size:11px;color:#666">${(p.alias||[]).join(', ')||'—'}</td>
+      <td class="c">${p.laborRule==='qty_only'?'수량만':'표준'}</td>
+      <td>${fmtN(p.consumerPrice)}</td>
+      <td style="color:var(--ok);font-weight:700">${fmtN(p.supplyPrice)}</td>
+      <td class="c">
+        <button class="btn btn-primary btn-sm" onclick="editMaster('${p.id}')">수정</button>
+        <button class="btn btn-bad btn-sm" onclick="deleteMaster('${p.id}')">삭제</button>
+      </td>
+    </tr>`).join('');
+}
+window.saveMaster = async () => {
+  const code=document.getElementById('m-code').value.trim();
+  const name=document.getElementById('m-name').value.trim();
+  const consumer=parseFloat(document.getElementById('m-consumer').value);
+  if(!code||!name||!consumer){showToast('❌ 코드·품목명·소비자가격 필수');return;}
+  const rate=parseFloat(document.getElementById('supplyRate').value)||68;
+  const supply=Math.round(consumer*rate/100);
+  await setDoc(doc(db,'products',code),{
+    code,name,
+    spec:document.getElementById('m-spec').value.trim(),
+    weight:parseFloat(document.getElementById('m-weight').value)||0,
+    meatType:document.getElementById('m-meattype').value||'',
+    alias:(document.getElementById('m-alias').value||'').split(',').map(s=>s.trim()).filter(Boolean),
+    laborRule:document.getElementById('m-labor-rule').value||'standard',
+    consumerPrice:consumer, supplyPrice:supply,
+  });
+  showToast('✅ 저장됨');
+  clearMasterForm(); loadMaster();
+};
+window.editMaster = id => {
+  const p=window._masters.find(x=>x.id===id); if(!p)return;
+  document.getElementById('m-code').value=p.code;
+  document.getElementById('m-name').value=p.name;
+  document.getElementById('m-spec').value=p.spec||'';
+  document.getElementById('m-weight').value=p.weight||'';
+  document.getElementById('m-meattype').value=p.meatType||'';
+  document.getElementById('m-consumer').value=p.consumerPrice||'';
+  document.getElementById('m-alias').value=(p.alias||[]).join(', ');
+  document.getElementById('m-labor-rule').value=p.laborRule||'standard';
+  previewSupply();
+  document.querySelector('#tab-settings .sec').scrollIntoView({behavior:'smooth'});
+};
+window.deleteMaster = async id => {
+  if(!confirm('삭제하시겠습니까?'))return;
+  await deleteDoc(doc(db,'products',id));
+  showToast('🗑️ 삭제됨'); loadMaster();
+};
+window.clearMasterForm = () => {
+  ['m-code','m-name','m-spec','m-weight','m-consumer','m-alias'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('m-meattype').value='';
+  document.getElementById('m-labor-rule').value='standard';
+  document.getElementById('m-supply-preview').textContent='소비자가 입력 시 자동계산';
+};
+window.recalcAllSupply = async () => {
+  const r=parseFloat(document.getElementById('supplyRate').value)||68;
+  if(!confirm(`전체 ${window._masters.length}개 제품 공급단가를 ${r}%로 재계산합니다.`))return;
+  for(const p of window._masters){
+    if(!p.consumerPrice)continue;
+    await setDoc(doc(db,'products',p.code),{...p,supplyPrice:Math.round(p.consumerPrice*r/100)});
+  }
+  showToast('✅ 전체 재계산 완료'); loadMaster();
+};
+
+// ════════════════════════════════════
+// 붙여넣기 파싱 유틸
+// ════════════════════════════════════
+window.clearPaste = (textareaId,resultId,tableId) => {
+  document.getElementById(textareaId).value='';
+  const r=document.getElementById(resultId); r.style.display='none'; r.innerHTML='';
+  const t=document.getElementById(tableId); if(t)t.style.display='none';
+  if(textareaId==='paste-prod') window._parsed.prod=null;
+  if(textareaId==='paste-labor') window._parsed.labor=null;
+  if(textareaId==='paste-inv') window._parsed.inv=null;
+  updateStepIndicators();
+};
+
+function updateStepIndicators() {
+  const p=window._parsed;
+  document.getElementById('step1').className='step'+(p.prod?' done':'');
+  document.getElementById('step2').className='step'+(p.labor?' done':'');
+  document.getElementById('step3').className='step'+(p.inv?' done':'');
+  document.getElementById('step4').className='step'+(p.erp?' done':'');
+  const expExp=parseFloat(document.getElementById('exp-exp')?.value)||0;
+  const expLabor=parseFloat(document.getElementById('exp-labor')?.value)||0;
+  const expProd=parseFloat(document.getElementById('exp-prod')?.value)||0;
+  document.getElementById('step5').className='step'+(p.erpQty?' done':'');
+  document.getElementById('step6').className='step'+((expExp||expLabor||expProd)?' done':'');
+  if(p.prod&&p.erp) updateCostPreview();
+}
+
+// ════════════════════════════════════
+// 구역4: ERP 노무비 파싱
+// ════════════════════════════════════
+window.parseErpLabor = () => {
+  const raw=document.getElementById('paste-erp').value.trim();
+  if(!raw){showToast('❌ 데이터를 붙여넣기 하세요');return;}
+  const rows=raw.split('\n').map(r=>r.split('\t').map(c=>c.trim()));
+  const labor={1:0,2:0,3:0,4:0,5:0,급여:0,잡급:0,퇴직:0};
+  for(const row of rows){
+    if(row.some(c=>c==='계정명'||c==='적요')) continue;
+    if(row.length<5) continue;
+    const 적요=row[3]||'';
+    const 차변Str=row[5]||row[4]||'';
+    const 차변=parseInt(차변Str.replace(/,/g,''))||0;
+    if(차변===0) continue;
+    let matched=false;
+    for(let i=1;i<=5;i++){
+      if(적요.includes(`${i}공정`)){labor[i]+=차변;matched=true;break;}
+    }
+    if(!matched){
+      if(적요.includes('잡급')) labor['잡급']+=차변;
+      else if(적요.includes('퇴직')) labor['퇴직']+=차변;
+      else if(적요.includes('급여')) labor['급여']+=차변;
+    }
+  }
+  const total=labor[1]+labor[2]+labor[3]+labor[4]+labor[5]+labor['급여']+labor['잡급']+labor['퇴직'];
+  if(total===0){showToast('❌ 노무비 데이터를 찾을 수 없습니다');return;}
+  window._parsed.erp=labor;
+  document.getElementById('exp-labor-calc').textContent=fmtN(total)+'원';
+  const items=[
+    ['임금1 (해동·전처리)',labor[1],'원육 중량 기준'],
+    ['임금2 (자숙)',labor[2],'원육 중량 기준'],
+    ['임금3 (파쇄)',labor[3],'원육 중량 기준'],
+    ['임금4 (내포장)',labor[4],'수량 기준'],
+    ['임금5 (외포장)',labor[5],'수량 기준'],
+    ['급여 (관리직)',labor['급여'],'수량 기준'],
+    ['잡급 (알바)',labor['잡급'],'수량 기준'],
+    ['퇴직급여',labor['퇴직'],'수량 기준'],
+  ].filter(([,v])=>v>0);
+  document.getElementById('erp-table-body').innerHTML=items.map(([label,amt,rule])=>
+    `<tr><td class="l">${label}</td><td style="color:var(--ok);font-weight:700">${fmtN(amt)}</td><td class="c" style="color:#888">${rule}</td></tr>`).join('');
+  const labor13=labor[1]+labor[2]+labor[3];
+  const labor45=labor[4]+labor[5]+labor['급여']+labor['잡급']+labor['퇴직'];
+  document.getElementById('erp-summary').innerHTML=
+    `✅ 노무비 총계: <b>${fmtN(total)}원</b> &nbsp;|&nbsp; 중량배부(1~3공정): ${fmtN(labor13)}원 &nbsp;|&nbsp; 수량배부(4~5+기타): ${fmtN(labor45)}원`;
+  document.getElementById('erp-table-wrap').style.display='block';
+  const res=document.getElementById('erp-result');
+  res.style.display='block';
+  res.innerHTML=`✅ 총 노무비 ${fmtN(total)}원 파싱 완료`;
+  updateStepIndicators();
+};
+
+// ════════════════════════════════════
+// 구역5: ERP 생산실적 파싱
+// ════════════════════════════════════
+window.parseErpQty = async () => {
+  const raw = document.getElementById('paste-erpqty').value.trim();
+  if(!raw){showToast('❌ 데이터를 붙여넣기 하세요');return;}
+  await ensureMasters();
+  const rows = raw.split('\n').map(r=>r.split('\t').map(c=>c.trim()));
+
+  // 헤더에서 생산입고 컬럼 찾기
+  let headerIdx=-1, codeCol=-1, nameCol=-1, qtyCol=-1;
+  for(let i=0;i<Math.min(rows.length,5);i++){
+    const row=rows[i];
+    const cc=row.findIndex(c=>c==='품목'||c==='품목코드');
+    const nc=row.findIndex(c=>c==='품목명');
+    const qc=row.findIndex(c=>c.includes('생산입고'));
+    if(cc>=0&&qc>=0){headerIdx=i;codeCol=cc;nameCol=nc>=0?nc:cc+1;qtyCol=qc;break;}
+  }
+
+  const result={};
+  for(let i=(headerIdx>=0?headerIdx+1:0);i<rows.length;i++){
+    const row=rows[i];
+    // 6으로 시작하는 품목코드 찾기
+    let code='';
+    if(codeCol>=0){
+      code=String(row[codeCol]||'').replace(/'/g,'').trim();
+    } else {
+      code=row.find(c=>/^'?6\d{5}$/.test(c.trim()))||'';
+      code=code.replace(/'/g,'').trim();
+    }
+    if(!/^6\d{5}$/.test(code)) continue;
+    const qty=parseFloat(String(row[qtyCol>=0?qtyCol:row.length-1]||'0').replace(/,/g,''))||0;
+    if(qty<=0) continue;
+    result[code]=(result[code]||0)+qty;
+  }
+
+  if(!Object.keys(result).length){showToast('❌ 6으로 시작하는 품목 데이터를 찾을 수 없습니다');return;}
+
+  window._parsed.erpQty=result;
+
+  // 마스터 매핑 및 테이블 표시
+  const masterMap={};
+  window._masters.forEach(m=>masterMap[m.code]=m);
+  const tbody=document.getElementById('erpqty-table-body');
+  tbody.innerHTML=Object.entries(result).map(([code,qty])=>{
+    const m=masterMap[code];
+    return `<tr>
+      <td class="c">${code}</td>
+      <td class="l">${m?m.name:nameCol>=0?rows.find(r=>String(r[codeCol]).replace(/'/g,'').trim()===code)?.[nameCol]||'—':'—':'—'}</td>
+      <td style="font-weight:700;color:var(--ok)">${fmtN(qty)} ea</td>
+      <td class="c">${m?'<span class="badge b-ok">✅ 매칭</span>':'<span class="badge b-warn">⚠️ 미매칭</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('erpqty-table-wrap').style.display='block';
+  const matched=Object.keys(result).filter(c=>masterMap[c]).length;
+  const res=document.getElementById('erpqty-result');
+  res.style.display='block';
+  res.innerHTML=`✅ ${Object.keys(result).length}개 품목 인식 — 마스터 매칭 ${matched}개`;
+  showToast(`✅ 생산실적 ${Object.keys(result).length}개 품목 파싱 완료`);
+  updateStepIndicators();
+};
+
+// ════════════════════════════════════
+// 노무비 총계 입력 시 갭 자동계산
+// ════════════════════════════════════
+window.updateLaborCalc = function() {
+  const total = (parseFloat(document.getElementById('exp-labor').value) || 0) * 1000000;
+  const erp = window._parsed.erp;
+  const erpTotal = erp ? (erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0) : 0;
+  const gap = total - erpTotal;
+  const gapDiv = document.getElementById('exp-labor-gap');
+  if(total > 0 && erpTotal > 0) {
+    gapDiv.textContent = fmtN(Math.round(gap)) + '원';
+    gapDiv.style.color = gap >= 0 ? 'var(--ok)' : 'var(--bad)';
+  } else {
+    gapDiv.textContent = '노무비 총계 입력 후 계산';
+  }
+  updateStepIndicators();
+};
+
+// ════════════════════════════════════
+// 구역1: 생산량 집계 파싱
+// ════════════════════════════════════
+window.parseProdData = () => {
+  const raw=document.getElementById('paste-prod').value.trim();
+  if(!raw){showToast('❌ 데이터를 붙여넣기 하세요');return;}
+  const rows=raw.split('\n').map(r=>r.split('\t').map(c=>c.trim()));
+  const results=[];
+  for(const row of rows){
+    // 날짜 컬럼 찾기 (2026/ 또는 날짜 패턴)
+    let dateStr='', prodName='', workers=0, meatIn=0, meatOut=0, yield_=0, note='';
+    // 헤더행 스킵
+    if(row.some(c=>c.includes('생산일자')||c.includes('제품명'))) continue;
+    // 날짜 찾기
+    const dateCol=row.findIndex(c=>/\d{4}[\/\-]\d{2}[\/\-]\d{2}/.test(c)||/\d{4}년/.test(c));
+    if(dateCol>=0){
+      dateStr=row[dateCol].replace(/\(.*\)/,'').trim();
+      // 이후 컬럼들
+      const rest=row.slice(dateCol+1);
+      prodName=rest[0]||'';
+      workers=parseFloat(rest[1])||0;
+      meatIn=parseFloat(String(rest[2]).replace(/,/g,''))||0;
+      meatOut=parseFloat(String(rest[3]).replace(/,/g,''))||0;
+      const yieldStr=String(rest[4]).replace('%','');
+      yield_=parseFloat(yieldStr)||0;
+      note=rest[7]||'';
+    } else {
+      // 날짜 없는 행 (같은 날 2번째 제품)
+      const prev=results[results.length-1];
+      if(!prev) continue;
+      dateStr=prev.date;
+      prodName=row[2]||row[1]||'';
+      workers=parseFloat(row[3])||prev.workers;
+      meatIn=parseFloat(String(row[4]).replace(/,/g,''))||0;
+      meatOut=parseFloat(String(row[5]).replace(/,/g,''))||0;
+      const yieldStr=String(row[6]).replace('%','');
+      yield_=parseFloat(yieldStr)||0;
+      note=row[8]||'';
+    }
+    if(!prodName||!dateStr) continue;
+    // 원육(kg) 또는 완제품원료육(kg) 중 하나라도 있으면 실적으로 인정
+    if(meatIn>0||meatOut>0){
+      // 실적 기준: 원육투입 OR 완제품원료육 존재
+      const isActual = meatIn>0 || meatOut>0;
+      results.push({date:dateStr,prodName,workers,meatIn,meatOut,yield_,note,isActual});
+    }
+  }
+  if(!results.length){showToast('❌ 인식된 데이터가 없습니다. 형식을 확인하세요');return;}
+  const actual=results.filter(r=>r.isActual);
+  window._parsed.prod=results;
+  // 테이블 표시
+  const tbody=document.getElementById('prod-table-body');
+  tbody.innerHTML=results.map(r=>`<tr style="${!r.isActual?'background:#fffde7':''}">
+    <td class="c">${r.date}</td><td class="l">${r.prodName}</td><td class="c">${r.workers}</td>
+    <td>${fmtN(r.meatIn)}</td><td>${fmtN(r.meatOut)}</td>
+    <td class="c ${r.isActual?'ok':'warn'}">${r.isActual?(r.yield_>0?r.yield_.toFixed(1)+'%':'원육투입'):'계획'}</td>
+    <td class="l">${r.note}</td></tr>`).join('');
+  document.getElementById('prod-table-wrap').style.display='block';
+  const res=document.getElementById('prod-result');
+  res.style.display='block';
+  res.innerHTML=`✅ 총 ${results.length}행 인식 — 실적 ${actual.length}건 / 계획 ${results.length-actual.length}건`;
+  updateStepIndicators();
+};
+
+// ════════════════════════════════════
+// 구역2: 근무내역 파싱
+// ════════════════════════════════════
+window.parseLaborData = () => {
+  const raw=document.getElementById('paste-labor').value.trim();
+  if(!raw){showToast('❌ 데이터를 붙여넣기 하세요');return;}
+  const rows=raw.split('\n').map(r=>r.split('\t').map(c=>c.trim()));
+  // 헤더 찾기
+  let headerIdx=-1,dateCol=-1,normalCol=-1,extCol=-1,nightCol=-1;
+  for(let i=0;i<Math.min(rows.length,10);i++){
+    const row=rows[i];
+    const dc=row.findIndex(c=>c==='월/일'||c==='날짜'||c==='일자');
+    const nc=row.findIndex(c=>c==='정상'||c.includes('정규'));
+    const ec=row.findIndex(c=>c==='연장'&&!c.includes('조'));
+    const xc=row.findIndex(c=>c==='야간');
+    if(dc>=0&&nc>=0){headerIdx=i;dateCol=dc;normalCol=nc;extCol=ec>=0?ec:nc+1;nightCol=xc>=0?xc:nc+2;break;}
+  }
+  // 날짜별 집계
+  const byDate={};
+  for(let i=(headerIdx>=0?headerIdx+1:1);i<rows.length;i++){
+    const row=rows[i];
+    const rawDate=row[dateCol]||'';
+    const m=rawDate.match(/(\d{4})[\/\-](\d{2})[\/\-](\d{2})/);
+    if(!m)continue;
+    const date=`${m[1]}-${m[2]}-${m[3]}`;
+    const normal=parseFloat(row[normalCol])||0;
+    const ext=parseFloat(row[extCol])||0;
+    const night=parseFloat(row[nightCol])||0;
+    if(!byDate[date])byDate[date]={normal:0,ext:0,night:0,count:0};
+    byDate[date].normal+=normal;
+    byDate[date].ext+=ext;
+    byDate[date].night+=night;
+    byDate[date].count++;
+  }
+  const dates=Object.keys(byDate).sort();
+  if(!dates.length){showToast('❌ 날짜 데이터를 찾을 수 없습니다');return;}
+  window._parsed.labor=byDate;
+  // 합계
+  let totalN=0,totalE=0,totalX=0;
+  const tbody=document.getElementById('labor-table-body');
+  tbody.innerHTML=dates.map(d=>{
+    const v=byDate[d];
+    totalN+=v.normal;totalE+=v.ext;totalX+=v.night;
+    const tot=v.normal+v.ext+v.night;
+    return `<tr><td class="c">${d}</td><td>${fmt(v.normal,1)}</td><td>${fmt(v.ext,1)}</td><td>${fmt(v.night,1)}</td><td style="font-weight:700">${fmt(tot,1)}</td></tr>`;
+  }).join('');
+  document.getElementById('labor-table-wrap').style.display='block';
+  const total=totalN+totalE+totalX;
+  document.getElementById('labor-summary').innerHTML=
+    `✅ ${dates.length}일 집계 완료 &nbsp;|&nbsp; 정규: ${fmt(totalN,1)}h &nbsp;|&nbsp; 연장: ${fmt(totalE,1)}h &nbsp;|&nbsp; 야간: ${fmt(totalX,1)}h &nbsp;|&nbsp; <b>총 ${fmt(total,1)}인시</b>`;
+  const res=document.getElementById('labor-result');
+  res.style.display='block';
+  res.innerHTML=`✅ ${dates.length}일 / 총 ${fmt(total,1)}인시`;
+  // 노무비 총계 표시 (근태로부터는 금액 계산 불가, 메모용)
+  document.getElementById('exp-labor-calc').textContent='근무내역 입력됨 — 저장 후 계산됨';
+  updateStepIndicators();
+};
+
+// ════════════════════════════════════
+// 구역3: 재고평가 파싱
+// ════════════════════════════════════
+window.parseInventory = () => {
+  const raw=document.getElementById('paste-inv').value.trim();
+  if(!raw){showToast('❌ 데이터를 붙여넣기 하세요');return;}
+  const rows=raw.split('\n').map(r=>r.split('\t').map(c=>c.trim()));
+  // 헤더 찾기
+  let headerIdx=-1,codeCol=-1,nameCol=-1,acctCol=-1,unitCol=-1,initQtyCol=-1,initAmtCol=-1,inQtyCol=-1,inAmtCol=-1;
+  for(let i=0;i<Math.min(rows.length,5);i++){
+    const row=rows[i];
+    const cc=row.findIndex(c=>c==='품목'||c==='품목코드');
+    const nc=row.findIndex(c=>c==='품목명');
+    const ac=row.findIndex(c=>c==='계정구분');
+    if(cc>=0&&nc>=0&&ac>=0){
+      headerIdx=i;codeCol=cc;nameCol=nc;acctCol=ac;
+      unitCol=row.findIndex(c=>c==='재고단위');
+      initQtyCol=row.findIndex(c=>c==='기초수량');
+      initAmtCol=row.findIndex(c=>c==='기초금액');
+      inQtyCol=row.findIndex(c=>c==='입고량'||c==='입고수량');
+      inAmtCol=row.findIndex(c=>c==='입고금액');
+      break;
+    }
+  }
+  const items=[];
+  for(let i=(headerIdx>=0?headerIdx+1:1);i<rows.length;i++){
+    const row=rows[i];
+    const code=String(row[codeCol]||'').replace(/'/g,'').trim();
+    const name=row[nameCol]||'';
+    const acct=row[acctCol]||'';
+    const unit=row[unitCol]||'';
+    if(!code||!name)continue;
+    if(!['원자재','부자재','원재료','부재료'].some(a=>acct.includes(a)))continue;
+    // 헤더로 컬럼 못찾으면 고정위치 사용 (품목(0)|품목명(1)|규격(2)|단위(3)|계정(4)|기초수량(5)|기초단가(6)|기초금액(7)|입고수량(8)|재고단가(9)|입고금액(10))
+    const _iQtyC = initQtyCol>=0 ? initQtyCol : 5;
+    const _iAmtC = initAmtCol>=0 ? initAmtCol : 7;
+    const _inQtyC = inQtyCol>=0 ? inQtyCol : 8;
+    const _inAmtC = inAmtCol>=0 ? inAmtCol : 10;
+    const initQty=parseFloat(String(row[_iQtyC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
+    const initAmt=parseFloat(String(row[_iAmtC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
+    const inQty=parseFloat(String(row[_inQtyC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
+    const inAmt=parseFloat(String(row[_inAmtC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
+    const totalQty=initQty+inQty;
+    const totalAmt=initAmt+inAmt;
+    if(totalAmt===0)continue;
+    const avgPrice=totalQty>0?totalAmt/totalQty:0;
+    items.push({code,name,acct,unit,avgPrice,totalQty,totalAmt});
+  }
+  if(!items.length){showToast('❌ 원자재/부자재 데이터를 찾을 수 없습니다. 계정구분 컬럼을 확인하세요');return;}
+  window._parsed.inv=items;
+  const tbody=document.getElementById('inv-table-body');
+  tbody.innerHTML=items.map(it=>`
+    <tr><td class="c">${it.code}</td><td class="l">${it.name}</td>
+    <td class="c">${it.acct}</td><td class="c">${it.unit}</td>
+    <td style="color:var(--ok);font-weight:700">${fmtN(Math.round(it.avgPrice))}</td></tr>`).join('');
+  document.getElementById('inv-table-wrap').style.display='block';
+  const rawItems=items.filter(it=>it.acct.includes('원'));
+  const subItems=items.filter(it=>it.acct.includes('부'));
+  const res=document.getElementById('inv-result');
+  res.style.display='block';
+  res.innerHTML=`✅ 총 ${items.length}개 품목 단가 추출 — 원자재 ${rawItems.length}개 / 부자재 ${subItems.length}개`;
+  updateStepIndicators();
+};
+
+// ════════════════════════════════════
+// 원가 계산 미리보기
+// ════════════════════════════════════
+function calcLaborByProduct() {
+  // 노무비(2) 스타일: 생산량 집계 기반으로 제품별 노무비 배부
+  // 임금1~3(해동/전처리/자숙/파쇄): 원육 중량 기준 (메추리알 제외)
+  // 임금4(내포장): 수량 기준
+  // 급여·잡급·임금5: 수량 기준
+  // → 여기서는 노무비 총액을 위 기준으로 배부
+  const prod=window._parsed.prod;
+  const labor=window._parsed.labor;
+  if(!prod||!labor)return {};
+
+  const expRaw=parseFloat(document.getElementById('exp-raw').value)||0;
+  // 노무비는 경비 입력에서 가져옴 (나중에 실제 노무비 입력 추가)
+  // 임시: 생산금액 기준으로 노무비 배부 (실제 노무비 입력 전까지)
+  const totalLaborHours=Object.values(labor).reduce((s,v)=>s+v.normal+v.ext+v.night,0);
+
+  // 날짜별 제품 실적
+  const actualProd=prod.filter(r=>r.isActual);
+  // 제품명→품목코드 매핑
+  const masterMap={};
+  window._masters.forEach(m=>{masterMap[m.name]=m;masterMap[m.code]=m;});
+  // 유사 품목명 매핑
+  const findMaster=(prodName)=>{
+    let best=null,bestScore=0;
+    for(const m of window._masters){
+      const score=['시그니처','코스트코','트레이더스','미니','메추리알','FC','3kg','70g','130g','170g','460g','180g']
+        .filter(k=>prodName.includes(k)&&m.name.includes(k)).length;
+      if(score>bestScore){bestScore=score;best=m;}
+    }
+    return best;
+  };
+
+  // 날짜별 그룹
+  const byDate={};
+  for(const r of actualProd){
+    if(!byDate[r.date])byDate[r.date]=[];
+    byDate[r.date].push(r);
+  }
+
+  // 제품별 원육중량 합계, 수량 합계 (배부 기준)
+  const prodTotals={}; // {코드:{meatKg,qty}}
+  for(const [date,items] of Object.entries(byDate)){
+    const laborDay=labor[date];
+    if(!laborDay)continue;
+    for(const item of items){
+      const m=findMaster(item.prodName);
+      const code=m?m.code:item.prodName;
+      if(!prodTotals[code])prodTotals[code]={meatKg:0,qty:0,prodName:item.prodName,master:m};
+      prodTotals[code].meatKg+=item.meatIn;
+      // 수량은 meatIn/원육단량으로 추정 (실제 수량 없을 경우)
+    }
+  }
+  return prodTotals;
+}
+
+function updateCostPreview() {
+  const prod=window._parsed.prod;
+  if(!prod)return;
+  document.getElementById('cost-preview').style.display='block';
+  // 간단 미리보기만 표시
+  const actual=prod.filter(r=>r.isActual);
+  const byProd={};
+  for(const r of actual){
+    const k=r.prodName;
+    if(!byProd[k])byProd[k]={meatIn:0,meatOut:0,count:0};
+    byProd[k].meatIn+=r.meatIn;
+    byProd[k].meatOut+=r.meatOut;
+    byProd[k].count++;
+  }
+  const tbody=document.getElementById('preview-body');
+  tbody.innerHTML=Object.entries(byProd).map(([name,v])=>`
+    <tr><td class="l">${name}</td><td>원육${fmtN(Math.round(v.meatIn))}kg</td>
+    <td colspan="7" style="color:#aaa;text-align:left">저장 후 원가 계산됩니다</td></tr>`).join('');
+}
+
+// ════════════════════════════════════
+// 저장
+// ════════════════════════════════════
+window.saveAllData = async () => {
+  const month=document.getElementById('inputMonth').value;
+  if(!month){showToast('❌ 작업월을 선택하세요');return;}
+  const prod=window._parsed.prod;
+  const labor=window._parsed.labor;
+  const inv=window._parsed.inv;
+  if(!prod&&!labor&&!inv){showToast('❌ 붙여넣기 데이터가 없습니다');return;}
+
+  const laborTotal=(parseFloat(document.getElementById('exp-labor').value)||0)*1000000;
+  const raw=parseFloat(document.getElementById('exp-raw').value)||0;
+  const sub=parseFloat(document.getElementById('exp-sub').value)||0;
+  const exp=parseFloat(document.getElementById('exp-exp').value)||0;
+  const prodAmt=parseFloat(document.getElementById('exp-prod').value)||0;
+  const note=document.getElementById('exp-note').value.trim();
+
+  // 생산량 집계에서 제품별 데이터 집계
+  const actualProd=(prod||[]).filter(r=>r.isActual);
+  const prodByName={};
+  for(const r of actualProd){
+    const k=r.prodName;
+    if(!prodByName[k])prodByName[k]={meatIn:0,meatOut:0,days:[]};
+    prodByName[k].meatIn+=r.meatIn;
+    prodByName[k].meatOut+=r.meatOut;
+    prodByName[k].days.push(r.date);
+  }
+
+  const erp=window._parsed.erp;
+  const erpQty=window._parsed.erpQty||{};
+  await setDoc(doc(db,'costData',month),{
+    month, raw, sub, exp, prodAmt, note,
+    prodData: prod||[],
+    laborData: labor||{},
+    invData: (inv||[]).map(({code,name,acct,unit,avgPrice})=>({code,name,acct,unit,avgPrice})),
+    erpLabor: erp ? {
+      임금1:erp[1]||0, 임금2:erp[2]||0, 임금3:erp[3]||0,
+      임금4:erp[4]||0, 임금5:erp[5]||0,
+      급여:erp['급여']||0, 잡급:erp['잡급']||0, 퇴직:erp['퇴직']||0,
+      total:laborTotal>0 ? laborTotal : (erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0)+(erp['급여']||0)+(erp['잡급']||0)+(erp['퇴직']||0)
+    } : null,
+    prodByName,
+    erpQty,
+    updatedAt: new Date().toISOString()
+  });
+
+  showToast('✅ 저장 완료!');
+  loadHistory();
+};
+
+// ════════════════════════════════════
+// 기존 데이터 불러오기
+// ════════════════════════════════════
+window.loadExistingData = async () => {
+  const month=document.getElementById('inputMonth').value;
+  if(!month)return;
+  const snap=await getDoc(doc(db,'costData',month));
+  if(!snap.exists())return;
+  const d=snap.data();
+  document.getElementById('exp-labor').value=d.laborTotal?d.laborTotal/1000000:'';
+  document.getElementById('exp-raw').value=d.raw||'';
+  document.getElementById('exp-sub').value=d.sub||'';
+  document.getElementById('exp-exp').value=d.exp||'';
+  document.getElementById('exp-prod').value=d.prodAmt||'';
+  document.getElementById('exp-note').value=d.note||'';
+  if(d.prodData?.length){window._parsed.prod=d.prodData;}
+  if(d.erpQty&&Object.keys(d.erpQty).length){window._parsed.erpQty=d.erpQty;}
+  if(d.erpLabor){
+    window._parsed.erp={
+      1:d.erpLabor.임금1||0, 2:d.erpLabor.임금2||0, 3:d.erpLabor.임금3||0,
+      4:d.erpLabor.임금4||0, 5:d.erpLabor.임금5||0,
+      급여:d.erpLabor.급여||0, 잡급:d.erpLabor.잡급||0, 퇴직:d.erpLabor.퇴직||0
+    };
+    document.getElementById('exp-labor-calc').textContent=fmtN(d.erpLabor.total||0)+'원';
+  }
+  if(d.laborData&&Object.keys(d.laborData).length){window._parsed.labor=d.laborData;}
+  if(d.invData?.length){window._parsed.inv=d.invData;}
+  updateStepIndicators();
+};
+
+// ════════════════════════════════════
+// 삭제
+// ════════════════════════════════════
+window.deleteMonthData = async () => {
+  const month=document.getElementById('inputMonth').value;
+  if(!month){showToast('❌ 작업월을 선택하세요');return;}
+  if(!confirm(`${month} 데이터를 삭제합니다. 계속하시겠습니까?`))return;
+  await deleteDoc(doc(db,'costData',month));
+  showToast(`🗑️ ${month} 삭제 완료`);
+  window._parsed={prod:null,labor:null,inv:null,erp:null,erpQty:null};
+  updateStepIndicators();
+  loadHistory();
+};
+window.deleteMonthDataFromProd = async () => {
+  const month=document.getElementById('prodMonth').value;
+  if(!month){showToast('❌ 월을 선택하세요');return;}
+  if(!confirm(`${month} 데이터를 삭제합니다.`))return;
+  await deleteDoc(doc(db,'costData',month));
+  showToast(`🗑️ ${month} 삭제 완료`);
+  document.getElementById('prod-detail-body').innerHTML='<tr><td colspan="10" class="empty">삭제되었습니다.</td></tr>';
+  loadHistory();
+};
+
+// ════════════════════════════════════
+// 제품별 원가
+// ════════════════════════════════════
+window.loadProducts = async () => {
+  const month=document.getElementById('prodMonth').value||thisMonth();
+  document.getElementById('prodMonth').value=month;
+  await ensureMasters();
+  const snap=await getDoc(doc(db,'costData',month));
+  const tbody=document.getElementById('prod-detail-body');
+  if(!snap.exists()){tbody.innerHTML='<tr><td colspan="10" class="empty">해당 월 데이터가 없습니다.</td></tr>';return;}
+  const d=snap.data();
+  const actualProd=(d.prodData||[]).filter(r=>r.isActual);
+  if(!actualProd.length){tbody.innerHTML='<tr><td colspan="10" class="empty">생산 실적 데이터가 없습니다.</td></tr>';return;}
+
+  // 제품별 원육 중량·일수 집계
+  // 생산량 집계: 날짜별 원육중량 집계 (노무비 배부용)
+  const byName={};
+  for(const r of actualProd){
+    if(!byName[r.prodName])byName[r.prodName]={meatIn:0,meatOut:0,days:0};
+    byName[r.prodName].meatIn+=r.meatIn;
+    byName[r.prodName].meatOut+=r.meatOut;
+    byName[r.prodName].days++;
+  }
+
+  const findM_=(name)=>{
+    const nm=name.trim();
+    for(const m of window._masters){
+      if((m.alias||[]).some(a=>nm===a||nm.includes(a)||a.includes(nm))) return m;
+    }
+    let best=null,bs=0;
+    for(const m of window._masters){
+      const kws=['시그니처','코스트코','트레이더스','미니','메추리알','FC','3kg','설도','홍두께','우둔'];
+      const sc=kws.filter(k=>nm.includes(k)&&m.name.includes(k)).length;
+      if(sc>bs){bs=sc;best=m;}
+    }
+    return best;
+  };
+
+  // 원육 총 중량 (노무비 중량배부 기준 - 메추리알 제외)
+  const totalMeatIn=Object.entries(byName).reduce((s,[name,v])=>{
+    const m_=findM_(name);
+    return s+(m_&&m_.meatType?v.meatIn:0);
+  },0);
+
+  // ERP 생산실적 (품목코드별 수량)
+  const erpQty=d.erpQty||{};
+  const totalErpQty=Object.values(erpQty).reduce((s,v)=>s+v,0);
+  const raw=d.raw||0; const sub=d.sub||0;
+  const exp=d.exp||0; const prodAmt=d.prodAmt||0;
+
+  // ERP 노무비 데이터
+  const erpLabor=d.erpLabor||{};
+  const laborTotal=d.laborTotal||0;
+  const erp1=(erpLabor.임금1||0),erp2=(erpLabor.임금2||0),erp3=(erpLabor.임금3||0);
+  const erp4=(erpLabor.임금4||0),erp5=(erpLabor.임금5||0);
+  const erpOther=laborTotal>0?laborTotal-(erp1+erp2+erp3+erp4+erp5):0;
+  const laborMeat=erp1+erp2+erp3;
+  const laborQtyBase=erp4+erp5+(erpOther>0?erpOther:0);
+
+  // 마스터 코드→제품 맵
+  const masterMap={};
+  window._masters.forEach(m=>masterMap[m.code]=m);
+
+  // ERP 수량 기준으로 행 생성
+  if(!Object.keys(erpQty).length){
+    tbody.innerHTML='<tr><td colspan="10" class="empty">⑤ ERP 생산실적 데이터가 없습니다. 데이터 입력 탭에서 붙여넣기 해주세요.</td></tr>';
+    return;
+  }
+
+  const totalQty=Object.values(erpQty).reduce((s,v)=>s+v,0);
+  // 수량배부용 총수량 (메추리알 포함 전체)
+  tbody.innerHTML=Object.entries(erpQty).filter(([,q])=>q>0).map(([code,qty])=>{
+    const m=masterMap[code];
+    // 생산량 집계에서 원육중량 찾기
+    let meatIn=0;
+    if(m){
+      for(const [pname,pv] of Object.entries(byName)){
+        const pm=findM_(pname);
+        if(pm&&pm.code===code){meatIn+=pv.meatIn;break;}
+      }
+    }
+    const meatShare=totalMeatIn>0&&m&&m.meatType?meatIn/totalMeatIn:0;
+    const qtyShare=totalQty>0?qty/totalQty:0;
+    const isQtyOnly=m&&m.laborRule==='qty_only';
+    const laborAlloc=laborTotal>0
+      ?(isQtyOnly?laborTotal*qtyShare:laborMeat*meatShare+laborQtyBase*qtyShare)
+      :0;
+    const rawCost=(raw||0)*1000000*meatShare;
+    const subCost=(sub||0)*1000000*meatShare;
+    const expCost=(exp||0)*1000000*(meatShare||qtyShare);
+    const totalCost=rawCost+subCost+laborAlloc+expCost;
+    const sp=m?m.supplyPrice:0;
+    const prodAmt_=sp*qty;
+    const rate=prodAmt_>0?totalCost/prodAmt_:0;
+    return `<tr>
+      <td class="c">${code}</td>
+      <td class="l">${m?m.name:code}</td>
+      <td class="c">${fmtN(qty)}</td>
+      <td>${fmtN(sp)}</td>
+      <td>${fmtN(Math.round(rawCost))}</td>
+      <td style="${laborAlloc>0?'color:var(--ok);font-weight:700':''}">${fmtN(Math.round(laborAlloc))}<br><span style="font-size:10px;color:#aaa">${isQtyOnly?'수량배부':'중량+수량'}</span></td>
+      <td>${fmtN(Math.round(expCost))}</td>
+      <td style="font-weight:700">${fmtN(Math.round(totalCost))}</td>
+      <td>${qty>0?fmtN(Math.round(totalCost/qty)):'—'}</td>
+      <td class="c ${rC(rate)}">${fmtP(rate)}</td>
+    </tr>`;
+  }).join('');
+};
+
+// ════════════════════════════════════
+// 월별 이력
+// ════════════════════════════════════
+window.loadHistory = async () => {
+  const q=query(collection(db,'costData'),orderBy('month'));
+  const snap=await getDocs(q);
+  const rows=[]; snap.forEach(d=>rows.push(d.data()));
+  const tbody=document.getElementById('history-body');
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="13" class="empty">데이터가 없습니다.</td></tr>';return;}
+  tbody.innerHTML=rows.map((r,i)=>{
+    const laborTotal=r.erpLabor?.total||0;
+    const total=(r.raw||0)+(r.sub||0)+laborTotal+(r.exp||0);
+    const rate=r.prodAmt>0?total/r.prodAmt:0;
+    const rRaw=total>0?(r.raw||0)/total:0;
+    const rExp=total>0?(r.exp||0)/total:0;
+    const prev=i>0?rows[i-1]:null;
+    const prevRate=prev&&prev.prodAmt>0?((prev.raw||0)+(prev.sub||0)+(prev.exp||0))/prev.prodAmt:null;
+    const diff=prevRate!==null?rate-prevRate:null;
+    return `<tr>
+      <td class="c">${r.month}</td>
+      <td>${fmt(r.prodAmt,1)}</td><td>${fmt(r.raw)}</td><td>${fmt(r.sub)}</td>
+      <td>${laborTotal>0?fmt(laborTotal/1000000):'—'}</td><td>${fmt(r.exp)}</td><td>${fmt(total/1000000)}</td>
+      <td class="c ${rC(rate)}">${fmtP(rate)}</td>
+      <td class="c">${fmtP(rRaw)}</td><td class="c">—</td>
+      <td class="c ${diff!=null?(diff>0?'bad':'ok'):''}">${diff!=null?(diff>=0?'+':'')+((diff)*100).toFixed(1)+'%p':'—'}</td>
+      <td class="l">${r.note||''}</td>
+      <td class="c">
+        <button class="btn btn-primary btn-sm" onclick="editMonth('${r.month}')">✏️ 수정</button>
+        <button class="btn btn-bad btn-sm" onclick="deleteHistoryMonth('${r.month}')">🗑️</button>
+      </td></tr>`;
+  }).join('');
+};
+window.editMonth = async (month) => {
+  document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(e=>e.classList.remove('active'));
+  document.getElementById('tab-input').classList.add('active');
+  document.querySelector('nav button:nth-child(2)').classList.add('active');
+  document.getElementById('inputMonth').value=month;
+  await loadExistingData();
+  showToast(`✏️ ${month} 데이터 불러옴`);
+  window.scrollTo(0,0);
+};
+window.deleteHistoryMonth = async (month) => {
+  if(!confirm(`${month} 데이터를 삭제합니다.`))return;
+  await deleteDoc(doc(db,'costData',month));
+  showToast(`🗑️ ${month} 삭제`);
+  loadHistory();
+};
+
+// ════════════════════════════════════
+// 대시보드
+// ════════════════════════════════════
+window.loadDashboard = async () => {
+  const month=document.getElementById('dashMonth').value||thisMonth();
+  document.getElementById('dashMonth').value=month;
+  document.getElementById('hdrMonth').textContent=month+' 기준';
+  await ensureMasters();
+  const snap=await getDoc(doc(db,'costData',month));
+  if(!snap.exists()){
+    ['kpi-prod','kpi-rate','kpi-diff'].forEach(id=>document.getElementById(id).textContent='—');
+    document.getElementById('kpi-status').textContent='데이터 없음';
+    document.getElementById('dashCostBody').innerHTML='<tr><td colspan="6" class="empty">해당 월 데이터가 없습니다.</td></tr>';
+    document.getElementById('dashProdBody').innerHTML='<tr><td colspan="7" class="empty">데이터 없음</td></tr>';
+    return;
+  }
+  const d=snap.data();
+  const total=(d.raw||0)+(d.sub||0)+(d.exp||0);
+  const rate=d.prodAmt>0?total/d.prodAmt:0;
+  document.getElementById('kpi-prod').textContent=fmt(d.prodAmt,1);
+  document.getElementById('kpi-rate').textContent=fmtP(rate);
+  document.getElementById('kpi-rate').className='kpi-val '+rC(rate);
+
+  const [y,m]=month.split('-').map(Number);
+  const pm=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;
+  const prevSnap=await getDoc(doc(db,'costData',pm));
+  const prev=prevSnap.exists()?prevSnap.data():null;
+  const prevRate=prev?((prev.raw||0)+(prev.sub||0)+(prev.exp||0))/(prev.prodAmt||1):null;
+  const diff=prevRate!==null?rate-prevRate:null;
+  document.getElementById('kpi-diff').textContent=diff!==null?(diff>=0?'+':'')+((diff*100).toFixed(1))+'%p':'—';
+
+  // 데이터 상태
+  const hasProd=d.prodData?.length>0;
+  const hasLabor=d.laborData&&Object.keys(d.laborData).length>0;
+  const hasInv=d.invData?.length>0;
+  document.getElementById('kpi-status').textContent=
+    [hasProd&&'생산',hasLabor&&'근무',hasInv&&'재고',(d.exp||d.raw)&&'경비'].filter(Boolean).join('·')||'미입력';
+
+  // 원가 구성
+  const items=[['원재료비',d.raw||0,prev?.raw],['부재료비',d.sub||0,prev?.sub],['노무비','—',prev],['경비',d.exp||0,prev?.exp],['합계',total,prev?((prev.raw||0)+(prev.sub||0)+(prev.exp||0)):null]];
+  document.getElementById('dashCostBody').innerHTML=items.map(([label,cv,pv])=>{
+    const isT=label==='합계';
+    const cr=total>0&&cv!=='—'?cv/total:0;
+    const pTotal=prev?((prev.raw||0)+(prev.sub||0)+(prev.exp||0)):0;
+    const pr=pTotal>0&&pv&&pv!=='—'?pv/pTotal:0;
+    const diff=cv!=='—'&&pv&&pv!=='—'?cv-pv:null;
+    return `<tr ${isT?'class="total"':''}>
+      <td class="c">${label}</td>
+      <td>${cv==='—'?'—':fmt(cv)}</td>
+      <td class="c">${cv==='—'?'—':fmtP(isT?rate:cr)}</td>
+      <td>${pv&&pv!=='—'?fmt(pv):'—'}</td>
+      <td class="c">${pv&&pv!=='—'?fmtP(isT?prevRate:pr):'—'}</td>
+      <td class="c ${diff!=null?(diff>0?'bad':'ok'):''}">${diff!=null?(diff>=0?'+':'')+fmt(diff):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  // 제품별 원가율 (생산량 집계 기반)
+  const actualProd=(d.prodData||[]).filter(r=>r.isActual);
+  if(!actualProd.length){document.getElementById('dashProdBody').innerHTML='<tr><td colspan="7" class="empty">생산 실적이 없습니다.</td></tr>';return;}
+  const totalMeat=actualProd.reduce((s,r)=>s+r.meatIn,0);
+  const byName={};
+  for(const r of actualProd){
+    if(!byName[r.prodName])byName[r.prodName]={meatIn:0,meatOut:0};
+    byName[r.prodName].meatIn+=r.meatIn;byName[r.prodName].meatOut+=r.meatOut;
+  }
+  const findM=(name)=>{
+    const nm=name.trim();
+    for(const m of window._masters){
+      if((m.alias||[]).some(a=>nm===a||nm.includes(a)||a.includes(nm))) return m;
+    }
+    let best=null,bs=0;
+    for(const m of window._masters){
+      const kws=['시그니처','코스트코','트레이더스','미니','메추리알','FC','3kg','설도','홍두께','우둔'];
+      const sc=kws.filter(k=>nm.includes(k)&&m.name.includes(k)).length;
+      if(sc>bs){bs=sc;best=m;}
+    }
+    return best;
+  };
+  document.getElementById('dashProdBody').innerHTML=Object.entries(byName).map(([name,v])=>{
+    const m_=findM(name);const share=totalMeat>0?v.meatIn/totalMeat:0;
+    const rawC=(d.raw||0)*1000000*share;const subC=(d.sub||0)*1000000*share;const expC=(d.exp||0)*1000000*share;
+    const totC=rawC+subC+expC;
+    const sp=m_?m_.supplyPrice:0;
+    const estQty=m_&&m_.weight>0?Math.round(v.meatOut*1000/(m_.weight*0.47)):0;
+    const rate_=sp>0&&estQty>0?totC/(sp*estQty):0;
+    return `<tr>
+      <td class="l">${name}</td><td>${fmtN(sp)}</td>
+      <td class="c ${rC(rate_)}">${rate_>0?fmtP(rate_):'—'}</td>
+      <td>${fmtN(Math.round(rawC))}</td><td>—</td><td>${fmtN(Math.round(expC))}</td>
+      <td class="c">${badge(rate_)}</td></tr>`;
+  }).join('');
+};
+
+// 초기화
+document.getElementById('dashMonth').value=thisMonth();
+document.getElementById('prodMonth').value=thisMonth();
+document.getElementById('inputMonth').value=thisMonth();
+loadDashboard();
+</script>
+</body>
+</html>
