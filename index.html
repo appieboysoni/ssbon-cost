@@ -385,18 +385,21 @@
 
       <div class="section-title">② 제품별 생산실적 입력</div>
 
-      <!-- ERP 파일 업로드 영역 -->
+      <!-- ERP 붙여넣기 영역 -->
       <div style="background:#EBF3E8;border:1.5px dashed #1D9E75;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <span style="font-size:13px;font-weight:700;color:#1D9E75">📂 더존 ERP 실적 파일 불러오기</span>
-          <input type="file" id="erpFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="readErpFile(this)">
-          <button class="btn btn-success btn-sm" onclick="document.getElementById('erpFileInput').click()">엑셀 파일 선택</button>
-          <span style="font-size:12px;color:#666">품목코드 6으로 시작하는 완제품만 자동 인식 · 생산입고 수량 자동 입력</span>
+        <div style="font-size:13px;font-weight:700;color:#1D9E75;margin-bottom:8px">📋 더존 ERP 실적 붙여넣기</div>
+        <div style="font-size:12px;color:#555;margin-bottom:8px">① 더존 엑셀에서 데이터 전체 선택 후 Ctrl+C → ② 아래 칸 클릭 후 Ctrl+V → ③ 자동 입력 버튼 클릭</div>
+        <textarea id="erpPasteArea"
+          placeholder="여기에 더존 엑셀 데이터를 붙여넣기 하세요 (Ctrl+V)"
+          style="width:100%;height:100px;padding:8px;border:1.5px solid #1D9E75;border-radius:6px;font-size:12px;font-family:monospace;resize:vertical;background:white;"></textarea>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <button class="btn btn-success btn-sm" onclick="parseErpPaste()">⚡ 자동 입력</button>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('erpPasteArea').value='';document.getElementById('erpResult').style.display='none'">🗑️ 초기화</button>
+          <div id="erpResult" style="font-size:12px;color:#1D9E75;display:none"></div>
         </div>
-        <div id="erpResult" style="margin-top:8px;font-size:12px;color:#1D9E75;display:none"></div>
       </div>
 
-      <p style="font-size:12px;color:#888;margin-bottom:10px">파일 불러오기 후 수량 확인 · 수정 가능합니다. 생산금액은 수량 × 공급단가로 자동계산됩니다.</p>
+      <p style="font-size:12px;color:#888;margin-bottom:10px">붙여넣기 후 수량 확인 · 수정 가능합니다. 생산금액은 수량 × 공급단가로 자동계산됩니다.</p>
 
       <div class="table-wrap">
         <table>
@@ -570,9 +573,6 @@
 </main>
 
 <div id="toast"></div>
-
-<!-- SheetJS 엑셀 파싱 -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <!-- Firebase SDK -->
 <script type="module">
@@ -773,93 +773,78 @@ window.clearMasterForm = function() {
 // 원가 입력
 // ════════════════════════════════════════════
 // ════════════════════════════════════════════
-// ERP 엑셀 파일 파싱
+// ERP 붙여넣기 파싱
 // ════════════════════════════════════════════
-window.readErpFile = function(input) {
-  const file = input.files[0];
-  if (!file) return;
+window.parseErpPaste = function() {
+  const raw = document.getElementById('erpPasteArea').value.trim();
+  if (!raw) { showToast('❌ 붙여넣기 데이터가 없습니다'); return; }
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  const rows = raw.split('\n').map(r => r.split('\t').map(c => c.trim()));
 
-      // 헤더 행 찾기 (품목 or 품목코드 가 있는 행)
-      let headerIdx = -1;
-      let codeCol = -1, qtyCol = -1;
-
-      for (let i = 0; i < Math.min(rows.length, 10); i++) {
-        const row = rows[i].map(c => String(c).trim());
-        // 품목코드 컬럼 찾기
-        const cIdx = row.findIndex(c => c === '품목' || c === '품목코드');
-        // 생산입고 컬럼 찾기
-        const qIdx = row.findIndex(c => c.includes('생산입고'));
-        if (cIdx >= 0 && qIdx >= 0) {
-          headerIdx = i; codeCol = cIdx; qtyCol = qIdx;
-          break;
-        }
-      }
-
-      // 헤더 못 찾으면 첫 번째 행 기준으로 추측
-      if (headerIdx < 0) {
-        for (let i = 0; i < Math.min(rows.length, 5); i++) {
-          const row = rows[i].map(c => String(c).trim());
-          for (let j = 0; j < row.length; j++) {
-            if (/^[36]\d{5}$/.test(row[j])) {
-              headerIdx = i - 1;
-              // 코드 컬럼 번호는 j
-              codeCol = j;
-              break;
-            }
-          }
-          if (headerIdx >= 0) break;
-        }
-      }
-
-      // 데이터 추출: 6으로 시작하는 품목코드만
-      const result = {};
-      for (let i = (headerIdx >= 0 ? headerIdx + 1 : 1); i < rows.length; i++) {
-        const row = rows[i];
-        const code = String(row[codeCol] || '').trim().replace(/'/g, '');
-        if (!/^6\d{5}$/.test(code)) continue;
-        const qty = parseFloat(String(row[qtyCol] || '0').replace(/,/g, '')) || 0;
-        if (qty <= 0) continue;
-        result[code] = (result[code] || 0) + qty;
-      }
-
-      // 입력칸에 값 채우기
-      let matched = 0, unmatched = [];
-      Object.entries(result).forEach(([code, qty]) => {
-        const input = document.getElementById(`pqty-${code}`);
-        if (input) {
-          input.value = qty;
-          // supplyPrice 찾아서 자동계산 트리거
-          const master = window._masters.find(m => m.code === code);
-          if (master) calcAmt(code, master.supplyPrice);
-          matched++;
-        } else {
-          unmatched.push(code);
-        }
-      });
-
-      const resultDiv = document.getElementById('erpResult');
-      resultDiv.style.display = 'block';
-      resultDiv.innerHTML = `✅ <b>${matched}개 품목</b> 수량 자동 입력 완료` +
-        (unmatched.length > 0 ? ` | ⚠️ 미매칭: ${unmatched.join(', ')}` : '');
-
-      // 파일 입력 초기화
-      input.value = '';
-      showToast(`✅ ERP 실적 ${matched}개 품목 자동 입력 완료`);
-
-    } catch(err) {
-      showToast('❌ 파일 읽기 실패: ' + err.message);
-      console.error(err);
+  // 헤더 행 찾기 (생산입고 컬럼 위치 파악)
+  let qtyCol = -1, codeCol = -1, headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const row = rows[i];
+    const qIdx = row.findIndex(c => c.includes('생산입고'));
+    const cIdx = row.findIndex(c => c === '품목' || c === '품목코드');
+    if (qIdx >= 0) {
+      qtyCol = qIdx; headerIdx = i;
+      if (cIdx >= 0) codeCol = cIdx;
+      break;
     }
-  };
-  reader.readAsArrayBuffer(file);
+  }
+
+  // 헤더 없으면 6으로 시작하는 코드 자동 탐색
+  const result = {};
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    // 품목코드 찾기: 6으로 시작하는 6자리 숫자
+    let code = '';
+    if (codeCol >= 0) {
+      code = String(row[codeCol] || '').replace(/'/g, '').trim();
+    } else {
+      code = row.find(c => /^'?6\d{5}$/.test(c.trim())) || '';
+      code = code.replace(/'/g, '').trim();
+    }
+    if (!/^6\d{5}$/.test(code)) continue;
+
+    // 생산입고 수량
+    let qty = 0;
+    if (qtyCol >= 0) {
+      qty = parseFloat(String(row[qtyCol] || '0').replace(/,/g, '')) || 0;
+    } else {
+      // 헤더 없으면 숫자 컬럼 중 가장 큰 값 사용
+      const nums = row.map(c => parseFloat(String(c).replace(/,/g, '')) || 0);
+      qty = Math.max(...nums.filter(n => n > 0 && n < 1000000));
+    }
+    if (qty <= 0) continue;
+    result[code] = (result[code] || 0) + qty;
+  }
+
+  if (Object.keys(result).length === 0) {
+    showToast('❌ 인식된 데이터가 없습니다. 더존 엑셀에서 헤더 포함해서 복사해보세요.');
+    return;
+  }
+
+  // 입력칸에 값 채우기
+  let matched = 0, unmatched = [];
+  Object.entries(result).forEach(([code, qty]) => {
+    const input = document.getElementById(`pqty-${code}`);
+    if (input) {
+      input.value = qty;
+      const master = window._masters.find(m => m.code === code);
+      if (master) calcAmt(code, master.supplyPrice);
+      matched++;
+    } else {
+      unmatched.push(code);
+    }
+  });
+
+  const resultDiv = document.getElementById('erpResult');
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = `✅ <b>${matched}개 품목</b> 수량 자동 입력 완료` +
+    (unmatched.length > 0 ? ` &nbsp;|&nbsp; ⚠️ 미매칭: ${unmatched.join(', ')}` : '');
+  showToast(`✅ ${matched}개 품목 자동 입력 완료`);
 };
 
 window.loadInputForm = async function() {
