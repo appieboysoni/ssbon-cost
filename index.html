@@ -321,6 +321,9 @@ tr.total td{background:var(--light);font-weight:700}
             <option value="우둔">우둔</option>
           </select>
         </div>
+        <div class="fg"><label>생산집계 별칭 (생산량 집계 파일의 제품명과 매칭)</label>
+          <input type="text" id="m-alias" placeholder="예: 시그니처 130g(메추리알), 코스트코680g">
+        </div>
         <div class="fg"><label>소비자가격(원)</label><input type="number" id="m-consumer" placeholder="예: 4900" oninput="previewSupply()"></div>
         <div class="fg"><label>공급단가 (소비자가 × <span id="rateLabel">68</span>%)</label><div class="calc-val" id="m-supply-preview">소비자가 입력 시 자동계산</div></div>
         <div class="fg"><label>노무비 배부 기준</label>
@@ -349,7 +352,7 @@ tr.total td{background:var(--light);font-weight:700}
 
       <div class="sec" style="margin-top:16px">등록된 제품 목록</div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>코드</th><th style="min-width:200px">품목명</th><th>규격</th><th>중량</th><th>원육종류</th><th>노무비기준</th><th>소비자가</th><th>공급단가</th><th>관리</th></tr></thead>
+        <thead><tr><th>코드</th><th style="min-width:200px">품목명</th><th>규격</th><th>중량</th><th>원육종류</th><th>생산집계 별칭</th><th>노무비기준</th><th>소비자가</th><th>공급단가</th><th>관리</th></tr></thead>
         <tbody id="master-body"><tr><td colspan="9" class="loading">로딩중...</td></tr></tbody>
       </table></div>
     </div>
@@ -452,6 +455,7 @@ async function loadMaster() {
     <tr>
       <td class="c">${p.code}</td><td class="l">${p.name}</td><td class="c">${p.spec||''}</td>
       <td class="c">${fmtN(p.weight)}g</td><td class="c">${p.meatType||'—'}</td>
+      <td class="l" style="font-size:11px;color:#666">${(p.alias||[]).join(', ')||'—'}</td>
       <td class="c">${p.laborRule==='qty_only'?'수량만':'표준'}</td>
       <td>${fmtN(p.consumerPrice)}</td>
       <td style="color:var(--ok);font-weight:700">${fmtN(p.supplyPrice)}</td>
@@ -473,6 +477,7 @@ window.saveMaster = async () => {
     spec:document.getElementById('m-spec').value.trim(),
     weight:parseFloat(document.getElementById('m-weight').value)||0,
     meatType:document.getElementById('m-meattype').value||'',
+    alias:(document.getElementById('m-alias').value||'').split(',').map(s=>s.trim()).filter(Boolean),
     laborRule:document.getElementById('m-labor-rule').value||'standard',
     consumerPrice:consumer, supplyPrice:supply,
   });
@@ -487,6 +492,7 @@ window.editMaster = id => {
   document.getElementById('m-weight').value=p.weight||'';
   document.getElementById('m-meattype').value=p.meatType||'';
   document.getElementById('m-consumer').value=p.consumerPrice||'';
+  document.getElementById('m-alias').value=(p.alias||[]).join(', ');
   document.getElementById('m-labor-rule').value=p.laborRule||'standard';
   previewSupply();
   document.querySelector('#tab-settings .sec').scrollIntoView({behavior:'smooth'});
@@ -497,7 +503,7 @@ window.deleteMaster = async id => {
   showToast('🗑️ 삭제됨'); loadMaster();
 };
 window.clearMasterForm = () => {
-  ['m-code','m-name','m-spec','m-weight','m-consumer'].forEach(id=>document.getElementById(id).value='');
+  ['m-code','m-name','m-spec','m-weight','m-consumer','m-alias'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('m-meattype').value='';
   document.getElementById('m-labor-rule').value='standard';
   document.getElementById('m-supply-preview').textContent='소비자가 입력 시 자동계산';
@@ -996,7 +1002,21 @@ window.loadProducts = async () => {
   }
 
   // 노무비 중량 배부용: 원육종류 있는 제품(쇠고기)만 집계, 메추리알 등 제외
-  const findM_=(name)=>{let best=null,bs=0;for(const m of window._masters){const kws=['시그니처','코스트코','트레이더스','미니','메추리알','FC','3kg','설도','홍두께','우둔','우둔살'];const sc=kws.filter(k=>name.includes(k)&&m.name.includes(k)).length;if(sc>bs){bs=sc;best=m;}}return best;};
+  const findM_=(name)=>{
+    const nm=name.trim();
+    // 1순위: alias 완전 일치
+    for(const m of window._masters){
+      if((m.alias||[]).some(a=>nm===a||nm.includes(a)||a.includes(nm))) return m;
+    }
+    // 2순위: 키워드 매칭
+    let best=null,bs=0;
+    for(const m of window._masters){
+      const kws=['시그니처','코스트코','트레이더스','미니','메추리알','FC','3kg','설도','홍두께','우둔'];
+      const sc=kws.filter(k=>nm.includes(k)&&m.name.includes(k)).length;
+      if(sc>bs){bs=sc;best=m;}
+    }
+    return best;
+  };
   const totalMeatIn=Object.entries(byName).reduce((s,[name,v])=>{
     const m_=findM_(name);
     // 원육종류가 있는 제품만 중량 배부 기준에 포함
@@ -1160,7 +1180,19 @@ window.loadDashboard = async () => {
     if(!byName[r.prodName])byName[r.prodName]={meatIn:0,meatOut:0};
     byName[r.prodName].meatIn+=r.meatIn;byName[r.prodName].meatOut+=r.meatOut;
   }
-  const findM=(name)=>{let best=null,bs=0;for(const m of window._masters){const kws=['시그니처','코스트코','트레이더스','미니','메추리알','FC','3kg'];const sc=kws.filter(k=>name.includes(k)&&m.name.includes(k)).length;if(sc>bs){bs=sc;best=m;}}return best;};
+  const findM=(name)=>{
+    const nm=name.trim();
+    for(const m of window._masters){
+      if((m.alias||[]).some(a=>nm===a||nm.includes(a)||a.includes(nm))) return m;
+    }
+    let best=null,bs=0;
+    for(const m of window._masters){
+      const kws=['시그니처','코스트코','트레이더스','미니','메추리알','FC','3kg','설도','홍두께','우둔'];
+      const sc=kws.filter(k=>nm.includes(k)&&m.name.includes(k)).length;
+      if(sc>bs){bs=sc;best=m;}
+    }
+    return best;
+  };
   document.getElementById('dashProdBody').innerHTML=Object.entries(byName).map(([name,v])=>{
     const m_=findM(name);const share=totalMeat>0?v.meatIn/totalMeat:0;
     const rawC=(d.raw||0)*1000000*share;const subC=(d.sub||0)*1000000*share;const expC=(d.exp||0)*1000000*share;
