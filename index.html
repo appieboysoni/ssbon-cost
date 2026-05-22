@@ -1004,6 +1004,7 @@ window.saveAllData = async () => {
       total:laborTotal>0 ? laborTotal : (erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0)+(erp['급여']||0)+(erp['잡급']||0)+(erp['퇴직']||0)
     } : null,
     prodByName,
+    laborTotal,
     erpQty,
     updatedAt: new Date().toISOString()
   });
@@ -1021,7 +1022,7 @@ window.loadExistingData = async () => {
   const snap=await getDoc(doc(db,'costData',month));
   if(!snap.exists())return;
   const d=snap.data();
-  document.getElementById('exp-labor').value=d.laborTotal?d.laborTotal/1000000:'';
+  document.getElementById('exp-labor').value=d.laborTotal?d.laborTotal/1000000:(d.erpLabor?.total?d.erpLabor.total/1000000:'');
   document.getElementById('exp-raw').value=d.raw||'';
   document.getElementById('exp-sub').value=d.sub||'';
   document.getElementById('exp-exp').value=d.exp||'';
@@ -1117,7 +1118,7 @@ window.loadProducts = async () => {
 
   // ERP 노무비 데이터
   const erpLabor=d.erpLabor||{};
-  const laborTotal=d.laborTotal||0;
+  const laborTotal=d.laborTotal||d.erpLabor?.total||0;
   const erp1=(erpLabor.임금1||0),erp2=(erpLabor.임금2||0),erp3=(erpLabor.임금3||0);
   const erp4=(erpLabor.임금4||0),erp5=(erpLabor.임금5||0);
   const erpOther=laborTotal>0?laborTotal-(erp1+erp2+erp3+erp4+erp5):0;
