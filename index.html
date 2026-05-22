@@ -229,15 +229,29 @@ tr.total td{background:var(--light);font-weight:700}
 
       <!-- 구역5: 경비 -->
       <div class="sec">⑤ 경비 합계 입력 (백만원)</div>
+      <div class="warn-box">💡 노무비 총계는 ERP 파싱값(임금1~5)에 급여·잡급·퇴직급여를 더한 전체 금액을 직접 입력하세요. 나머지는 ERP에서 자동 파싱된 값으로 배부됩니다.</div>
       <div class="form-row cols4">
         <div class="fg"><label>원재료비 합계 (검증용)</label><input type="number" id="exp-raw" step="0.01" placeholder="예: 342.2" style="background:var(--input)"></div>
         <div class="fg"><label>부재료비 합계 (검증용)</label><input type="number" id="exp-sub" step="0.01" placeholder="예: 26.4" style="background:var(--input)"></div>
         <div class="fg"><label>경비 합계</label><input type="number" id="exp-exp" step="0.01" placeholder="예: 186.4" style="background:var(--input)"></div>
         <div class="fg"><label>생산금액 합계</label><input type="number" id="exp-prod" step="0.01" placeholder="예: 893.2" style="background:var(--input)"></div>
       </div>
-      <div class="form-row" style="margin-top:8px">
+      <div class="form-row cols4" style="margin-top:8px">
+        <div class="fg">
+          <label>노무비 총계 (백만원) *</label>
+          <input type="number" id="exp-labor" step="0.01" placeholder="예: 103.9"
+            oninput="updateLaborCalc()"
+            style="background:var(--input);border-color:#1D9E75;border-width:2px">
+        </div>
+        <div class="fg">
+          <label>ERP 파싱 임금(1~5) — 참고</label>
+          <div class="calc-val" id="exp-labor-calc">—</div>
+        </div>
+        <div class="fg">
+          <label>급여+잡급+퇴직 (자동계산)</label>
+          <div class="calc-val" id="exp-labor-gap">—</div>
+        </div>
         <div class="fg"><label>비고</label><input type="text" id="exp-note" placeholder="특이사항"></div>
-        <div class="fg"><label>노무비 총계 (자동계산)</label><div class="calc-val" id="exp-labor-calc">—</div></div>
       </div>
 
       <!-- 원가 미리보기 -->
@@ -518,8 +532,9 @@ function updateStepIndicators() {
   document.getElementById('step3').className='step'+(p.inv?' done':'');
   document.getElementById('step4').className='step'+(p.erp?' done':'');
   const expExp=parseFloat(document.getElementById('exp-exp')?.value)||0;
+  const expLabor=parseFloat(document.getElementById('exp-labor')?.value)||0;
   const expProd=parseFloat(document.getElementById('exp-prod')?.value)||0;
-  document.getElementById('step5').className='step'+((expExp||expProd)?' done':'');
+  document.getElementById('step5').className='step'+((expExp||expLabor||expProd)?' done':'');
   if(p.prod&&p.erp) updateCostPreview();
 }
 
@@ -572,6 +587,24 @@ window.parseErpLabor = () => {
   const res=document.getElementById('erp-result');
   res.style.display='block';
   res.innerHTML=`✅ 총 노무비 ${fmtN(total)}원 파싱 완료`;
+  updateStepIndicators();
+};
+
+// ════════════════════════════════════
+// 노무비 총계 입력 시 갭 자동계산
+// ════════════════════════════════════
+window.updateLaborCalc = function() {
+  const total = (parseFloat(document.getElementById('exp-labor').value) || 0) * 1000000;
+  const erp = window._parsed.erp;
+  const erpTotal = erp ? (erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0) : 0;
+  const gap = total - erpTotal;
+  const gapDiv = document.getElementById('exp-labor-gap');
+  if(total > 0 && erpTotal > 0) {
+    gapDiv.textContent = fmtN(Math.round(gap)) + '원';
+    gapDiv.style.color = gap >= 0 ? 'var(--ok)' : 'var(--bad)';
+  } else {
+    gapDiv.textContent = '노무비 총계 입력 후 계산';
+  }
   updateStepIndicators();
 };
 
@@ -849,6 +882,7 @@ window.saveAllData = async () => {
   const inv=window._parsed.inv;
   if(!prod&&!labor&&!inv){showToast('❌ 붙여넣기 데이터가 없습니다');return;}
 
+  const laborTotal=(parseFloat(document.getElementById('exp-labor').value)||0)*1000000;
   const raw=parseFloat(document.getElementById('exp-raw').value)||0;
   const sub=parseFloat(document.getElementById('exp-sub').value)||0;
   const exp=parseFloat(document.getElementById('exp-exp').value)||0;
@@ -876,7 +910,7 @@ window.saveAllData = async () => {
       임금1:erp[1]||0, 임금2:erp[2]||0, 임금3:erp[3]||0,
       임금4:erp[4]||0, 임금5:erp[5]||0,
       급여:erp['급여']||0, 잡급:erp['잡급']||0, 퇴직:erp['퇴직']||0,
-      total:(erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0)+(erp['급여']||0)+(erp['잡급']||0)+(erp['퇴직']||0)
+      total:laborTotal>0 ? laborTotal : (erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0)+(erp['급여']||0)+(erp['잡급']||0)+(erp['퇴직']||0)
     } : null,
     prodByName,
     updatedAt: new Date().toISOString()
@@ -895,6 +929,7 @@ window.loadExistingData = async () => {
   const snap=await getDoc(doc(db,'costData',month));
   if(!snap.exists())return;
   const d=snap.data();
+  document.getElementById('exp-labor').value=d.laborTotal?d.laborTotal/1000000:'';
   document.getElementById('exp-raw').value=d.raw||'';
   document.getElementById('exp-sub').value=d.sub||'';
   document.getElementById('exp-exp').value=d.exp||'';
