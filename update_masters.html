@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>제품마스터 일괄 업데이트</title>
+<style>
+  body{font-family:Arial,sans-serif;max-width:700px;margin:60px auto;padding:20px;background:#f5f5f5}
+  .card{background:#fff;border-radius:12px;padding:32px;box-shadow:0 2px 12px rgba(0,0,0,.1)}
+  h2{color:#1F3864;margin-bottom:8px}
+  p{color:#666;font-size:14px;margin-bottom:24px}
+  button{width:100%;padding:16px;background:#1D9E75;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer}
+  button:disabled{background:#aaa;cursor:not-allowed}
+  #log{margin-top:20px;padding:16px;background:#f8f8f8;border-radius:8px;font-size:13px;line-height:2;display:none;max-height:500px;overflow-y:auto}
+  .ok{color:#1D9E75}.err{color:#C00000}.done{color:#1F3864;font-weight:700;font-size:15px}
+  .warn{color:#ED7D31;font-weight:700;margin-top:16px;padding:12px;background:#FFF2CC;border-radius:6px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>🏭 제품마스터 일괄 업데이트</h2>
+  <p>원육종류 + 생산집계 별칭 + 노무비기준을 20개 제품에 한 번에 적용합니다.<br>버튼을 한 번만 클릭하세요.</p>
+  <button id="btn" onclick="updateAll()">🔄 전체 업데이트 시작</button>
+  <div id="log"></div>
+  <div class="warn" id="warn" style="display:none">
+    ⚠️ 완료 후 이 페이지(update_masters.html)는 GitHub에서 삭제하세요.
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCw3KlYX6A-OMbAojirXdluNeU7g6286cM",
+  authDomain: "ssbon-64b4f.firebaseapp.com",
+  projectId: "ssbon-64b4f",
+  storageBucket: "ssbon-64b4f.firebasestorage.app",
+  messagingSenderId: "797947388860",
+  appId: "1:797947388860:web:4baf3cc586cdec9fc501b9"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// 원육종류 + 별칭 + 노무비기준 매핑
+const updates = {
+  '600001': { meatType:'설도',   alias:['미니장조림70g(5입)', '미니쇠고기장조림 70(5입_설도)'],          laborRule:'standard' },
+  '600003': { meatType:'설도',   alias:['미니장조림70g(개별)', '미니장조림70g'],                         laborRule:'standard' },
+  '600006': { meatType:'홍두께', alias:['코스트코680g(홍두께)', '쇠고기장조림 170_코코_4입(홍두께)'],    laborRule:'standard' },
+  '600007': { meatType:'설도',   alias:['코스트코680g', '코스트코680g(설도)', '쇠고기장조림 170_코코_4입(설도)'], laborRule:'standard' },
+  '600010': { meatType:'설도',   alias:['시그니처 130g(메추리알)', '시그니처130g(설도)', '시그니처 130g'], laborRule:'standard' },
+  '600013': { meatType:'설도',   alias:['쇠고기장조림 120g(설도)'],                                      laborRule:'standard' },
+  '600014': { meatType:'설도',   alias:['시그니처 130g 마트용(설도)'],                                   laborRule:'standard' },
+  '600015': { meatType:'설도',   alias:['트레이더스460g', '트레이더스460g(설도)', '트레이더스 460g'],      laborRule:'standard' },
+  '600017': { meatType:'홍두께', alias:['3kg 어머니 쇠고기 장조림', 'FC 장조림 3KG', '3kg FC 장조림'],   laborRule:'standard' },
+  '600018': { meatType:'우둔',   alias:['미니장조림70g(5입_우둔)'],                                      laborRule:'standard' },
+  '600019': { meatType:'우둔',   alias:['미니장조림70g(우둔)', '미니쇠고기장조림 70g 낱개(우둔)'],        laborRule:'standard' },
+  '600020': { meatType:'우둔',   alias:['코스트코680g(우둔)', '쇠고기장조림 170_코코_4입(우둔)'],         laborRule:'standard' },
+  '600021': { meatType:'우둔',   alias:['시그니처 130g(우둔)', '시그니처130g(우둔)'],                    laborRule:'standard' },
+  '600022': { meatType:'우둔',   alias:['쇠고기장조림 120g(우둔)'],                                      laborRule:'standard' },
+  '600023': { meatType:'우둔',   alias:['시그니처 130g 마트용(우둔)'],                                   laborRule:'standard' },
+  '600024': { meatType:'우둔',   alias:['트레이더스460g(우둔)', '트레이더스 460g(우둔)'],                 laborRule:'standard' },
+  '600025': { meatType:'우둔',   alias:['3kg FC 장조림(우둔)'],                                          laborRule:'standard' },
+  '600026': { meatType:'홍두께', alias:['트레이더스460g(홍두께)', '트레이더스 460g(홍두께)'],             laborRule:'standard' },
+  '600027': { meatType:'',       alias:['메추리알장조림180g', '메추리알 장조림 180g'],                   laborRule:'qty_only' },
+  '600028': { meatType:'홍두께', alias:['시그니처 130g(홍두께)', '시그니처130g(홍두께)'],                 laborRule:'standard' },
+};
+
+window.updateAll = async function() {
+  const btn = document.getElementById('btn');
+  const log = document.getElementById('log');
+  btn.disabled = true;
+  btn.textContent = '업데이트 중...';
+  log.style.display = 'block';
+  log.innerHTML = '';
+
+  let ok = 0, fail = 0;
+  for (const [code, upd] of Object.entries(updates)) {
+    try {
+      const snap = await getDoc(doc(db, 'products', code));
+      if (!snap.exists()) {
+        log.innerHTML += `<div style="color:#aaa">⬜ ${code} 마스터에 없음 (스킵)</div>`;
+        continue;
+      }
+      const existing = snap.data();
+      await setDoc(doc(db, 'products', code), {
+        ...existing,
+        meatType: upd.meatType,
+        alias: upd.alias,
+        laborRule: upd.laborRule,
+      });
+      log.innerHTML += `<div class="ok">✅ ${code} | 원육:${upd.meatType||'없음'} | 별칭:${upd.alias[0]} | 기준:${upd.laborRule}</div>`;
+      ok++;
+    } catch(e) {
+      log.innerHTML += `<div class="err">❌ ${code} 실패: ${e.message}</div>`;
+      fail++;
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+
+  log.innerHTML += `<div class="done">━━━━━━━━━━━━━━━━<br>완료! 성공 ${ok}개 / 실패 ${fail}개</div>`;
+  btn.textContent = '✅ 업데이트 완료';
+  document.getElementById('warn').style.display = 'block';
+};
+</script>
+</body>
+</html>
