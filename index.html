@@ -1259,7 +1259,7 @@ window.loadDashboard = async () => {
   const hasLabor=d.laborData&&Object.keys(d.laborData).length>0;
   const hasInv=d.invData?.length>0;
   document.getElementById('kpi-status').textContent=
-    [hasProd&&'생산','hasLabor'&&hasLabor&&'근무','hasInv&&'&&hasInv&&'재고','(d.exp||d.raw)&&'&&(d.exp||d.raw)&&'경비'].filter(Boolean).join('·')||'미입력';
+    [hasProd&&'생산',hasLabor&&'근무',hasInv&&'재고',(d.exp||d.raw)&&'경비'].filter(Boolean).join('·')||'미입력';
 
   // 원가 구성
   const items=[['원재료비',d.raw||0,prev?.raw],['부재료비',d.sub||0,prev?.sub],['노무비','—',prev],['경비',d.exp||0,prev?.exp],['합계',total,prev?((prev.raw||0)+(prev.sub||0)+(prev.exp||0)):null]];
