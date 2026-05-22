@@ -418,7 +418,8 @@
 
       <div class="btn-row">
         <button class="btn btn-success" onclick="saveCostData()">💾 저장</button>
-        <button class="btn btn-primary" onclick="loadInputForm()">🔄 초기화</button>
+        <button class="btn btn-primary" onclick="loadInputForm()">🔄 다시 불러오기</button>
+        <button class="btn btn-danger" onclick="clearInputForm()">🗑️ 당월 데이터 초기화</button>
       </div>
     </div>
   </div>
@@ -435,6 +436,9 @@
   <div class="card">
     <div class="card-header">📦 제품별 원가 상세</div>
     <div class="card-body">
+      <div class="btn-row" style="margin-bottom:12px">
+        <button class="btn btn-danger btn-sm" onclick="deleteMonthData('prod')">🗑️ 이 달 데이터 삭제</button>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -483,6 +487,7 @@
               <th>노무비 비율</th>
               <th>전월대비</th>
               <th>비  고</th>
+              <th>관리</th>
             </tr>
           </thead>
           <tbody id="historyBody">
@@ -930,6 +935,55 @@ window.saveCostData = async function() {
 };
 
 // ════════════════════════════════════════════
+// 수정 / 삭제 / 초기화
+// ════════════════════════════════════════════
+
+// 당월 입력 폼 초기화 (Firebase 데이터는 유지)
+window.clearInputForm = async function() {
+  const month = document.getElementById('inputMonth').value;
+  if (!month) { showToast('❌ 작업월을 선택하세요'); return; }
+  if (!confirm(`${month} 데이터를 Firebase에서 완전히 삭제하고 초기화합니다. 계속하시겠습니까?`)) return;
+  await deleteDoc(doc(db, 'costData', month));
+  ['inp-raw','inp-sub','inp-labor','inp-exp','inp-prod','inp-note'].forEach(id => document.getElementById(id).value = '');
+  window._masters.forEach(p => {
+    const el = document.getElementById(`pqty-${p.code}`);
+    if (el) { el.value = ''; calcAmt(p.code, p.supplyPrice); }
+  });
+  document.getElementById('erpPasteArea').value = '';
+  document.getElementById('erpResult').style.display = 'none';
+  showToast(`🗑️ ${month} 데이터 삭제 완료`);
+  loadHistory();
+};
+
+// 제품별 원가 탭 / 이력DB 탭에서 특정 월 삭제
+window.deleteMonthData = async function(source) {
+  const month = source === 'prod'
+    ? document.getElementById('prodMonth').value
+    : source;
+  if (!month) { showToast('❌ 삭제할 월이 선택되지 않았습니다'); return; }
+  if (!confirm(`${month} 데이터를 삭제합니다. 이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?`)) return;
+  await deleteDoc(doc(db, 'costData', month));
+  showToast(`🗑️ ${month} 데이터 삭제 완료`);
+  if (source === 'prod') {
+    document.getElementById('productDetailBody').innerHTML = '<tr><td colspan="11" class="empty">데이터가 삭제되었습니다.</td></tr>';
+  }
+  loadHistory();
+};
+
+// 이력DB에서 특정 월 수정 (원가 입력 탭으로 이동)
+window.editMonthData = async function(month) {
+  // 원가 입력 탭으로 전환 후 해당 월 데이터 불러오기
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-input').classList.add('active');
+  document.querySelector('nav button:nth-child(2)').classList.add('active');
+  document.getElementById('inputMonth').value = month;
+  await loadInputForm();
+  showToast(`✏️ ${month} 데이터를 불러왔습니다. 수정 후 저장하세요.`);
+  window.scrollTo(0, 0);
+};
+
+// ════════════════════════════════════════════
 // 대시보드
 // ════════════════════════════════════════════
 window.loadDashboard = async function() {
@@ -1102,7 +1156,7 @@ window.loadHistory = async function() {
 
   const tbody = document.getElementById('historyBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="12" class="empty">데이터가 없습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" class="empty">데이터가 없습니다.</td></tr>';
     return;
   }
 
@@ -1127,6 +1181,10 @@ window.loadHistory = async function() {
       <td class="text-center">${fmtPct(rateLabor)}</td>
       <td class="text-center ${diff!=null?(diff>0?'rate-bad':'rate-good'):''}">${diff!=null?(diff>=0?'+':'')+((diff)*100).toFixed(1)+'%p':'—'}</td>
       <td class="text-left">${r.note||''}</td>
+      <td class="text-center" style="white-space:nowrap">
+        <button class="btn btn-primary btn-sm" onclick="editMonthData('${r.month}')">✏️ 수정</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMonthData('${r.month}')" style="margin-left:4px">🗑️ 삭제</button>
+      </td>
     </tr>`;
   }).join('');
 };
