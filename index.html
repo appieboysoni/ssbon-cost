@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>순수본 제조원가 관리</title>
+<style>
+  :root {
+    --primary: #1F3864;
+    --primary-mid: #2F5496;
+    --primary-light: #D6E4F7;
+    --input-bg: #FFF2CC;
+    --calc-bg: #EBF3E8;
+    --success: #1D9E75;
+    --danger: #C00000;
+    --warning: #ED7D31;
+    --gray-light: #F2F2F2;
+    --gray-mid: #D9D9D9;
+    --border: #BFBFBF;
+    --white: #FFFFFF;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif; background: #f0f2f5; color: #222; }
+  header {
+    background: var(--primary); color: white; padding: 0 24px; height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .header-month { font-size: 13px; background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 20px; }
+  nav { background: var(--primary-mid); display: flex; overflow-x: auto; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  nav button {
+    flex-shrink: 0; padding: 12px 20px; background: none; border: none;
+    color: rgba(255,255,255,0.7); font-size: 13px; cursor: pointer;
+    border-bottom: 3px solid transparent; transition: all 0.2s; white-space: nowrap;
+  }
+  nav button.active { color: white; border-bottom-color: #FFC000; font-weight: 700; }
+  nav button:hover { color: white; background: rgba(255,255,255,0.1); }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 16px; overflow: hidden; }
+  .card-header { background: var(--primary-mid); color: white; padding: 12px 18px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-body { padding: 16px 18px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media(max-width: 768px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  .kpi-card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-top: 4px solid var(--primary-mid); }
+  .kpi-card.warning { border-top-color: var(--warning); }
+  .kpi-label { font-size: 11px; color: #888; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 700; color: var(--primary); line-height: 1; }
+  .kpi-sub { font-size: 11px; color: #aaa; margin-top: 4px; }
+  .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media(max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: 12px; color: #555; font-weight: 600; }
+  .form-group input, .form-group select {
+    padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 6px;
+    font-size: 14px; background: var(--input-bg); outline: none; transition: border-color 0.2s;
+  }
+  .form-group input:focus { border-color: var(--primary-mid); }
+  .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .btn-primary { background: var(--primary); color: white; }
+  .btn-primary:hover { background: var(--primary-mid); }
+  .btn-success { background: var(--success); color: white; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--primary-light); color: var(--primary); font-weight: 700; padding: 10px 8px; text-align: center; border: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 8px; border: 1px solid #e8e8e8; text-align: right; white-space: nowrap; }
+  td.text-left { text-align: left; }
+  td.text-center { text-align: center; }
+  tr:nth-child(even) td { background: var(--gray-light); }
+  tr.total-row td { background: var(--primary-light); font-weight: 700; }
+  .rate-good { color: var(--success); font-weight: 700; }
+  .rate-warn { color: var(--warning); font-weight: 700; }
+  .rate-bad  { color: var(--danger);  font-weight: 700; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .badge-good { background: #d4edda; color: #155724; }
+  .badge-warn { background: #fff3cd; color: #856404; }
+  .badge-bad  { background: #f8d7da; color: #721c24; }
+  .month-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; background: white; padding: 12px 16px; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .month-bar label { font-size: 13px; font-weight: 700; color: var(--primary); }
+  .month-bar input[type=month] { padding: 7px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--input-bg); outline: none; }
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 12px 24px; border-radius: 8px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  .loading { text-align: center; padding: 40px; color: #aaa; font-size: 14px; }
+  .empty   { text-align: center; padding: 30px; color: #bbb; font-size: 13px; }
+  .section-title { font-size: 13px; font-weight: 700; color: var(--primary-mid); border-left: 4px solid var(--primary-mid); padding-left: 10px; margin: 16px 0 10px; }
+  @media(max-width: 480px) { header h1 { font-size: 15px; } .kpi-value { font-size: 20px; } main { padding: 12px 10px; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏭 순수본 제조원가 관리</h1>
+  <span class="header-month" id="headerMonth">로딩중...</span>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('dashboard',this)">📊 대시보드</button>
+  <button onclick="showTab('input',this)">✏️ 원가 입력</button>
+  <button onclick="showTab('products',this)">📦 제품별 원가</button>
+  <button onclick="showTab('history',this)">📅 월별 이력</button>
+  <button onclick="showTab('master',this)">⚙️ 제품마스터</button>
+</nav>
+
+<main>
+
+<!-- 대시보드 -->
+<div id="tab-dashboard" class="tab-content active">
+  <div class="month-bar">
+    <label>조회 기준월</label>
+    <input type="month" id="dashMonth" onchange="loadDashboard()">
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">생산금액</div><div class="kpi-value" id="kpi-prod">—</div><div class="kpi-sub">백만원</div></div>
+    <div class="kpi-card"><div class="kpi-label">제조원가율</div><div class="kpi-value" id="kpi-rate">—</div><div class="kpi-sub">생산금액 대비</div></div>
+    <div class="kpi-card warning"><div class="kpi-label">전월 대비</div><div class="kpi-value" id="kpi-diff">—</div><div class="kpi-sub">원가율 변동</div></div>
+    <div class="kpi-card"><div class="kpi-label">주요 원가 요인</div><div class="kpi-value" id="kpi-factor" style="font-size:16px">—</div><div class="kpi-sub">최대 비중 항목</div></div>
+  </div>
+  <div class="card">
+    <div class="card-header">📋 원가 구성 (당월 vs 전월)</div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>항  목</th><th>당월 금액(백만)</th><th>당월 비율</th><th>전월 금액(백만)</th><th>전월 비율</th><th>증  감</th></tr></thead>
+          <tbody id="dashCostBody"><tr><td colspan="6" class="loading">데이터 로딩중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">🏷️ 제품별 원가율 현황</div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>품목명</th><th>공급단가</th><th>제품단가</th><th>원가율</th><th>판단</th></tr></thead>
+          <tbody id="dashProductBody"><tr><td colspan="5" class="loading">데이터 로딩중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 원가 입력 -->
+<div id="tab-input" class="tab-content">
+  <div class="card">
+    <div class="card-header">✏️ 월간 원가 입력</div>
+    <div class="card-body">
+      <div class="form-grid">
+        <div class="form-group"><label>작업월 *</label><input type="month" id="inputMonth"></div>
+      </div>
+      <div class="section-title">① 원가 집계 (백만원 단위)</div>
+      <div class="form-grid">
+        <div class="form-group"><label>원재료비 합계 (백만원)</label><input type="number" id="inp-raw" step="0.01" placeholder="예: 289.4"></div>
+        <div class="form-group"><label>부재료비 합계 (백만원)</label><input type="number" id="inp-sub" step="0.01" placeholder="예: 29.4"></div>
+        <div class="form-group"><label>노무비 합계 (백만원)</label><input type="number" id="inp-labor" step="0.01" placeholder="예: 100.8"></div>
+        <div class="form-group"><label>경비 합계 (백만원)</label><input type="number" id="inp-exp" step="0.01" placeholder="예: 160.8"></div>
+        <div class="form-group"><label>생산금액 합계 (백만원)</label><input type="number" id="inp-prod" step="0.01" placeholder="예: 756.8"></div>
+        <div class="form-group"><label>비고</label><input type="text" id="inp-note" placeholder="특이사항 입력"></div>
+      </div>
+      <div class="section-title">② 제품별 생산실적 입력</div>
+      <p style="font-size:12px;color:#888;margin-bottom:10px">생산이 있는 제품만 입력하세요.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>품목코드</th><th style="min-width:200px">품목명</th><th>생산수량(ea)</th><th>생산금액(원)</th></tr></thead>
+          <tbody id="prodInputBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-success" onclick="saveCostData()">💾 저장</button>
+        <button class="btn btn-primary" onclick="loadInputForm()">🔄 불러오기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 제품별 원가 -->
+<div id="tab-products" class="tab-content">
+  <div class="month-bar">
+    <label>조회 기준월</label>
+    <input type="month" id="prodMonth" onchange="loadProductDetail()">
+  </div>
+  <div class="card">
+    <div class="card-header">📦 제품별 원가 상세</div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>품목코드</th><th style="min-width:200px">품목명</th><th>공급단가</th><th>생산수량(ea)</th><th>생산금액(원)</th><th>원재료비</th><th>노무비</th><th>경비</th><th>합계원가</th><th>제품단가</th><th>원가율</th></tr></thead>
+          <tbody id="productDetailBody"><tr><td colspan="11" class="loading">월을 선택하세요</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 월별 이력 -->
+<div id="tab-history" class="tab-content">
+  <div class="card">
+    <div class="card-header">📅 월별 원가 이력</div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>연  월</th><th>생산금액(백만)</th><th>원재료비(백만)</th><th>부재료비(백만)</th><th>노무비(백만)</th><th>경  비(백만)</th><th>제조원가(백만)</th><th>제조원가율</th><th>원재료 비율</th><th>노무비 비율</th><th>전월대비</th><th>비  고</th></tr></thead>
+          <tbody id="historyBody"><tr><td colspan="12" class="loading">데이터 로딩중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 제품마스터 -->
+<div id="tab-master" class="tab-content">
+  <div class="card">
+    <div class="card-header">⚙️ 제품 마스터 관리</div>
+    <div class="card-body">
+      <div class="section-title">제품 추가 / 수정</div>
+      <div class="form-grid">
+        <div class="form-group"><label>품목코드 *</label><input type="text" id="m-code" placeholder="예: 600001"></div>
+        <div class="form-group"><label>품목명 *</label><input type="text" id="m-name" placeholder="예: [본죽]미니쇠고기장조림 70g"></div>
+        <div class="form-group"><label>규격</label><input type="text" id="m-spec" placeholder="예: 70g*5입"></div>
+        <div class="form-group"><label>중량(g)</label><input type="number" id="m-weight" placeholder="예: 350"></div>
+        <div class="form-group"><label>소비자가격(원)</label><input type="number" id="m-consumer" placeholder="예: 17500"></div>
+        <div class="form-group"><label>공급단가(원) *</label><input type="number" id="m-supply" placeholder="예: 11900"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-success" onclick="saveMaster()">💾 저장</button>
+        <button class="btn btn-primary btn-sm" onclick="clearMasterForm()">초기화</button>
+      </div>
+      <div class="section-title" style="margin-top:20px">등록된 제품 목록</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>품목코드</th><th style="min-width:220px">품목명</th><th>규격</th><th>중량(g)</th><th>소비자가격</th><th>공급단가</th><th>관리</th></tr></thead>
+          <tbody id="masterBody"><tr><td colspan="7" class="loading">로딩중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+<div id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, getDocs, collection, orderBy, query, deleteDoc }
+  from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCw3KlYX6A-OMbAojirXdluNeU7g6286cM",
+  authDomain: "ssbon-64b4f.firebaseapp.com",
+  projectId: "ssbon-64b4f",
+  storageBucket: "ssbon-64b4f.firebasestorage.app",
+  messagingSenderId: "797947388860",
+  appId: "1:797947388860:web:4baf3cc586cdec9fc501b9"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+window._db = db;
+window._masters = [];
+
+function fmt(n, dec=2) {
+  if (n===null||n===undefined||isNaN(n)) return '—';
+  return Number(n).toLocaleString('ko-KR',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+}
+function fmtN(n) { if (!n&&n!==0) return '—'; return Number(n).toLocaleString('ko-KR'); }
+function fmtPct(n) { if (n===null||n===undefined||isNaN(n)) return '—'; return (n*100).toFixed(1)+'%'; }
+function rateClass(r) { if (!r||isNaN(r)) return ''; if (r>=1) return 'rate-bad'; if (r>=0.85) return 'rate-warn'; return 'rate-good'; }
+function rateBadge(r) {
+  if (!r||isNaN(r)) return '';
+  if (r>=1)    return '<span class="badge badge-bad">🔴 검토필요</span>';
+  if (r>=0.85) return '<span class="badge badge-warn">🟡 주의</span>';
+  return '<span class="badge badge-good">🟢 양호</span>';
+}
+
+window.showToast = function(msg,dur=2500) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),dur);
+};
+
+window.showTab = function(name,btn) {
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+  if (name==='dashboard') loadDashboard();
+  if (name==='products')  loadProductDetail();
+  if (name==='history')   loadHistory();
+  if (name==='master')    loadMaster();
+  if (name==='input')     loadInputForm();
+};
+
+function thisMonth() {
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+
+async function ensureMasters() {
+  if (window._masters.length) return;
+  const snap=await getDocs(query(collection(db,'products'),orderBy('code')));
+  snap.forEach(d=>window._masters.push({id:d.id,...d.data()}));
+}
+
+// 마스터
+async function loadMaster() {
+  const snap=await getDocs(query(collection(db,'products'),orderBy('code')));
+  window._masters=[];
+  snap.forEach(d=>window._masters.push({id:d.id,...d.data()}));
+  const tbody=document.getElementById('masterBody');
+  if (!window._masters.length) { tbody.innerHTML='<tr><td colspan="7" class="empty">등록된 제품이 없습니다. 위에서 추가하세요.</td></tr>'; return; }
+  tbody.innerHTML=window._masters.map(p=>`
+    <tr>
+      <td class="text-center">${p.code}</td>
+      <td class="text-left">${p.name}</td>
+      <td class="text-center">${p.spec||''}</td>
+      <td>${fmtN(p.weight)}</td>
+      <td>${fmtN(p.consumerPrice)}</td>
+      <td>${fmtN(p.supplyPrice)}</td>
+      <td class="text-center">
+        <button class="btn btn-primary btn-sm" onclick="editMaster('${p.id}')">수정</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMaster('${p.id}')">삭제</button>
+      </td>
+    </tr>`).join('');
+}
+
+window.saveMaster = async function() {
+  const code=document.getElementById('m-code').value.trim();
+  const name=document.getElementById('m-name').value.trim();
+  const supply=parseFloat(document.getElementById('m-supply').value);
+  if (!code||!name||!supply) { showToast('❌ 품목코드·품목명·공급단가는 필수입니다'); return; }
+  await setDoc(doc(db,'products',code),{
+    code, name,
+    spec: document.getElementById('m-spec').value.trim(),
+    weight: parseFloat(document.getElementById('m-weight').value)||0,
+    consumerPrice: parseFloat(document.getElementById('m-consumer').value)||0,
+    supplyPrice: supply,
+  });
+  showToast('✅ 저장되었습니다');
+  clearMasterForm();
+  loadMaster();
+};
+
+window.editMaster = function(id) {
+  const p=window._masters.find(x=>x.id===id); if (!p) return;
+  document.getElementById('m-code').value=p.code;
+  document.getElementById('m-name').value=p.name;
+  document.getElementById('m-spec').value=p.spec||'';
+  document.getElementById('m-weight').value=p.weight||'';
+  document.getElementById('m-consumer').value=p.consumerPrice||'';
+  document.getElementById('m-supply').value=p.supplyPrice||'';
+  document.querySelector('#tab-master .section-title').scrollIntoView({behavior:'smooth'});
+};
+
+window.deleteMaster = async function(id) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  await deleteDoc(doc(db,'products',id));
+  showToast('🗑️ 삭제되었습니다'); loadMaster();
+};
+
+window.clearMasterForm = function() {
+  ['m-code','m-name','m-spec','m-weight','m-consumer','m-supply'].forEach(id=>document.getElementById(id).value='');
+};
+
+// 원가 입력
+window.loadInputForm = async function() {
+  await ensureMasters();
+  const month=document.getElementById('inputMonth').value||thisMonth();
+  document.getElementById('inputMonth').value=month;
+  let existing={};
+  const snap=await getDoc(doc(db,'costData',month));
+  if (snap.exists()) {
+    const d=snap.data();
+    document.getElementById('inp-raw').value=d.raw||'';
+    document.getElementById('inp-sub').value=d.sub||'';
+    document.getElementById('inp-labor').value=d.labor||'';
+    document.getElementById('inp-exp').value=d.exp||'';
+    document.getElementById('inp-prod').value=d.prod||'';
+    document.getElementById('inp-note').value=d.note||'';
+    existing=d.products||{};
+  } else {
+    ['inp-raw','inp-sub','inp-labor','inp-exp','inp-prod','inp-note'].forEach(id=>document.getElementById(id).value='');
+  }
+  const tbody=document.getElementById('prodInputBody');
+  if (!window._masters.length) { tbody.innerHTML='<tr><td colspan="4" class="empty">제품마스터에 제품을 먼저 등록하세요</td></tr>'; return; }
+  tbody.innerHTML=window._masters.map(p=>`
+    <tr>
+      <td class="text-center">${p.code}</td>
+      <td class="text-left">${p.name}</td>
+      <td><input type="number" id="pqty-${p.code}" value="${existing[p.code]?.qty||''}" placeholder="0" style="width:100px;padding:5px;border:1px solid #ddd;border-radius:4px;background:var(--input-bg)"></td>
+      <td><input type="number" id="pamt-${p.code}" value="${existing[p.code]?.amt||''}" placeholder="0" style="width:130px;padding:5px;border:1px solid #ddd;border-radius:4px;background:var(--input-bg)"></td>
+    </tr>`).join('');
+};
+
+window.saveCostData = async function() {
+  const month=document.getElementById('inputMonth').value;
+  if (!month) { showToast('❌ 작업월을 선택하세요'); return; }
+  const raw=parseFloat(document.getElementById('inp-raw').value)||0;
+  const sub=parseFloat(document.getElementById('inp-sub').value)||0;
+  const labor=parseFloat(document.getElementById('inp-labor').value)||0;
+  const exp=parseFloat(document.getElementById('inp-exp').value)||0;
+  const prod=parseFloat(document.getElementById('inp-prod').value)||0;
+  const note=document.getElementById('inp-note').value.trim();
+  const products={};
+  window._masters.forEach(p=>{
+    const qty=parseFloat(document.getElementById(`pqty-${p.code}`)?.value)||0;
+    const amt=parseFloat(document.getElementById(`pamt-${p.code}`)?.value)||0;
+    if (qty>0||amt>0) products[p.code]={qty,amt};
+  });
+  await setDoc(doc(db,'costData',month),{month,raw,sub,labor,exp,prod,note,total:raw+sub+labor+exp,products,updatedAt:new Date().toISOString()});
+  showToast('✅ 저장 완료!');
+  loadHistory();
+};
+
+// 대시보드
+window.loadDashboard = async function() {
+  const month=document.getElementById('dashMonth').value||thisMonth();
+  document.getElementById('dashMonth').value=month;
+  document.getElementById('headerMonth').textContent=month+' 기준';
+  await ensureMasters();
+  const snap=await getDoc(doc(db,'costData',month));
+  if (!snap.exists()) {
+    ['kpi-prod','kpi-rate','kpi-diff'].forEach(id=>document.getElementById(id).textContent='—');
+    document.getElementById('kpi-factor').textContent='데이터 없음';
+    document.getElementById('dashCostBody').innerHTML='<tr><td colspan="6" class="empty">해당 월 데이터가 없습니다.</td></tr>';
+    document.getElementById('dashProductBody').innerHTML='<tr><td colspan="5" class="empty">데이터 없음</td></tr>';
+    return;
+  }
+  const cur=snap.data();
+  const [y,m]=month.split('-').map(Number);
+  const pm=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;
+  const prevSnap=await getDoc(doc(db,'costData',pm));
+  const prev=prevSnap.exists()?prevSnap.data():null;
+  const prodMil=cur.prod||0;
+  const total=cur.total||(cur.raw+cur.sub+cur.labor+cur.exp);
+  const rate=prodMil>0?total/prodMil:0;
+  const prevRate=prev&&prev.prod>0?prev.total/prev.prod:null;
+  const diff=prevRate!==null?rate-prevRate:null;
+  document.getElementById('kpi-prod').textContent=fmt(prodMil,1);
+  document.getElementById('kpi-rate').textContent=fmtPct(rate);
+  document.getElementById('kpi-rate').className='kpi-value '+rateClass(rate);
+  document.getElementById('kpi-diff').textContent=diff!==null?(diff>=0?'+':'')+(diff*100).toFixed(1)+'%p':'—';
+  const costs={원재료비:cur.raw,부재료비:cur.sub,노무비:cur.labor,경비:cur.exp};
+  const maxKey=Object.entries(costs).sort((a,b)=>b[1]-a[1])[0];
+  document.getElementById('kpi-factor').textContent=maxKey?maxKey[0]:'—';
+  const items=[['원재료비',cur.raw,prev?.raw],['부재료비',cur.sub,prev?.sub],['노무비',cur.labor,prev?.labor],['경  비',cur.exp,prev?.exp],['합  계',total,prev?prev.total:null]];
+  document.getElementById('dashCostBody').innerHTML=items.map(([label,cv,pv])=>{
+    const cr=total>0?cv/total:0;
+    const isTotal=label==='합  계';
+    const diffAmt=pv!=null?cv-pv:null;
+    return `<tr ${isTotal?'class="total-row"':''}>
+      <td class="text-center">${label}</td><td>${fmt(cv)}</td>
+      <td class="text-center">${fmtPct(isTotal?rate:cr)}</td>
+      <td>${pv!=null?fmt(pv):'—'}</td>
+      <td class="text-center">${pv!=null&&prev?fmtPct(isTotal?prevRate:pv/(prev.total||1)):'—'}</td>
+      <td class="text-center ${diffAmt!=null?(diffAmt>0?'rate-bad':'rate-good'):''}">${diffAmt!=null?(diffAmt>=0?'+':'')+fmt(diffAmt):'—'}</td>
+    </tr>`;
+  }).join('');
+  const prodData=cur.products||{};
+  const masterMap={};
+  window._masters.forEach(p=>masterMap[p.code]=p);
+  const prodRows=Object.entries(prodData).filter(([,v])=>v.qty>0||v.amt>0).map(([code,v])=>{
+    const master=masterMap[code]||{};
+    const unitCost=v.qty>0?(total*1000000*v.amt/(prodMil*1000000))/v.qty:0;
+    const r=master.supplyPrice>0&&v.qty>0?unitCost/master.supplyPrice:0;
+    return {code,name:master.name||code,supplyPrice:master.supplyPrice||0,unitCost,rate:r};
+  }).sort((a,b)=>b.rate-a.rate);
+  if (!prodRows.length) {
+    document.getElementById('dashProductBody').innerHTML='<tr><td colspan="5" class="empty">제품별 생산실적을 입력하세요</td></tr>';
+  } else {
+    document.getElementById('dashProductBody').innerHTML=prodRows.map(p=>`
+      <tr>
+        <td class="text-left">${p.name}</td><td>${fmtN(p.supplyPrice)}</td>
+        <td>${fmtN(Math.round(p.unitCost))}</td>
+        <td class="text-center ${rateClass(p.rate)}">${fmtPct(p.rate)}</td>
+        <td class="text-center">${rateBadge(p.rate)}</td>
+      </tr>`).join('');
+  }
+};
+
+// 제품별 원가 상세
+window.loadProductDetail = async function() {
+  const month=document.getElementById('prodMonth').value||thisMonth();
+  document.getElementById('prodMonth').value=month;
+  await ensureMasters();
+  const snap=await getDoc(doc(db,'costData',month));
+  const tbody=document.getElementById('productDetailBody');
+  if (!snap.exists()) { tbody.innerHTML='<tr><td colspan="11" class="empty">해당 월 데이터가 없습니다.</td></tr>'; return; }
+  const cur=snap.data();
+  const total=cur.total||0; const prodMil=cur.prod||0;
+  const masterMap={};
+  window._masters.forEach(p=>masterMap[p.code]=p);
+  const rows=Object.entries(cur.products||{}).filter(([,v])=>v.qty>0||v.amt>0).map(([code,v])=>{
+    const m=masterMap[code]||{};
+    const share=prodMil>0?v.amt/prodMil:0;
+    const rawAmt=cur.raw*1000000*share; const laborAmt=cur.labor*1000000*share;
+    const expAmt=cur.exp*1000000*share; const totalAmt=total*1000000*share;
+    const unitCost=v.qty>0?totalAmt/v.qty:0;
+    const rate=m.supplyPrice>0&&v.qty>0?unitCost/m.supplyPrice:0;
+    return {code,m,v,rawAmt,laborAmt,expAmt,totalAmt,unitCost,rate};
+  });
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="11" class="empty">제품별 생산실적이 없습니다.</td></tr>'; return; }
+  tbody.innerHTML=rows.map(r=>`
+    <tr>
+      <td class="text-center">${r.code}</td><td class="text-left">${r.m.name||r.code}</td>
+      <td>${fmtN(r.m.supplyPrice)}</td><td>${fmtN(r.v.qty)}</td><td>${fmtN(r.v.amt*10000)}</td>
+      <td>${fmtN(Math.round(r.rawAmt))}</td><td>${fmtN(Math.round(r.laborAmt))}</td>
+      <td>${fmtN(Math.round(r.expAmt))}</td><td>${fmtN(Math.round(r.totalAmt))}</td>
+      <td>${fmtN(Math.round(r.unitCost))}</td>
+      <td class="text-center ${rateClass(r.rate)}">${fmtPct(r.rate)}</td>
+    </tr>`).join('');
+};
+
+// 월별 이력
+window.loadHistory = async function() {
+  const snap=await getDocs(query(collection(db,'costData'),orderBy('month')));
+  const rows=[]; snap.forEach(d=>rows.push(d.data()));
+  const tbody=document.getElementById('historyBody');
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="12" class="empty">데이터가 없습니다.</td></tr>'; return; }
+  tbody.innerHTML=rows.map((r,i)=>{
+    const total=r.total||0; const rate=r.prod>0?total/r.prod:0;
+    const rateRaw=total>0?r.raw/total:0; const rateLabor=total>0?r.labor/total:0;
+    const prev=i>0?rows[i-1]:null;
+    const prevRate=prev&&prev.prod>0?prev.total/prev.prod:null;
+    const diff=prevRate!==null?rate-prevRate:null;
+    return `<tr>
+      <td class="text-center">${r.month}</td><td>${fmt(r.prod,1)}</td><td>${fmt(r.raw)}</td>
+      <td>${fmt(r.sub)}</td><td>${fmt(r.labor)}</td><td>${fmt(r.exp)}</td><td>${fmt(total)}</td>
+      <td class="text-center ${rateClass(rate)}">${fmtPct(rate)}</td>
+      <td class="text-center">${fmtPct(rateRaw)}</td><td class="text-center">${fmtPct(rateLabor)}</td>
+      <td class="text-center ${diff!=null?(diff>0?'rate-bad':'rate-good'):''}">${diff!=null?(diff>=0?'+':'')+((diff)*100).toFixed(1)+'%p':'—'}</td>
+      <td class="text-left">${r.note||''}</td>
+    </tr>`;
+  }).join('');
+};
+
+// 초기 로드
+document.getElementById('dashMonth').value=thisMonth();
+document.getElementById('prodMonth').value=thisMonth();
+document.getElementById('inputMonth').value=thisMonth();
+loadDashboard();
+</script>
+</body>
+</html>
