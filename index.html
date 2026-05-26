@@ -362,7 +362,7 @@ tr.total td{background:var(--light);font-weight:700}
   <div class="card">
     <div class="card-hdr">📊 제품별 원가율 분기 비교</div>
     <div class="card-body">
-      <div class="info-box">보고싶은 제품을 선택하면 분기별 원가율 추이를 비교합니다. 그룹 기준(원육종류 통합) 가중평균 원가율입니다.</div>
+      <div class="info-box">보고싶은 제품을 선택하면 분기별 <b>개당 제조원가(원/EA)</b> 추이를 비교합니다. 그룹 기준(원육종류 통합) 수량가중평균 단가이며, 공급단가(점선)도 함께 표시됩니다.</div>
       <div id="quarter-product-select" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;padding:10px;background:#f8f9fa;border-radius:8px;border:1px solid #e0e0e0;min-height:40px">
         <span style="color:#aaa;font-size:11px;align-self:center" id="quarter-select-placeholder">제품별 원가 탭을 열면 제품 목록이 나타납니다...</span>
       </div>
@@ -1463,8 +1463,6 @@ function drawQuarterChart() {
   const selected = window._quarterAllGroups.filter(g => window._quarterSelected.has(g));
 
   if(!selected.length || !quarters.length) {
-    // 빈 안내
-    destroyChart('quarter');
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.font = '13px Malgun Gothic, Arial';
@@ -1474,17 +1472,19 @@ function drawQuarterChart() {
     return;
   }
 
-  const datasets = selected.map(gname => {
+  // 제조원가/EA 데이터셋 + 공급단가 점선 데이터셋
+  const datasets = [];
+  selected.forEach(gname => {
     const idx = window._quarterAllGroups.indexOf(gname);
     const color = window._quarterPalette[idx % window._quarterPalette.length];
-    return {
-      label: gname,
+
+    // 제조원가/EA (실선)
+    datasets.push({
+      label: gname + ' (원가)',
       data: quarters.map(ql => {
         const v = window._quarterData[ql]?.[gname];
-        if(!v || v.totalQty === 0 || v.spSum === 0) return null;
-        const spAvg = v.spSum / v.totalQty;
-        const unitCost = v.totalCost / v.totalQty;
-        return spAvg > 0 ? parseFloat((unitCost / spAvg * 100).toFixed(1)) : null;
+        if(!v || v.totalQty === 0) return null;
+        return Math.round(v.totalCost / v.totalQty);
       }),
       borderColor: color,
       backgroundColor: color + '22',
@@ -1495,7 +1495,30 @@ function drawQuarterChart() {
       fill: false,
       tension: 0.2,
       spanGaps: true,
-    };
+      _gname: gname,
+      _type: 'cost',
+    });
+
+    // 공급단가 (점선, 같은 색 연하게)
+    datasets.push({
+      label: gname + ' (공급단가)',
+      data: quarters.map(ql => {
+        const v = window._quarterData[ql]?.[gname];
+        if(!v || v.totalQty === 0 || v.spSum === 0) return null;
+        return Math.round(v.spSum / v.totalQty);
+      }),
+      borderColor: color,
+      backgroundColor: 'transparent',
+      borderWidth: 1.5,
+      borderDash: [5, 4],
+      pointRadius: 3,
+      pointBackgroundColor: color,
+      fill: false,
+      tension: 0.2,
+      spanGaps: true,
+      _gname: gname,
+      _type: 'supply',
+    });
   });
 
   const ctx = canvas.getContext('2d');
@@ -1509,42 +1532,39 @@ function drawQuarterChart() {
         legend: {
           display: true,
           position: 'bottom',
-          labels: { font: { size: 11 }, boxWidth: 12, padding: 10 }
+          labels: {
+            font: { size: 10 },
+            boxWidth: 12,
+            padding: 8,
+            filter: item => !item.text.includes('공급단가'), // 공급단가는 범례 숨김 (실선만 표시)
+          }
         },
         tooltip: {
           callbacks: {
-            label: c => `${c.dataset.label}: ${c.parsed.y !== null ? c.parsed.y.toFixed(1)+'%' : '—'}`
+            label: c => {
+              const type = c.dataset._type;
+              const val = c.parsed.y;
+              if(val === null) return null;
+              if(type === 'cost') return `${c.dataset._gname} 원가: ${val.toLocaleString('ko-KR')}원/EA`;
+              if(type === 'supply') return `${c.dataset._gname} 공급단가: ${val.toLocaleString('ko-KR')}원`;
+              return `${c.dataset.label}: ${val.toLocaleString('ko-KR')}원`;
+            }
           }
         }
       },
       scales: {
         x: { grid: { color: '#f0f0f0' }, ticks: { font: { size: 11 } } },
         y: {
-          min: 40, max: 180,
-          ticks: { callback: v => v + '%', font: { size: 11 } },
+          ticks: {
+            callback: v => v >= 10000
+              ? (v/10000).toFixed(0)+'만원'
+              : v.toLocaleString('ko-KR')+'원',
+            font: { size: 11 }
+          },
           grid: { color: '#f0f0f0' }
         }
       }
-    },
-    plugins: [{
-      id: 'baselineLine',
-      afterDraw(chart) {
-        const {ctx: c2, chartArea: {left, right}, scales: {y}} = chart;
-        if(!y) return;
-        const yPos = y.getPixelForValue(100);
-        c2.save();
-        c2.setLineDash([6, 4]);
-        c2.strokeStyle = '#C00000';
-        c2.lineWidth = 1.5;
-        c2.beginPath(); c2.moveTo(left, yPos); c2.lineTo(right, yPos); c2.stroke();
-        c2.restore();
-        c2.save();
-        c2.font = 'bold 10px Malgun Gothic, Arial';
-        c2.fillStyle = '#C00000';
-        c2.fillText('100%', right + 4, yPos + 4);
-        c2.restore();
-      }
-    }]
+    }
   });
 }
 
