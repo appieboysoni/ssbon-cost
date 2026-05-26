@@ -444,6 +444,38 @@ tr.total td{background:var(--light);font-weight:700}
       </table></div>
     </div>
   </div>
+  <!-- 목표 제조원가 관리 -->
+  <div class="card">
+    <div class="card-hdr">🎯 목표 제조원가 관리</div>
+    <div class="card-body">
+      <div class="info-box">제품별 목표 제조원가(원/EA)를 설정합니다. 분기 비교 차트에서 실제 원가 대비 달성 여부를 확인할 수 있습니다.</div>
+      <div class="warn-box">💡 처음 사용 시 [초기 데이터 일괄 등록] 버튼으로 기준값을 먼저 등록하세요.</div>
+      <div class="btn-row" style="margin-bottom:12px">
+        <button class="btn btn-warn" onclick="registerInitialTargetCost()">📥 초기 데이터 일괄 등록</button>
+      </div>
+      <div class="sec">목표원가 추가 / 수정</div>
+      <div class="form-row cols3" style="margin-bottom:8px">
+        <div class="fg">
+          <label>제품 선택 *</label>
+          <select id="tc-product"><option value="">— 제품 선택 —</option></select>
+        </div>
+        <div class="fg">
+          <label>목표 제조원가 (원/EA) *</label>
+          <input type="number" id="tc-cost" step="1" placeholder="예: 1840">
+        </div>
+        <div class="fg" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:8px">
+          <button class="btn btn-ok" onclick="saveTargetCost()">💾 저장</button>
+          <button class="btn btn-primary btn-sm" onclick="clearTargetCostForm()">초기화</button>
+        </div>
+      </div>
+      <div class="sec" style="margin-top:16px">등록된 목표원가</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>제품명</th><th>목표 제조원가 (원/EA)</th><th>관리</th></tr></thead>
+        <tbody id="target-cost-body"><tr><td colspan="3" class="loading">로딩중...</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-hdr">🧬 BOM 관리 (자재 구성)</div>
     <div class="card-body">
@@ -515,7 +547,7 @@ window.goTab = (name,btn) => {
   if(name==='dashboard') loadDashboard();
   if(name==='products')  loadProducts();
   if(name==='history')   loadHistory();
-  if(name==='settings')  { loadMaster(); loadBomProductList(); }
+  if(name==='settings')  { loadMaster(); loadBomProductList(); loadTargetCostList(); }
   if(name==='input')     loadExistingData();
 };
 
@@ -558,6 +590,114 @@ async function ensureBom() {
   const s = await getDocs(collection(db,'bom'));
   s.forEach(d=>{window._bom[d.id]={...d.data()};});
 }
+
+// ════════════════════════════════════
+// 목표 제조원가
+// ════════════════════════════════════
+window._targetCost = {}; // {제품그룹명: 목표원가}
+
+async function ensureTargetCost() {
+  if(Object.keys(window._targetCost).length) return;
+  const s = await getDocs(collection(db,'targetCost'));
+  s.forEach(d => { window._targetCost[d.id] = d.data().cost || 0; });
+}
+
+async function loadTargetCostList() {
+  await ensureMasters();
+  // 제품 선택 셀렉트 채우기
+  const sel = document.getElementById('tc-product');
+  if(sel) {
+    sel.innerHTML = '<option value="">— 제품 선택 —</option>' +
+      window._masters.map(m => `<option value="${m.code}">${m.name}</option>`).join('');
+  }
+  // 목표원가 목록 로드
+  const snap = await getDocs(collection(db,'targetCost'));
+  window._targetCost = {};
+  snap.forEach(d => { window._targetCost[d.id] = d.data().cost || 0; });
+  renderTargetCostTable();
+}
+
+function renderTargetCostTable() {
+  const tbody = document.getElementById('target-cost-body');
+  if(!tbody) return;
+  const entries = Object.entries(window._targetCost);
+  if(!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty">등록된 목표원가가 없습니다.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries
+    .sort((a,b) => a[0].localeCompare(b[0]))
+    .map(([name, cost]) => `
+      <tr>
+        <td class="l">${name}</td>
+        <td style="color:var(--ok);font-weight:700">${fmtN(cost)}원</td>
+        <td class="c">
+          <button class="btn btn-primary btn-sm" onclick="editTargetCost('${name.replace(/'/g,"\\'")}',${cost})">수정</button>
+          <button class="btn btn-bad btn-sm" onclick="deleteTargetCost('${name.replace(/'/g,"\\'")}')">삭제</button>
+        </td>
+      </tr>`).join('');
+}
+
+window.saveTargetCost = async () => {
+  const sel = document.getElementById('tc-product');
+  const costVal = parseFloat(document.getElementById('tc-cost').value);
+  if(!sel.value) { showToast('❌ 제품을 선택하세요'); return; }
+  if(!costVal || costVal <= 0) { showToast('❌ 목표원가를 입력하세요'); return; }
+  // 그룹명(원육 제거)으로 저장
+  const m = window._masters.find(x => x.code === sel.value);
+  const gname = (m ? m.name : sel.value).replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
+  const docId = gname.replace(/[\/\s]/g,'_');
+  await setDoc(doc(db,'targetCost', docId), { name: gname, cost: costVal });
+  window._targetCost[gname] = costVal;
+  showToast(`✅ ${gname} 목표원가 ${fmtN(costVal)}원 저장`);
+  clearTargetCostForm();
+  renderTargetCostTable();
+};
+
+window.editTargetCost = (name, cost) => {
+  const sel = document.getElementById('tc-product');
+  // 해당 제품명과 가장 가깝게 매칭
+  const m = window._masters.find(x => x.name.replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim() === name);
+  if(m && sel) sel.value = m.code;
+  document.getElementById('tc-cost').value = cost;
+};
+
+window.deleteTargetCost = async (name) => {
+  if(!confirm(`"${name}" 목표원가를 삭제합니다.`)) return;
+  const docId = name.replace(/[\/\s]/g,'_');
+  await deleteDoc(doc(db,'targetCost', docId));
+  delete window._targetCost[name];
+  showToast('🗑️ 삭제됨');
+  renderTargetCostTable();
+};
+
+window.clearTargetCostForm = () => {
+  const sel = document.getElementById('tc-product');
+  if(sel) sel.value = '';
+  const inp = document.getElementById('tc-cost');
+  if(inp) inp.value = '';
+};
+
+// 초기 데이터 일괄 등록
+window.registerInitialTargetCost = async () => {
+  const initData = [
+    { name: '[본죽]미니쇠고기장조림 70',       cost: 1145  },
+    { name: '[본죽]미니쇠고기장조림 70(5입)',   cost: 5860  },
+    { name: '[본죽]쇠고기장조림 120g 낱개',     cost: 1840  },
+    { name: '[본죽]쇠고기장조림 130g 낱개',     cost: 1800  },
+    { name: '[본죽]쇠고기장조림 170_코코_4입',  cost: 10480 },
+    { name: '[본죽]쇠고기장조림 460_트레',      cost: 6500  },
+    { name: '[본죽]3kg FC 쇠고기장조림',        cost: 54145 },
+  ];
+  if(!confirm(`아래 ${initData.length}개 제품 목표원가를 등록합니다.\n기존 동일 항목은 덮어씁니다.\n\n${initData.map(d=>`${d.name}: ${d.cost.toLocaleString()}원`).join('\n')}`)) return;
+  for(const d of initData) {
+    const docId = d.name.replace(/[\/\s]/g,'_');
+    await setDoc(doc(db,'targetCost', docId), { name: d.name, cost: d.cost });
+    window._targetCost[d.name] = d.cost;
+  }
+  showToast(`✅ ${initData.length}개 목표원가 등록 완료`);
+  renderTargetCostTable();
+};
 async function loadMaster() {
   await loadRate();
   const s = await getDocs(query(collection(db,'products'),orderBy('code')));
@@ -1472,23 +1612,23 @@ function drawQuarterChart() {
     return;
   }
 
-  // 제조원가/EA 데이터셋 + 공급단가 점선 데이터셋
   const datasets = [];
   selected.forEach(gname => {
     const idx = window._quarterAllGroups.indexOf(gname);
     const color = window._quarterPalette[idx % window._quarterPalette.length];
+    const target = window._targetCost[gname] || null;
 
-    // 제조원가/EA (실선)
+    // ① 실제 제조원가/EA (실선)
     datasets.push({
-      label: gname + ' (원가)',
+      label: gname,
       data: quarters.map(ql => {
         const v = window._quarterData[ql]?.[gname];
         if(!v || v.totalQty === 0) return null;
         return Math.round(v.totalCost / v.totalQty);
       }),
       borderColor: color,
-      backgroundColor: color + '22',
-      borderWidth: 2.2,
+      backgroundColor: color + '18',
+      borderWidth: 2.5,
       pointRadius: 6,
       pointHoverRadius: 8,
       pointBackgroundColor: color,
@@ -1497,28 +1637,27 @@ function drawQuarterChart() {
       spanGaps: true,
       _gname: gname,
       _type: 'cost',
+      _target: target,
     });
 
-    // 공급단가 (점선, 같은 색 연하게)
-    datasets.push({
-      label: gname + ' (공급단가)',
-      data: quarters.map(ql => {
-        const v = window._quarterData[ql]?.[gname];
-        if(!v || v.totalQty === 0 || v.spSum === 0) return null;
-        return Math.round(v.spSum / v.totalQty);
-      }),
-      borderColor: color,
-      backgroundColor: 'transparent',
-      borderWidth: 1.5,
-      borderDash: [5, 4],
-      pointRadius: 3,
-      pointBackgroundColor: color,
-      fill: false,
-      tension: 0.2,
-      spanGaps: true,
-      _gname: gname,
-      _type: 'supply',
-    });
+    // ② 목표원가 수평 점선 (등록된 경우만)
+    if(target) {
+      datasets.push({
+        label: gname + ' 목표',
+        data: quarters.map(() => target),
+        borderColor: color,
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        fill: false,
+        tension: 0,
+        spanGaps: true,
+        _gname: gname,
+        _type: 'target',
+      });
+    }
   });
 
   const ctx = canvas.getContext('2d');
@@ -1528,26 +1667,42 @@ function drawQuarterChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: {
           display: true,
           position: 'bottom',
           labels: {
-            font: { size: 10 },
+            font: { size: 11 },
             boxWidth: 12,
-            padding: 8,
-            filter: item => !item.text.includes('공급단가'), // 공급단가는 범례 숨김 (실선만 표시)
+            padding: 10,
+            // 실제원가(실선)만 범례 표시
+            filter: item => !item.text.includes(' 목표'),
           }
         },
         tooltip: {
           callbacks: {
             label: c => {
               const type = c.dataset._type;
+              const gname = c.dataset._gname;
               const val = c.parsed.y;
-              if(val === null) return null;
-              if(type === 'cost') return `${c.dataset._gname} 원가: ${val.toLocaleString('ko-KR')}원/EA`;
-              if(type === 'supply') return `${c.dataset._gname} 공급단가: ${val.toLocaleString('ko-KR')}원`;
-              return `${c.dataset.label}: ${val.toLocaleString('ko-KR')}원`;
+              if(val === null || val === undefined) return null;
+              if(type === 'cost') {
+                const target = c.dataset._target;
+                const diff = target ? val - target : null;
+                const diffStr = diff !== null
+                  ? (diff > 0
+                      ? ` ▲ ${Math.abs(diff).toLocaleString()}원 초과`
+                      : diff < 0
+                        ? ` ▼ ${Math.abs(diff).toLocaleString()}원 절감`
+                        : ' ✅ 목표 달성')
+                  : '';
+                return `${gname} 실제원가: ${val.toLocaleString('ko-KR')}원/EA${diffStr}`;
+              }
+              if(type === 'target') {
+                return `${gname} 목표원가: ${val.toLocaleString('ko-KR')}원/EA`;
+              }
+              return null;
             }
           }
         }
@@ -1557,8 +1712,8 @@ function drawQuarterChart() {
         y: {
           ticks: {
             callback: v => v >= 10000
-              ? (v/10000).toFixed(0)+'만원'
-              : v.toLocaleString('ko-KR')+'원',
+              ? (v / 10000).toFixed(1).replace(/\.0$/,'') + '만원'
+              : v.toLocaleString('ko-KR') + '원',
             font: { size: 11 }
           },
           grid: { color: '#f0f0f0' }
@@ -1571,6 +1726,7 @@ function drawQuarterChart() {
 async function renderQuarterChart() {
   await ensureMasters();
   await ensureBom();
+  await ensureTargetCost();
 
   const q = query(collection(db,'costData'), orderBy('month'));
   const snap = await getDocs(q);
