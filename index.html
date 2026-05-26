@@ -1223,7 +1223,8 @@ window.loadProducts = async () => {
   // ② 이론총사용량 = 자재별 모든제품 이론사용량 합
   // ③ 비율 = 이론사용량 / 이론총사용량
   // ④ 금액 = 비율 × 출고금액
-  const bom=window._bom;
+  // BOM: 저장된 그 달 스냅샷 우선, 없으면 현재 마스터 BOM
+  const bom=(d.bomSnapshot&&Object.keys(d.bomSnapshot).length)?d.bomSnapshot:window._bom;
   // ② 이론총사용량
   const theoryTotal={};
   for(const [code,qty] of Object.entries(erpQty)){
@@ -1246,9 +1247,28 @@ window.loadProducts = async () => {
   // 경비 총액
   const exp=(d.exp||0); // 원단위
 
-  // 노무비 중량배부용: 저장된 제품별 투입원육 (누락보정 완료된 값)
-  // 분모는 ERP수량 있는 제품의 투입원육 합계로 한정 → 배부누락 방지
-  const meatInByCode=d.meatInByCode||{};
+  // 노무비 중량배부용 제품별 원육량
+  // 우선순위: 저장된 투입원육(meatInByCode) → 없으면 BOM 원육 반제품중량×수량
+  const savedMeat=d.meatInByCode||{};
+  const hasSavedMeat=Object.keys(savedMeat).length>0;
+  const meatInByCode={};
+  for(const [code,qty] of Object.entries(erpQty)){
+    if(qty<=0)continue;
+    if(hasSavedMeat){
+      meatInByCode[code]=savedMeat[code]||0;
+    }else{
+      // BOM 원육(반제품) 자재 합 × 수량
+      const b=bom[code]; let mk=0;
+      if(b){
+        for(const m of (b.mats||[])){
+          if(m.mcode[0]==='1' && /쇠고기|원육|설도|홍두께|우둔/.test(m.mname||'')){
+            mk+=(m.perEa||0)*qty;
+          }
+        }
+      }
+      meatInByCode[code]=mk;
+    }
+  }
   let totalMeatKg=0;
   for(const code of Object.keys(erpQty)){
     if(erpQty[code]>0) totalMeatKg+=(meatInByCode[code]||0);
