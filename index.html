@@ -303,11 +303,21 @@ tr.total td{background:var(--light);font-weight:700}
     <button class="btn btn-bad btn-sm" onclick="deleteMonthDataFromProd()">🗑️ 이 달 삭제</button>
   </div>
   <div class="card">
-    <div class="card-hdr">📦 제품별 원가 상세</div>
+    <div class="card-hdr">📦 제품별 원가 상세 (개당 단가)</div>
     <div class="card-body">
       <div class="tbl-wrap"><table>
-        <thead><tr><th>품목코드</th><th style="min-width:200px">품목명</th><th>생산수량</th><th>공급단가</th><th>원재료비</th><th>노무비<br><span style="font-size:10px;font-weight:400">(중량/수량 배부)</span></th><th>경비</th><th>합계원가</th><th>제품단가</th><th>원가율</th></tr></thead>
+        <thead><tr><th>품목코드</th><th style="min-width:200px">품목명</th><th>생산수량</th><th>공급단가</th><th>원재료비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>부재료비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>노무비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>경비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>제조원가<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>원가율</th></tr></thead>
         <tbody id="prod-detail-body"><tr><td colspan="10" class="loading">월을 선택하세요</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hdr">🔗 품목 그룹별 평균 (원육 통합)</div>
+    <div class="card-body">
+      <div class="info-box">같은 품목이 원육종류(설도/우둔/홍두께)로 나뉜 경우, 생산수량 가중평균한 개당 단가입니다.</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th style="min-width:200px">품목 그룹</th><th>원육종류</th><th>총생산수량</th><th>공급단가</th><th>원재료비/EA</th><th>부재료비/EA</th><th>노무비/EA</th><th>경비/EA</th><th>제조원가/EA</th><th>원가율</th></tr></thead>
+        <tbody id="prod-group-body"><tr><td colspan="10" class="loading">월을 선택하세요</td></tr></tbody>
       </table></div>
     </div>
   </div>
@@ -1250,12 +1260,12 @@ window.loadProducts = async () => {
   const masterMap={};
   window._masters.forEach(m=>masterMap[m.code]=m);
 
-  // 행 생성
+  // 행 생성 (개당 단가) + 그룹 집계용 데이터 수집
   let sumRaw=0,sumSub=0,sumLabor=0,sumExp=0,sumTotal=0;
+  const calcRows=[]; // 그룹 집계용
   const rowsHtml=Object.entries(erpQty).filter(([,q])=>q>0).map(([code,qty])=>{
     const m=masterMap[code];
     const b=bom[code];
-    // 원/부재료비: BOM 4단계
     let rawCost=0, subCost=0;
     if(b){
       for(const mat of (b.mats||[])){
@@ -1267,49 +1277,83 @@ window.loadProducts = async () => {
         else if(mat.mcode[0]==='4'||mat.mcode[0]==='5') subCost+=amt;
       }
     }
-    // 노무비: 중량배부(임금1~3, 원육비율) + 수량배부(임금4~5+급여+잡급+퇴직, 수량비율)
-    // 메추리알 등 원육 없는 제품은 meatShare=0 → 자동으로 수량배부만 받음
     const meatShare=totalMeatKg>0?(meatInByCode[code]||0)/totalMeatKg:0;
     const qtyShare=totalQty>0?qty/totalQty:0;
-    const isQtyOnly=!meatInByCode[code]; // 원육 0이면 수량배부만 (표시용)
     const laborAlloc=laborMeat*meatShare+laborQtyBase*qtyShare;
-    // 경비: 수량 비중 배부
     const expCost=exp*qtyShare;
-
     const totalCost=rawCost+subCost+laborAlloc+expCost;
     const sp=m?m.supplyPrice:0;
-    const unitCost=qty>0?totalCost/qty:0;
-    const rate=sp>0?unitCost/sp:0;  // 원가율 = 제품단가 / 공급단가
+    // 개당 단가
+    const rawEa=qty>0?rawCost/qty:0, subEa=qty>0?subCost/qty:0;
+    const laborEa=qty>0?laborAlloc/qty:0, expEa=qty>0?expCost/qty:0;
+    const unitCost=rawEa+subEa+laborEa+expEa;
+    const rate=sp>0?unitCost/sp:0;
 
     sumRaw+=rawCost;sumSub+=subCost;sumLabor+=laborAlloc;sumExp+=expCost;sumTotal+=totalCost;
+
+    // 그룹명 (원육 제거)
+    const gname=(m?m.name:code).replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
+    calcRows.push({code,name:m?m.name:code,gname,meatType:m?m.meatType:'',qty,sp,rawCost,subCost,laborAlloc,expCost,totalCost});
 
     return `<tr>
       <td class="c">${code}</td>
       <td class="l">${m?m.name:code}${!b?' <span class="badge b-warn">BOM없음</span>':''}</td>
       <td class="c">${fmtN(qty)}</td>
       <td>${fmtN(sp)}</td>
-      <td>${fmtN(Math.round(rawCost))}</td>
-      <td style="${laborAlloc>0?'color:var(--ok);font-weight:700':''}">${fmtN(Math.round(laborAlloc))}<br><span style="font-size:10px;color:#aaa">${isQtyOnly?'수량배부':'중량+수량'}</span></td>
-      <td>${fmtN(Math.round(expCost))}</td>
-      <td style="font-weight:700">${fmtN(Math.round(totalCost))}</td>
-      <td>${qty>0?fmtN(Math.round(unitCost)):'—'}</td>
+      <td>${fmtN(Math.round(rawEa))}</td>
+      <td>${fmtN(Math.round(subEa))}</td>
+      <td style="color:var(--ok);font-weight:700">${fmtN(Math.round(laborEa))}</td>
+      <td>${fmtN(Math.round(expEa))}</td>
+      <td style="font-weight:700">${fmtN(Math.round(unitCost))}</td>
       <td class="c ${rC(rate)}">${fmtP(rate)}</td>
     </tr>`;
   });
 
-  // 합계행
+  // 합계행 (총액 기준)
   rowsHtml.push(`<tr class="total">
-    <td class="c" colspan="2">합계</td>
+    <td class="c" colspan="2">합계 (총액)</td>
     <td class="c">${fmtN(totalQty)}</td>
     <td>—</td>
     <td>${fmtN(Math.round(sumRaw))}</td>
+    <td>${fmtN(Math.round(sumSub))}</td>
     <td>${fmtN(Math.round(sumLabor))}</td>
     <td>${fmtN(Math.round(sumExp))}</td>
     <td>${fmtN(Math.round(sumTotal))}</td>
-    <td>—</td><td>—</td>
+    <td>—</td>
   </tr>`);
-
   tbody.innerHTML=rowsHtml.join('');
+
+  // ══ 품목 그룹별 평균 (원육 통합, 수량가중) ══
+  const groups={};
+  for(const r of calcRows){
+    if(!groups[r.gname])groups[r.gname]={qty:0,raw:0,sub:0,labor:0,exp:0,total:0,spSum:0,meatTypes:[]};
+    const g=groups[r.gname];
+    g.qty+=r.qty; g.raw+=r.rawCost; g.sub+=r.subCost;
+    g.labor+=r.laborAlloc; g.exp+=r.expCost; g.total+=r.totalCost;
+    g.spSum+=r.sp*r.qty; // 수량가중 공급단가
+    if(r.meatType)g.meatTypes.push(r.meatType);
+  }
+  const gbody=document.getElementById('prod-group-body');
+  gbody.innerHTML=Object.entries(groups).map(([gname,g])=>{
+    const rawEa=g.qty>0?g.raw/g.qty:0, subEa=g.qty>0?g.sub/g.qty:0;
+    const laborEa=g.qty>0?g.labor/g.qty:0, expEa=g.qty>0?g.exp/g.qty:0;
+    const unitCost=rawEa+subEa+laborEa+expEa;
+    const spAvg=g.qty>0?g.spSum/g.qty:0;
+    const rate=spAvg>0?unitCost/spAvg:0;
+    const meats=[...new Set(g.meatTypes)].join('+')||'—';
+    return `<tr>
+      <td class="l">${gname}</td>
+      <td class="c">${meats}</td>
+      <td class="c">${fmtN(g.qty)}</td>
+      <td>${fmtN(Math.round(spAvg))}</td>
+      <td>${fmtN(Math.round(rawEa))}</td>
+      <td>${fmtN(Math.round(subEa))}</td>
+      <td style="color:var(--ok);font-weight:700">${fmtN(Math.round(laborEa))}</td>
+      <td>${fmtN(Math.round(expEa))}</td>
+      <td style="font-weight:700">${fmtN(Math.round(unitCost))}</td>
+      <td class="c ${rC(rate)}">${fmtP(rate)}</td>
+    </tr>`;
+  }).join('');
 };
 
 // ════════════════════════════════════
