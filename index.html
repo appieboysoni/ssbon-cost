@@ -91,6 +91,9 @@ tr.total td{background:var(--light);font-weight:700}
 /* 분기차트 */
 .quarter-chart-wrap{padding:16px;position:relative;height:360px}
 .quarter-chart-wrap canvas{max-height:328px}
+.quarter-check-btn{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid transparent;transition:all .15s;user-select:none;}
+.quarter-check-btn.selected{border-color:currentColor;opacity:1;}
+.quarter-check-btn.unselected{opacity:0.35;border-color:#ccc;background:#f0f0f0!important;color:#888!important;}
 
 /* 범례 커스텀 */
 .chart-legend{display:flex;gap:14px;flex-wrap:wrap;padding:0 16px 12px;font-size:11px}
@@ -359,7 +362,14 @@ tr.total td{background:var(--light);font-weight:700}
   <div class="card">
     <div class="card-hdr">📊 제품별 원가율 분기 비교</div>
     <div class="card-body">
-      <div class="info-box">분기별 제품 원가율 추이입니다. 그룹 기준(원육종류 통합) 가중평균 원가율로 표시됩니다.</div>
+      <div class="info-box">보고싶은 제품을 선택하면 분기별 원가율 추이를 비교합니다. 그룹 기준(원육종류 통합) 가중평균 원가율입니다.</div>
+      <div id="quarter-product-select" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;padding:10px;background:#f8f9fa;border-radius:8px;border:1px solid #e0e0e0;min-height:40px">
+        <span style="color:#aaa;font-size:11px;align-self:center" id="quarter-select-placeholder">제품별 원가 탭을 열면 제품 목록이 나타납니다...</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn btn-primary btn-sm" onclick="selectAllQuarter()">전체 선택</button>
+        <button class="btn btn-primary btn-sm" onclick="deselectAllQuarter()">전체 해제</button>
+      </div>
       <div class="quarter-chart-wrap">
         <canvas id="chartQuarter"></canvas>
       </div>
@@ -1399,96 +1409,94 @@ function renderProductionChart(allRows) {
 }
 
 // ════════════════════════════════════
-// 제품별 원가율 분기 비교 차트
+// 제품별 원가율 분기 비교 차트 (제품 선택식)
 // ════════════════════════════════════
-async function renderQuarterChart() {
+window._quarterAllGroups = [];
+window._quarterData = {};
+window._quarterPalette = [
+  '#1F3864','#ED7D31','#1D9E75','#FFC000','#C00000','#2F5496',
+  '#70AD47','#9E2A2B','#5B9BD5','#FF9800','#8064A2','#00B050'
+];
+window._quarterSelected = new Set();
+
+window.selectAllQuarter = () => {
+  window._quarterAllGroups.forEach(g => window._quarterSelected.add(g));
+  renderQuarterCheckboxes();
+  drawQuarterChart();
+};
+window.deselectAllQuarter = () => {
+  window._quarterSelected.clear();
+  renderQuarterCheckboxes();
+  drawQuarterChart();
+};
+
+function renderQuarterCheckboxes() {
+  const wrap = document.getElementById('quarter-product-select');
+  if(!wrap || !window._quarterAllGroups.length) return;
+  wrap.innerHTML = window._quarterAllGroups.map((g, idx) => {
+    const color = window._quarterPalette[idx % window._quarterPalette.length];
+    const sel = window._quarterSelected.has(g);
+    return `<span class="quarter-check-btn ${sel?'selected':'unselected'}"
+      style="background:${color}22;color:${sel?color:'#888'};border-color:${sel?color:'#ccc'}"
+      onclick="toggleQuarterGroup(${idx})">
+      <span style="width:8px;height:8px;border-radius:50%;background:${sel?color:'#ccc'};flex-shrink:0;display:inline-block"></span>
+      ${g}
+    </span>`;
+  }).join('');
+}
+
+window.toggleQuarterGroup = (idx) => {
+  const g = window._quarterAllGroups[idx];
+  if(!g) return;
+  if(window._quarterSelected.has(g)) window._quarterSelected.delete(g);
+  else window._quarterSelected.add(g);
+  renderQuarterCheckboxes();
+  drawQuarterChart();
+};
+
+function drawQuarterChart() {
   destroyChart('quarter');
   const canvas = document.getElementById('chartQuarter');
   if(!canvas) return;
 
-  await ensureMasters();
-  await ensureBom();
+  const quarters = Object.keys(window._quarterData).sort();
+  const selected = window._quarterAllGroups.filter(g => window._quarterSelected.has(g));
 
-  // 모든 월 데이터 로드
-  const q = query(collection(db,'costData'), orderBy('month'));
-  const snap = await getDocs(q);
-  const allMonths = [];
-  snap.forEach(d => allMonths.push(d.data()));
-
-  if(!allMonths.length) {
-    canvas.parentElement.innerHTML = '<div class="chart-empty">데이터가 없습니다.</div>';
+  if(!selected.length || !quarters.length) {
+    // 빈 안내
+    destroyChart('quarter');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = '13px Malgun Gothic, Arial';
+    ctx.fillStyle = '#bbb';
+    ctx.textAlign = 'center';
+    ctx.fillText('위에서 비교할 제품을 선택하세요', canvas.width/2, 150);
     return;
   }
 
-  // 월별 → 분기별 그룹핑
-  // 그룹명(원육통합) 기준 분기 가중평균 원가율 계산
-  const quarterData = {}; // {quarterLabel: {groupName: {totalCost, totalQty, spSum}}}
-
-  for(const d of allMonths) {
-    const cc = computeMonthCost(d, window._bom);
-    const ql = quarterLabel(d.month);
-    if(!quarterData[ql]) quarterData[ql] = {};
-
-    const bom = (d.bomSnapshot && Object.keys(d.bomSnapshot).length) ? d.bomSnapshot : window._bom;
-    const masterMap = {};
-    window._masters.forEach(m => masterMap[m.code] = m);
-
-    for(const r of cc.rows) {
-      const mm = masterMap[r.code];
-      const gname = (mm ? mm.name : r.code).replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
-      const sp = mm ? mm.supplyPrice : 0;
-      if(!quarterData[ql][gname]) quarterData[ql][gname] = {totalCost:0, totalQty:0, spSum:0};
-      quarterData[ql][gname].totalCost += r.totalCost;
-      quarterData[ql][gname].totalQty += r.qty;
-      quarterData[ql][gname].spSum += sp * r.qty;
-    }
-  }
-
-  const quarters = Object.keys(quarterData).sort();
-  if(!quarters.length) return;
-
-  // 등장한 모든 그룹명 수집
-  const allGroups = [];
-  for(const ql of quarters) {
-    for(const g of Object.keys(quarterData[ql])) {
-      if(!allGroups.includes(g)) allGroups.push(g);
-    }
-  }
-  // 그룹수 많으면 너무 복잡해지니 최대 12개로 제한 (생산수량 상위)
-  const groupTotalQty = {};
-  for(const ql of quarters) {
-    for(const [g,v] of Object.entries(quarterData[ql]||{})) {
-      groupTotalQty[g] = (groupTotalQty[g]||0) + v.totalQty;
-    }
-  }
-  const sortedGroups = allGroups
-    .sort((a,b) => (groupTotalQty[b]||0) - (groupTotalQty[a]||0))
-    .slice(0, 12);
-
-  // 색상 팔레트 (12색)
-  const palette = [
-    '#1F3864','#ED7D31','#1D9E75','#FFC000','#C00000','#2F5496',
-    '#70AD47','#9E2A2B','#5B9BD5','#FF9800','#8064A2','#00B050'
-  ];
-
-  const datasets = sortedGroups.map((gname, idx) => ({
-    label: gname,
-    data: quarters.map(ql => {
-      const v = quarterData[ql]?.[gname];
-      if(!v || v.totalQty === 0 || v.spSum === 0) return null;
-      const spAvg = v.spSum / v.totalQty;
-      const unitCost = v.totalCost / v.totalQty;
-      return spAvg > 0 ? parseFloat((unitCost / spAvg * 100).toFixed(1)) : null;
-    }),
-    borderColor: palette[idx % palette.length],
-    backgroundColor: palette[idx % palette.length] + '22',
-    borderWidth: 2,
-    pointRadius: 5,
-    pointBackgroundColor: palette[idx % palette.length],
-    fill: false,
-    tension: 0.2,
-    spanGaps: true,
-  }));
+  const datasets = selected.map(gname => {
+    const idx = window._quarterAllGroups.indexOf(gname);
+    const color = window._quarterPalette[idx % window._quarterPalette.length];
+    return {
+      label: gname,
+      data: quarters.map(ql => {
+        const v = window._quarterData[ql]?.[gname];
+        if(!v || v.totalQty === 0 || v.spSum === 0) return null;
+        const spAvg = v.spSum / v.totalQty;
+        const unitCost = v.totalCost / v.totalQty;
+        return spAvg > 0 ? parseFloat((unitCost / spAvg * 100).toFixed(1)) : null;
+      }),
+      borderColor: color,
+      backgroundColor: color + '22',
+      borderWidth: 2.2,
+      pointRadius: 6,
+      pointHoverRadius: 8,
+      pointBackgroundColor: color,
+      fill: false,
+      tension: 0.2,
+      spanGaps: true,
+    };
+  });
 
   const ctx = canvas.getContext('2d');
   window._charts.quarter = new Chart(ctx, {
@@ -1501,43 +1509,24 @@ async function renderQuarterChart() {
         legend: {
           display: true,
           position: 'bottom',
-          labels: {
-            font: { size: 10 },
-            boxWidth: 12,
-            padding: 8,
-          }
+          labels: { font: { size: 11 }, boxWidth: 12, padding: 10 }
         },
         tooltip: {
           callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(1)+'%' : '—'}`
+            label: c => `${c.dataset.label}: ${c.parsed.y !== null ? c.parsed.y.toFixed(1)+'%' : '—'}`
           }
         }
       },
       scales: {
-        x: {
-          grid: { color: '#f0f0f0' },
-          ticks: { font: { size: 11 } }
-        },
+        x: { grid: { color: '#f0f0f0' }, ticks: { font: { size: 11 } } },
         y: {
-          min: 40,
-          max: 180,
-          ticks: {
-            callback: v => v + '%',
-            font: { size: 11 }
-          },
-          grid: { color: '#f0f0f0' },
-          // 기준선 100% 강조
-          afterBuildTicks: (axis) => {
-            if(!axis.ticks.find(t => t.value === 100)) {
-              axis.ticks.push({value: 100});
-              axis.ticks.sort((a,b) => a.value - b.value);
-            }
-          }
+          min: 40, max: 180,
+          ticks: { callback: v => v + '%', font: { size: 11 } },
+          grid: { color: '#f0f0f0' }
         }
       }
     },
     plugins: [{
-      // 100% 기준선
       id: 'baselineLine',
       afterDraw(chart) {
         const {ctx: c2, chartArea: {left, right}, scales: {y}} = chart;
@@ -1546,21 +1535,65 @@ async function renderQuarterChart() {
         c2.save();
         c2.setLineDash([6, 4]);
         c2.strokeStyle = '#C00000';
-        c2.lineWidth = 1.2;
-        c2.beginPath();
-        c2.moveTo(left, yPos);
-        c2.lineTo(right, yPos);
-        c2.stroke();
+        c2.lineWidth = 1.5;
+        c2.beginPath(); c2.moveTo(left, yPos); c2.lineTo(right, yPos); c2.stroke();
         c2.restore();
-        // "100%" 레이블
         c2.save();
-        c2.font = 'bold 10px Malgun Gothic';
+        c2.font = 'bold 10px Malgun Gothic, Arial';
         c2.fillStyle = '#C00000';
         c2.fillText('100%', right + 4, yPos + 4);
         c2.restore();
       }
     }]
   });
+}
+
+async function renderQuarterChart() {
+  await ensureMasters();
+  await ensureBom();
+
+  const q = query(collection(db,'costData'), orderBy('month'));
+  const snap = await getDocs(q);
+  const allMonths = [];
+  snap.forEach(d => allMonths.push(d.data()));
+  if(!allMonths.length) return;
+
+  // 분기별 데이터 집계
+  window._quarterData = {};
+  for(const d of allMonths) {
+    const cc = computeMonthCost(d, window._bom);
+    const ql = quarterLabel(d.month);
+    if(!window._quarterData[ql]) window._quarterData[ql] = {};
+    const masterMap = {};
+    window._masters.forEach(m => masterMap[m.code] = m);
+    for(const r of cc.rows) {
+      const mm = masterMap[r.code];
+      const gname = (mm ? mm.name : r.code).replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
+      const sp = mm ? mm.supplyPrice : 0;
+      if(!window._quarterData[ql][gname]) window._quarterData[ql][gname] = {totalCost:0, totalQty:0, spSum:0};
+      window._quarterData[ql][gname].totalCost += r.totalCost;
+      window._quarterData[ql][gname].totalQty += r.qty;
+      window._quarterData[ql][gname].spSum += sp * r.qty;
+    }
+  }
+
+  // 전체 그룹 목록 (생산수량 내림차순)
+  const groupTotalQty = {};
+  for(const ql of Object.keys(window._quarterData)) {
+    for(const [g,v] of Object.entries(window._quarterData[ql]||{})) {
+      groupTotalQty[g] = (groupTotalQty[g]||0) + v.totalQty;
+    }
+  }
+  window._quarterAllGroups = Object.keys(groupTotalQty)
+    .sort((a,b) => groupTotalQty[b] - groupTotalQty[a]);
+
+  // 기존 선택 없으면 상위 5개 기본 선택
+  if(window._quarterSelected.size === 0) {
+    window._quarterAllGroups.slice(0, 5).forEach(g => window._quarterSelected.add(g));
+  }
+
+  renderQuarterCheckboxes();
+  drawQuarterChart();
 }
 
 // ════════════════════════════════════
