@@ -1195,6 +1195,69 @@ window.deleteMonthDataFromProd = async () => {
 };
 
 // ════════════════════════════════════
+// 공통 원가 계산 (BOM 4단계) — 제품별·이력·대시보드 공용
+// d: costData 한 달치, bomFallback: window._bom
+// 반환: {rows:[{code,qty,sp,rawCost,subCost,laborAlloc,expCost,totalCost}], sum:{raw,sub,labor,exp,total}, prodAmt}
+// ════════════════════════════════════
+function computeMonthCost(d, bomFallback) {
+  const erpQty=d.erpQty||{};
+  const outAmt={};
+  (d.invData||[]).forEach(it=>{ outAmt[it.code]=(it.outAmt||0); });
+  const bom=(d.bomSnapshot&&Object.keys(d.bomSnapshot).length)?d.bomSnapshot:(bomFallback||{});
+  // 이론총사용량
+  const theoryTotal={};
+  for(const [code,qty] of Object.entries(erpQty)){
+    const b=bom[code]; if(!b)continue;
+    for(const m of (b.mats||[])) theoryTotal[m.mcode]=(theoryTotal[m.mcode]||0)+(m.perEa||0)*qty;
+  }
+  // 노무비
+  const eL=d.erpLabor||{};
+  const laborTotal=d.laborTotal||eL.total||0;
+  const e1=eL.임금1||0,e2=eL.임금2||0,e3=eL.임금3||0,e4=eL.임금4||0,e5=eL.임금5||0;
+  const eOther=laborTotal>0?laborTotal-(e1+e2+e3+e4+e5):0;
+  const laborMeat=e1+e2+e3;
+  const laborQtyBase=e4+e5+(eOther>0?eOther:0);
+  const exp=d.exp||0;
+  // 원육량 (저장값 우선, 없으면 BOM 원육중량)
+  const savedMeat=d.meatInByCode||{};
+  const hasSaved=Object.keys(savedMeat).length>0;
+  const meatBy={};
+  for(const [code,qty] of Object.entries(erpQty)){
+    if(qty<=0)continue;
+    if(hasSaved){ meatBy[code]=savedMeat[code]||0; }
+    else{
+      const b=bom[code]; let mk=0;
+      if(b)for(const m of (b.mats||[])){
+        if(m.mcode[0]==='1' && /쇠고기|원육|설도|홍두께|우둔/.test(m.mname||'') && !/육수/.test(m.mname||'')) mk+=(m.perEa||0)*qty;
+      }
+      meatBy[code]=mk;
+    }
+  }
+  let totalMeat=0; for(const c of Object.keys(erpQty)) if(erpQty[c]>0) totalMeat+=(meatBy[c]||0);
+  const totalQty=Object.values(erpQty).reduce((s,v)=>s+v,0);
+  // 제품별
+  const rows=[]; const sum={raw:0,sub:0,labor:0,exp:0,total:0};
+  for(const [code,qty] of Object.entries(erpQty)){
+    if(qty<=0)continue;
+    const b=bom[code]; let rawCost=0,subCost=0;
+    if(b)for(const mat of (b.mats||[])){
+      const tt=theoryTotal[mat.mcode]||0; if(tt<=0)continue;
+      const amt=((mat.perEa||0)*qty)/tt*(outAmt[mat.mcode]||0);
+      if(mat.mcode[0]==='1'||mat.mcode[0]==='2') rawCost+=amt;
+      else if(mat.mcode[0]==='4'||mat.mcode[0]==='5') subCost+=amt;
+    }
+    const meatShare=totalMeat>0?(meatBy[code]||0)/totalMeat:0;
+    const qtyShare=totalQty>0?qty/totalQty:0;
+    const laborAlloc=laborMeat*meatShare+laborQtyBase*qtyShare;
+    const expCost=exp*qtyShare;
+    const totalCost=rawCost+subCost+laborAlloc+expCost;
+    rows.push({code,qty,rawCost,subCost,laborAlloc,expCost,totalCost});
+    sum.raw+=rawCost;sum.sub+=subCost;sum.labor+=laborAlloc;sum.exp+=expCost;sum.total+=totalCost;
+  }
+  return {rows,sum,prodAmt:d.prodAmt||0};
+}
+
+// ════════════════════════════════════
 // 제품별 원가
 // ════════════════════════════════════
 window.loadProducts = async () => {
@@ -1380,29 +1443,30 @@ window.loadProducts = async () => {
 // 월별 이력
 // ════════════════════════════════════
 window.loadHistory = async () => {
+  await ensureBom();
   const q=query(collection(db,'costData'),orderBy('month'));
   const snap=await getDocs(q);
   const rows=[]; snap.forEach(d=>rows.push(d.data()));
   const tbody=document.getElementById('history-body');
   if(!rows.length){tbody.innerHTML='<tr><td colspan="13" class="empty">데이터가 없습니다.</td></tr>';return;}
+  // 각 월 BOM 계산
+  const calc=rows.map(r=>computeMonthCost(r, window._bom));
   tbody.innerHTML=rows.map((r,i)=>{
-    // 모든 금액 원 단위
-    const laborTotal=r.laborTotal||r.erpLabor?.total||0;
-    const rawV=r.raw||0, subV=r.sub||0, expV=r.exp||0, prodV=r.prodAmt||0;
-    const total=rawV+subV+laborTotal+expV;
+    const c=calc[i].sum;
+    const rawV=c.raw, subV=c.sub, laborV=c.labor, expV=c.exp, total=c.total;
+    const prodV=r.prodAmt||0;
     const rate=prodV>0?total/prodV:0;
     const rRaw=total>0?rawV/total:0;
-    const rLabor=total>0?laborTotal/total:0;
-    const prev=i>0?rows[i-1]:null;
-    const prevLabor=prev?(prev.laborTotal||prev.erpLabor?.total||0):0;
-    const prevTotal=prev?((prev.raw||0)+(prev.sub||0)+prevLabor+(prev.exp||0)):0;
-    const prevRate=prev&&prev.prodAmt>0?prevTotal/prev.prodAmt:null;
+    const rLabor=total>0?laborV/total:0;
+    const prev=i>0?calc[i-1].sum:null;
+    const prevProd=i>0?rows[i-1].prodAmt:0;
+    const prevRate=prev&&prevProd>0?prev.total/prevProd:null;
     const diff=prevRate!==null?rate-prevRate:null;
-    const M=v=>fmt(v/1000000,1); // 백만원 표시
+    const M=v=>fmt(v/1000000,1);
     return `<tr>
       <td class="c">${r.month}</td>
       <td>${M(prodV)}</td><td>${M(rawV)}</td><td>${M(subV)}</td>
-      <td>${laborTotal>0?M(laborTotal):'—'}</td><td>${M(expV)}</td><td>${M(total)}</td>
+      <td>${laborV>0?M(laborV):'—'}</td><td>${M(expV)}</td><td>${M(total)}</td>
       <td class="c ${rC(rate)}">${fmtP(rate)}</td>
       <td class="c">${fmtP(rRaw)}</td><td class="c">${fmtP(rLabor)}</td>
       <td class="c ${diff!=null?(diff>0?'bad':'ok'):''}">${diff!=null?(diff>=0?'+':'')+((diff)*100).toFixed(1)+'%p':'—'}</td>
@@ -1438,6 +1502,7 @@ window.loadDashboard = async () => {
   document.getElementById('dashMonth').value=month;
   document.getElementById('hdrMonth').textContent=month+' 기준';
   await ensureMasters();
+  await ensureBom();
   const snap=await getDoc(doc(db,'costData',month));
   if(!snap.exists()){
     ['kpi-prod','kpi-rate','kpi-diff'].forEach(id=>document.getElementById(id).textContent='—');
@@ -1447,11 +1512,13 @@ window.loadDashboard = async () => {
     return;
   }
   const d=snap.data();
-  const dLabor=d.laborTotal||d.erpLabor?.total||0;
-  const total=(d.raw||0)+(d.sub||0)+dLabor+(d.exp||0);
-  const rate=d.prodAmt>0?total/d.prodAmt:0;
+  const cc=computeMonthCost(d, window._bom);
+  const c=cc.sum;
+  const total=c.total;
+  const prodAmt=d.prodAmt||0;
+  const rate=prodAmt>0?total/prodAmt:0;
   const M=v=>fmt(v/1000000,1);
-  document.getElementById('kpi-prod').textContent=M(d.prodAmt||0);
+  document.getElementById('kpi-prod').textContent=M(prodAmt);
   document.getElementById('kpi-rate').textContent=fmtP(rate);
   document.getElementById('kpi-rate').className='kpi-val '+rC(rate);
 
@@ -1459,25 +1526,27 @@ window.loadDashboard = async () => {
   const pm=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;
   const prevSnap=await getDoc(doc(db,'costData',pm));
   const prev=prevSnap.exists()?prevSnap.data():null;
-  const prevLabor=prev?(prev.laborTotal||prev.erpLabor?.total||0):0;
-  const prevTotal=prev?((prev.raw||0)+(prev.sub||0)+prevLabor+(prev.exp||0)):0;
-  const prevRate=prev&&prev.prodAmt>0?prevTotal/prev.prodAmt:null;
+  const prevC=prev?computeMonthCost(prev,window._bom).sum:null;
+  const prevProd=prev?prev.prodAmt:0;
+  const prevRate=prevC&&prevProd>0?prevC.total/prevProd:null;
   const diff=prevRate!==null?rate-prevRate:null;
   document.getElementById('kpi-diff').textContent=diff!==null?(diff>=0?'+':'')+((diff*100).toFixed(1))+'%p':'—';
 
-  // 데이터 상태
-  const hasProd=d.prodData?.length>0;
-  const hasLabor=d.laborData&&Object.keys(d.laborData).length>0;
+  const hasProd=d.prodData?.length>0||Object.keys(d.erpQty||{}).length>0;
   const hasInv=d.invData?.length>0;
   document.getElementById('kpi-status').textContent=
-    [hasProd&&'생산',hasLabor&&'근무',hasInv&&'재고',(d.exp||d.raw)&&'경비'].filter(Boolean).join('·')||'미입력';
+    [hasProd&&'생산',hasInv&&'재고',(d.exp||c.labor)&&'경비·노무'].filter(Boolean).join('·')||'미입력';
 
-  // 원가 구성 (원 단위, 백만원 표시)
-  const items=[['원재료비',d.raw||0,prev?.raw||0],['부재료비',d.sub||0,prev?.sub||0],['노무비',dLabor,prevLabor],['경비',d.exp||0,prev?.exp||0],['합계',total,prevTotal]];
+  // 원가 구성 (BOM 계산값)
+  const items=[
+    ['원재료비',c.raw,prevC?.raw||0],['부재료비',c.sub,prevC?.sub||0],
+    ['노무비',c.labor,prevC?.labor||0],['경비',c.exp,prevC?.exp||0],
+    ['합계',total,prevC?.total||0]
+  ];
   document.getElementById('dashCostBody').innerHTML=items.map(([label,cv,pv])=>{
     const isT=label==='합계';
     const cr=total>0?cv/total:0;
-    const pr=prevTotal>0&&pv?pv/prevTotal:0;
+    const pr=prevC&&prevC.total>0&&pv?pv/prevC.total:0;
     const dF=pv?cv-pv:null;
     return `<tr ${isT?'class="total"':''}>
       <td class="c">${label}</td>
@@ -1489,39 +1558,21 @@ window.loadDashboard = async () => {
     </tr>`;
   }).join('');
 
-  // 제품별 원가율 (생산량 집계 기반)
-  const actualProd=(d.prodData||[]).filter(r=>r.isActual);
-  if(!actualProd.length){document.getElementById('dashProdBody').innerHTML='<tr><td colspan="7" class="empty">생산 실적이 없습니다.</td></tr>';return;}
-  const totalMeat=actualProd.reduce((s,r)=>s+r.meatIn,0);
-  const byName={};
-  for(const r of actualProd){
-    if(!byName[r.prodName])byName[r.prodName]={meatIn:0,meatOut:0};
-    byName[r.prodName].meatIn+=r.meatIn;byName[r.prodName].meatOut+=r.meatOut;
-  }
-  const findM=(name)=>{
-    const nm=name.trim();
-    for(const m of window._masters){
-      if((m.alias||[]).some(a=>nm===a||nm.includes(a)||a.includes(nm))) return m;
-    }
-    let best=null,bs=0;
-    for(const m of window._masters){
-      const kws=['시그니처','코스트코','트레이더스','미니','메추리알','FC','3kg','설도','홍두께','우둔'];
-      const sc=kws.filter(k=>nm.includes(k)&&m.name.includes(k)).length;
-      if(sc>bs){bs=sc;best=m;}
-    }
-    return best;
-  };
-  document.getElementById('dashProdBody').innerHTML=Object.entries(byName).map(([name,v])=>{
-    const m_=findM(name);const share=totalMeat>0?v.meatIn/totalMeat:0;
-    const rawC=(d.raw||0)*share;const subC=(d.sub||0)*share;const expC=(d.exp||0)*share;
-    const totC=rawC+subC+expC;
-    const sp=m_?m_.supplyPrice:0;
-    const estQty=m_&&m_.weight>0?Math.round(v.meatOut*1000/(m_.weight*0.47)):0;
-    const rate_=sp>0&&estQty>0?totC/(sp*estQty):0;
+  // 제품별 원가율 (BOM 계산값, 개당단가 기준)
+  const masterMap={};
+  window._masters.forEach(mm=>masterMap[mm.code]=mm);
+  if(!cc.rows.length){document.getElementById('dashProdBody').innerHTML='<tr><td colspan="7" class="empty">생산 실적이 없습니다.</td></tr>';return;}
+  document.getElementById('dashProdBody').innerHTML=cc.rows.map(r=>{
+    const mm=masterMap[r.code];
+    const sp=mm?mm.supplyPrice:0;
+    const unitCost=r.qty>0?r.totalCost/r.qty:0;
+    const rate_=sp>0?unitCost/sp:0;
     return `<tr>
-      <td class="l">${name}</td><td>${fmtN(sp)}</td>
+      <td class="l">${mm?mm.name:r.code}</td><td>${fmtN(sp)}</td>
       <td class="c ${rC(rate_)}">${rate_>0?fmtP(rate_):'—'}</td>
-      <td>${fmtN(Math.round(rawC))}</td><td>—</td><td>${fmtN(Math.round(expC))}</td>
+      <td>${fmtN(Math.round(r.rawCost/r.qty))}</td>
+      <td>${fmtN(Math.round(r.laborAlloc/r.qty))}</td>
+      <td>${fmtN(Math.round(r.expCost/r.qty))}</td>
       <td class="c">${badge(rate_)}</td></tr>`;
   }).join('');
 };
