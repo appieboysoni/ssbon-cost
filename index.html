@@ -2766,6 +2766,29 @@ const LOGO_B64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAIBAQEBAQIBAQECAgICAgQDAgICAg
 const fmtM = v => (!v&&v!==0)?'—':fmt(v/1000000,1);
 const fmtPct = v => (!v&&v!==0)?'—':(v*100).toFixed(1)+'%';
 
+// 목표원가 퍼지 매칭 — Firebase 키(언더바·공백 혼용)와 그룹명 매칭
+function matchTargetCost(gname) {
+  const normalize = s => s
+    .replace(/\s+/g,'').replace(/_/g,'')
+    .replace(/\[본죽\]/g,'').replace(/【본죽】/g,'')
+    .replace(/낱개/g,'').replace(/장조림/g,'')
+    .replace(/쇠고기/g,'').toLowerCase();
+  const gNorm = normalize(gname);
+  let best = null, bestScore = 0;
+  for(const [key, cost] of Object.entries(window._targetCost)) {
+    const kNorm = normalize(key);
+    // 정규화 후 완전일치
+    if(kNorm === gNorm) return cost;
+    // 부분 포함 점수
+    const shorter = kNorm.length < gNorm.length ? kNorm : gNorm;
+    const longer  = kNorm.length < gNorm.length ? gNorm : kNorm;
+    if(longer.includes(shorter) && shorter.length > bestScore) {
+      bestScore = shorter.length; best = cost;
+    }
+  }
+  return best;
+}
+
 function rptHeader(title, subtitle, date) {
   return `
   <div class="rpt-header">
@@ -2906,10 +2929,10 @@ async function buildMonthlyReport(month, y, m, dateStr) {
     return {code:r.code,name:mm?mm.name:r.code,gname,qty:r.qty,sp,rawEa,subEa,laborEa,expEa,unitCost,rate:sp>0?unitCost/sp:0,target};
   });
 
-  // 제품 그룹별 평균 집계
+  // 제품 그룹별 집계
   const groups={};
   for(const r of prodRows){
-    if(!groups[r.gname]) groups[r.gname]={qty:0,raw:0,sub:0,labor:0,exp:0,total:0,spSum:0,target:r.target};
+    if(!groups[r.gname]) groups[r.gname]={qty:0,raw:0,sub:0,labor:0,exp:0,total:0,spSum:0};
     const g=groups[r.gname];
     g.qty+=r.qty; g.raw+=r.rawEa*r.qty; g.sub+=r.subEa*r.qty;
     g.labor+=r.laborEa*r.qty; g.exp+=r.expEa*r.qty; g.total+=r.unitCost*r.qty;
@@ -2917,45 +2940,91 @@ async function buildMonthlyReport(month, y, m, dateStr) {
   }
 
   // 원가율 판정 분류
-  const goodProds  = prodRows.filter(r=>r.rate>0&&r.rate<0.85);
-  const warnProds  = prodRows.filter(r=>r.rate>=0.85&&r.rate<1);
-  const badProds   = prodRows.filter(r=>r.rate>=1);
+  const goodProds = prodRows.filter(r=>r.rate>0&&r.rate<0.85);
+  const warnProds = prodRows.filter(r=>r.rate>=0.85&&r.rate<1);
+  const badProds  = prodRows.filter(r=>r.rate>=1);
 
-  // 생산금액/원가 증감
-  const prodDiff = prevProd>0?prodAmt-prevProd:null;
-  const totalDiff = prevSum?sum.total-prevSum.total:null;
+  // 증감
+  const prodDiff  = prevProd>0?prodAmt-prevProd:null;
   const rawDiff   = prevSum?sum.raw-prevSum.raw:null;
   const laborDiff = prevSum?sum.labor-prevSum.labor:null;
   const expDiff   = prevSum?sum.exp-prevSum.exp:null;
 
-  // 원가율 구성비 (제조원가 대비)
-  const rawShare  = sum.total>0?sum.raw/sum.total:0;
-  const subShare  = sum.total>0?sum.sub/sum.total:0;
-  const laborShare= sum.total>0?sum.labor/sum.total:0;
-  const expShare  = sum.total>0?sum.exp/sum.total:0;
+  // 원가 구성비
+  const rawShare   = sum.total>0?sum.raw/sum.total:0;
+  const subShare   = sum.total>0?sum.sub/sum.total:0;
+  const laborShare = sum.total>0?sum.labor/sum.total:0;
+  const expShare   = sum.total>0?sum.exp/sum.total:0;
 
-  // 제품별 원가 분석 코멘트 자동 생성
-  const prodComments = [];
-  if(badProds.length) prodComments.push(`<li class="bad">⚠️ <strong>원가율 100% 초과 제품 ${badProds.length}개</strong>: ${badProds.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')} — 공급단가 재검토 또는 레시피 원가절감 필요</li>`);
-  if(warnProds.length) prodComments.push(`<li class="warn">🟡 <strong>주의 구간 제품(85~100%)</strong>: ${warnProds.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')} — 원가 관리 지속 모니터링 필요</li>`);
-  if(goodProds.length) prodComments.push(`<li class="ok">✅ <strong>양호 제품(85% 미만)</strong>: ${goodProds.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')}</li>`);
+  // 목표원가 매칭 (퍼지 매칭 적용)
+  const groupsWithTarget = Object.entries(groups).map(([gname, g]) => {
+    const target = matchTargetCost(gname);
+    const unitCostAvg = g.total / g.qty;
+    const spAvg = g.spSum / g.qty;
+    const diff = target !== null ? unitCostAvg - target : null;
+    const diffPct = target > 0 && diff !== null ? diff / target * 100 : null;
+    return { gname, g, unitCostAvg, spAvg, target, diff, diffPct };
+  });
+  const hasTarget = groupsWithTarget.some(r => r.target !== null);
 
-  // 목표원가 비교표 (등록된 것만)
-  const targetRows = Object.entries(groups).filter(([g,v])=>v.target&&v.qty>0).map(([g,v])=>{
-    const unitCostAvg = v.total/v.qty;
-    const spAvg = v.spSum/v.qty;
-    const tgt = v.target;
-    const diff = unitCostAvg - tgt;
-    const diffPct = tgt>0?diff/tgt*100:0;
-    const cls = diff>0?'bad':diff<0?'ok':'';
+  // 목표원가 비교표 HTML
+  const targetTableRows = groupsWithTarget.map(r => {
+    if(r.target === null) return `<tr>
+      <td class="l">${r.gname}</td>
+      <td>${Math.round(r.spAvg).toLocaleString('ko-KR')}</td>
+      <td style="font-weight:700">${Math.round(r.unitCostAvg).toLocaleString('ko-KR')}</td>
+      <td class="c" style="color:#bbb" colspan="3">목표원가 미등록</td>
+      <td class="c" style="color:#bbb">—</td>
+    </tr>`;
+    const cls = r.diff > 0 ? 'bad' : r.diff < 0 ? 'ok' : '';
+    const badge = r.diff > 0 ? '🔴 초과' : r.diff < 0 ? '🟢 절감' : '✅ 달성';
     return `<tr>
-      <td class="l">${g}</td>
-      <td>${Math.round(spAvg).toLocaleString('ko-KR')}</td>
-      <td>${Math.round(unitCostAvg).toLocaleString('ko-KR')}</td>
-      <td>${tgt.toLocaleString('ko-KR')}</td>
-      <td class="${cls}" style="font-weight:700">${diff>=0?'+':''}${Math.round(diff).toLocaleString('ko-KR')}</td>
-      <td class="${cls} c" style="font-weight:700">${diff>=0?'+':''}${diffPct.toFixed(1)}%</td>
-      <td class="c">${diff>0?'🔴 초과':diff<0?'🟢 절감':'✅ 달성'}</td>
+      <td class="l">${r.gname}</td>
+      <td>${Math.round(r.spAvg).toLocaleString('ko-KR')}</td>
+      <td style="font-weight:700">${Math.round(r.unitCostAvg).toLocaleString('ko-KR')}</td>
+      <td>${r.target.toLocaleString('ko-KR')}</td>
+      <td class="${cls}" style="font-weight:700">${r.diff >= 0 ? '+' : ''}${Math.round(r.diff).toLocaleString('ko-KR')}</td>
+      <td class="${cls} c" style="font-weight:700">${r.diff >= 0 ? '+' : ''}${r.diffPct.toFixed(1)}%</td>
+      <td class="c">${badge}</td>
+    </tr>`;
+  }).join('');
+
+  // 목표원가 요약 코멘트
+  const overTarget  = groupsWithTarget.filter(r => r.target !== null && r.diff > 0);
+  const underTarget = groupsWithTarget.filter(r => r.target !== null && r.diff <= 0);
+  const avgGapPct   = groupsWithTarget.filter(r => r.diffPct !== null).reduce((s, r) => s + r.diffPct, 0)
+                      / (groupsWithTarget.filter(r => r.diffPct !== null).length || 1);
+
+  // 전월 목표 대비 개선도 (전월 그룹별 단가 계산)
+  const prevGroupMap = {};
+  if(prevCc) {
+    const prevProdRowsRaw = prevCc.rows.map(r => {
+      const mm = masterMap[r.code];
+      const gn = (mm ? mm.name : r.code).replace(/\s*\((설도|우둔|홍두께)\)\s*$/, '').trim();
+      return { gname: gn, qty: r.qty, total: r.totalCost };
+    });
+    for(const r of prevProdRowsRaw) {
+      if(!prevGroupMap[r.gname]) prevGroupMap[r.gname] = { qty: 0, total: 0 };
+      prevGroupMap[r.gname].qty   += r.qty;
+      prevGroupMap[r.gname].total += r.total;
+    }
+  }
+
+  const trendRows = groupsWithTarget.filter(r => r.target !== null).map(r => {
+    const prev = prevGroupMap[r.gname];
+    const prevUnit = prev && prev.qty > 0 ? prev.total / prev.qty : null;
+    const prevDiff = prevUnit !== null && r.target !== null ? prevUnit - r.target : null;
+    const prevDiffPct = prevDiff !== null && r.target > 0 ? prevDiff / r.target * 100 : null;
+    const improvement = prevDiffPct !== null ? prevDiffPct - r.diffPct : null; // 양수 = 개선
+    const impCls = improvement !== null ? (improvement > 0 ? 'ok' : improvement < 0 ? 'bad' : '') : '';
+    return `<tr>
+      <td class="l">${r.gname}</td>
+      <td>${r.target.toLocaleString('ko-KR')}</td>
+      <td style="font-weight:700">${Math.round(r.unitCostAvg).toLocaleString('ko-KR')}</td>
+      <td class="${r.diff > 0 ? 'bad' : 'ok'}" style="font-weight:700">${r.diff >= 0 ? '+' : ''}${r.diffPct.toFixed(1)}%</td>
+      <td>${prevUnit !== null ? Math.round(prevUnit).toLocaleString('ko-KR') : '—'}</td>
+      <td class="${prevDiff !== null ? (prevDiff > 0 ? 'bad' : 'ok') : ''}">${prevDiffPct !== null ? (prevDiffPct >= 0 ? '+' : '') + prevDiffPct.toFixed(1) + '%' : '—'}</td>
+      <td class="${impCls}" style="font-weight:700">${improvement !== null ? (improvement > 0 ? '▲ 개선 ' : improvement < 0 ? '▼ 악화 ' : '→ 유지 ') + Math.abs(improvement).toFixed(1) + '%p' : '—'}</td>
     </tr>`;
   }).join('');
 
@@ -3023,19 +3092,23 @@ async function buildMonthlyReport(month, y, m, dateStr) {
     ${rptProdTable(prodRows)}
 
     <h2>■ 제품별 원가율 평가</h2>
-    <ul>${prodComments.join('')}</ul>
+    <ul>
+      ${badProds.length?`<li class="bad">⚠️ <strong>원가율 100% 초과 제품 ${badProds.length}개</strong>: ${badProds.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')} — 공급단가 재검토 또는 레시피 원가절감 필요</li>`:''}
+      ${warnProds.length?`<li class="warn">🟡 <strong>주의 구간 제품(85~100%)</strong>: ${warnProds.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')} — 원가 관리 지속 모니터링 필요</li>`:''}
+      ${goodProds.length?`<li class="ok">✅ <strong>양호 제품(85% 미만)</strong>: ${goodProds.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')}</li>`:''}
+    </ul>
 
-    ${Object.keys(groups).length>1?`
+    ${groupsWithTarget.length>1?`
     <h2>■ 품목 그룹별 평균 (원육 종류 통합)</h2>
     <table>
       <thead><tr><th class="l">품목 그룹</th><th>총수량</th><th>공급단가</th><th>원재료비/EA</th><th>노무비/EA</th><th>경비/EA</th><th>원가/EA</th><th>원가율</th></tr></thead>
       <tbody>
-        ${Object.entries(groups).map(([gname,g])=>{
-          const uCost=g.total/g.qty, spAvg=g.spSum/g.qty;
+        ${groupsWithTarget.map(r=>{
+          const uCost=r.unitCostAvg, spAvg=r.spAvg, g=r.g;
           const gr=spAvg>0?uCost/spAvg:0;
           const cls=gr>=1?'bad':gr>=0.85?'warn':'ok';
           return `<tr>
-            <td class="l">${gname}</td>
+            <td class="l">${r.gname}</td>
             <td class="c">${g.qty.toLocaleString('ko-KR')}</td>
             <td>${Math.round(spAvg).toLocaleString('ko-KR')}</td>
             <td>${Math.round(g.raw/g.qty).toLocaleString('ko-KR')}</td>
@@ -3048,20 +3121,44 @@ async function buildMonthlyReport(month, y, m, dateStr) {
       </tbody>
     </table>`:''}
 
-    ${targetRows?`
-    <!-- 4. 목표원가 대비 실적 -->
-    <h1>4. 목표 제조원가 대비 실적</h1>
-    <p>설정탭에 등록된 목표 제조원가 대비 당월 실제 원가를 비교합니다.</p>
+    <!-- 4. 목표 제조원가 대비 분석 -->
+    <h1>4. 목표 제조원가 대비 실적 분석</h1>
+    <p>설정탭에 등록된 목표 제조원가 대비 당월 실제 원가를 비교하고, 전월 대비 개선·악화 추이를 분석합니다.</p>
+
+    <h2>■ 목표원가 달성 현황 (당월)</h2>
     <table>
-      <thead><tr><th class="l">품목 그룹</th><th>공급단가</th><th>실제원가/EA</th><th>목표원가/EA</th><th>차이(원)</th><th>달성율</th><th>판정</th></tr></thead>
-      <tbody>${targetRows}</tbody>
+      <thead><tr><th class="l">품목 그룹</th><th>공급단가</th><th>실제원가/EA</th><th>목표원가/EA</th><th>차이(원)</th><th>목표대비(%)</th><th>판정</th></tr></thead>
+      <tbody>${targetTableRows}</tbody>
     </table>
-    <div class="${badProds.length?'warn-box':'section-box'}">
-      목표원가는 설정탭 &gt; 목표 제조원가 관리에서 수정할 수 있습니다.
-    </div>`:''}
+
+    ${hasTarget?`
+    <div class="${overTarget.length>0?'warn-box':'section-box'}">
+      ▶ 목표원가 달성 현황: 전체 ${groupsWithTarget.filter(r=>r.target!==null).length}개 품목 중
+      <span class="ok"><strong>달성·절감 ${underTarget.length}개</strong></span> /
+      <span class="bad"><strong>초과 ${overTarget.length}개</strong></span>
+      &nbsp;|&nbsp; 평균 목표대비: <strong class="${avgGapPct>0?'bad':'ok'}">${avgGapPct>=0?'+':''}${avgGapPct.toFixed(1)}%</strong>
+      ${overTarget.length>0?`<br>⚠️ <strong>초과 품목: ${overTarget.map(r=>r.gname).join(', ')}</strong> — 공급단가 재검토 또는 원가절감 방안 수립 필요`:'<br>✅ 전 품목 목표원가 달성 중입니다.'}
+    </div>
+
+    <h2>■ 목표원가 대비 전월 개선도 추이</h2>
+    <p>당월과 전월의 목표원가 대비 달성률을 비교하여 개선·악화 방향을 분석합니다.</p>
+    <table>
+      <thead><tr>
+        <th class="l">품목 그룹</th>
+        <th>목표원가/EA</th>
+        <th>당월 실제원가</th><th>당월 목표대비</th>
+        <th>전월 실제원가</th><th>전월 목표대비</th>
+        <th>전월 대비 개선도</th>
+      </tr></thead>
+      <tbody>${trendRows}</tbody>
+    </table>
+    <div class="section-box">
+      ▶ <strong>개선도 해석:</strong> 전월 대비 목표원가 초과율이 줄어들면 <span class="ok">▲ 개선</span>, 늘어나면 <span class="bad">▼ 악화</span>입니다.
+      목표원가 등록은 설정탭 &gt; 목표 제조원가 관리에서 수정할 수 있습니다.
+    </div>`:'<div class="warn-box">⚠️ 목표원가가 등록되지 않았습니다. 설정탭 &gt; 목표 제조원가 관리에서 등록해주세요.</div>'}
 
     <!-- 5. 노무비 배부 방식 현황 -->
-    <h1>${targetRows?'5':'4'}. 노무비 배부 방식 현황</h1>
+    <h1>5. 노무비 배부 방식 현황</h1>
     <table>
       <thead><tr><th>공정</th><th>배부 기준</th><th>대상 임금 항목</th><th>비고</th></tr></thead>
       <tbody>
@@ -3077,14 +3174,14 @@ async function buildMonthlyReport(month, y, m, dateStr) {
         : '📌 현재 원육중량+수량 혼합배부 방식 적용 중. 스마트팩토리 실공수 연동 시 정확도가 향상됩니다.'}
     </div>
 
-    <!-- 비고 -->
-    <h1>${targetRows?'6':'5'}. 비고 및 향후 과제</h1>
+    <!-- 6. 비고 및 향후 과제 -->
+    <h1>6. 비고 및 향후 과제</h1>
     <ul>
       <li>원·부재료비는 BOM 4단계 계산으로 ERP 확정값과 차이 없이 검증 완료됩니다.</li>
       <li>노무비·경비는 ERP 최종 마감 후 원단위 입력 기준이며, 배부 방식에 따라 제품별 금액이 달라질 수 있습니다.</li>
       ${d.exp?`<li>경비 합계: ${Number(d.exp).toLocaleString('ko-KR')}원 (ERP 확정값 입력 기준)</li>`:'<li class="warn">⚠️ 경비 원단위 미입력 — 정확한 원가율 산출을 위해 입력 필요</li>'}
       ${d.prodAmt?`<li>생산금액: ${Number(d.prodAmt).toLocaleString('ko-KR')}원</li>`:'<li class="warn">⚠️ 생산금액 미입력 — 원가율 산출 불가</li>'}
-      <li>다음 달 개선 과제: ${badProds.length?badProds.map(r=>r.gname).filter((v,i,a)=>a.indexOf(v)===i).join(', ')+' 공급단가 검토':'원가율 유지 및 생산성 향상'}</li>
+      <li>다음 달 개선 과제: ${overTarget.length?overTarget.map(r=>r.gname).join(', ')+' 목표원가 달성 집중 관리':badProds.length?badProds.map(r=>r.gname||r.name).filter((v,i,a)=>a.indexOf(v)===i).join(', ')+' 공급단가 검토':'전 품목 목표원가 유지 및 생산성 향상'}</li>
     </ul>
 
     <div class="rpt-footer">
