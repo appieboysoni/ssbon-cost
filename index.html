@@ -203,6 +203,7 @@ tr.total td{background:var(--light);font-weight:700}
         <div class="step" id="step4">④ ERP 노무비</div>
         <div class="step" id="step5">⑤ ERP 생산실적</div>
         <div class="step" id="step6">⑥ 경비</div>
+        <div class="step" id="step7">⑦ 공수 연동</div>
       </div>
       <div class="sec">① 생산량 집계 붙여넣기</div>
       <div class="paste-box">
@@ -320,6 +321,26 @@ tr.total td{background:var(--light);font-weight:700}
         <div class="fg"><label>부재료비 합계 (원, 검증용)</label><input type="number" id="exp-sub" step="1" placeholder="예: 26398419" style="background:var(--gray)"></div>
         <div class="fg"><label>생산금액 합계 (원) ★필수</label><input type="number" id="exp-prod" step="1" placeholder="예: 893201372" style="background:var(--input);border-color:#FFC000;border-width:2px"></div>
       </div>
+      <!-- 구역7: 스마트팩토리 공수 연동 -->
+      <div class="sec">⑦ 스마트팩토리 공수 연동 (노무비 배부 기준)</div>
+      <div class="paste-box" style="border-color:var(--mid);background:#EEF4FF">
+        <div class="pb-title" style="color:var(--mid)">🔗 순수본 2공장 스마트팩토리 → 공정별 실공수 자동 가져오기</div>
+        <div class="pb-desc">작업월을 선택하면 스마트팩토리 DB에서 해당 월 전체 공정별·부위별 공수(인원×시간)를 자동 집계합니다.<br>
+        노무비 배부: 임금1(전처리)·임금2(자숙)·임금3(파쇄) → 공정별 실공수 비율 / 임금4(내포장) → 포장 EA 비율 / 임금5(외포장) → 미니5입·코코170g 수량 비율</div>
+        <div class="btn-row">
+          <button class="btn btn-ok btn-sm" onclick="fetchFactoryManhours()" id="btn-fetch-manhours">⚡ 공수 가져오기</button>
+          <button class="btn btn-primary btn-sm" onclick="clearManhours()">🗑️ 초기화</button>
+        </div>
+        <div class="paste-result" id="manhours-result"></div>
+      </div>
+      <div id="manhours-table-wrap" style="display:none">
+        <div class="info-box" id="manhours-summary"></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>공정</th><th>부위/제품</th><th>총 작업일</th><th>총 인원(연인원)</th><th>총 시간(h)</th><th>총 공수(인시)</th><th>포장EA</th></tr></thead>
+          <tbody id="manhours-table-body"></tbody>
+        </table></div>
+      </div>
+
       <div id="cost-preview" style="display:none;margin-top:14px">
         <div class="sec">📊 원가 계산 미리보기</div>
         <div class="tbl-wrap"><table>
@@ -339,7 +360,42 @@ tr.total td{background:var(--light);font-weight:700}
     <button class="btn btn-bad btn-sm" onclick="deleteMonthDataFromProd()">🗑️ 이 달 삭제</button>
   </div>
   <div class="card">
-    <div class="card-hdr">📦 제품별 원가 상세 (개당 단가)</div>
+    <div class="card-hdr">⚖️ 노무비 배부 방식 3가지 비교 (개당 단가)</div>
+    <div class="card-body">
+      <div class="info-box">
+        <b>①수량기준</b> — 전체 노무비를 생산수량 비율로 배부 &nbsp;|&nbsp;
+        <b>②원육중량기준</b> — 임금1~3: 원육중량 / 임금4~5+기타: 수량 &nbsp;|&nbsp;
+        <b>③실공수기준</b> — 스마트팩토리 실제 공수 데이터 기반 (⑦ 연동 필요)
+      </div>
+      <div class="tbl-wrap"><table id="compare-table">
+        <thead>
+          <tr>
+            <th rowspan="2" style="min-width:180px">품목명</th>
+            <th rowspan="2">수량</th>
+            <th rowspan="2">공급단가</th>
+            <th rowspan="2">원재료비/EA</th>
+            <th rowspan="2">부재료비/EA</th>
+            <th rowspan="2">경비/EA</th>
+            <th colspan="2" style="background:#FFF2CC;color:#856404">① 수량기준</th>
+            <th colspan="2" style="background:#E8F4E8;color:#155724">② 원육중량기준</th>
+            <th colspan="2" style="background:#E8EAF6;color:#1a237e">③ 실공수기준</th>
+          </tr>
+          <tr>
+            <th style="background:#FFF9E6;color:#856404">노무비/EA</th>
+            <th style="background:#FFF9E6;color:#856404">원가율</th>
+            <th style="background:#F0FAF0;color:#155724">노무비/EA</th>
+            <th style="background:#F0FAF0;color:#155724">원가율</th>
+            <th style="background:#ECEEF9;color:#1a237e">노무비/EA</th>
+            <th style="background:#ECEEF9;color:#1a237e">원가율</th>
+          </tr>
+        </thead>
+        <tbody id="compare-body"><tr><td colspan="12" class="loading">월을 선택하세요</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr">📦 제품별 원가 상세 (개당 단가) <span id="labor-method-badge" style="font-size:10px;font-weight:400;margin-left:8px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.2)"></span></div>
     <div class="card-body">
       <div class="tbl-wrap"><table>
         <thead><tr><th>품목코드</th><th style="min-width:200px">품목명</th><th>생산수량</th><th>공급단가</th><th>원재료비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>부재료비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>노무비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>경비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>제조원가<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>원가율</th></tr></thead>
@@ -517,9 +573,22 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 window._db = db;
+
+// ── 스마트팩토리 Firebase (읽기 전용)
+const factoryConfig = {
+  apiKey: "AIzaSyA0Y6VK8EOahDE607LEWtyG9-U8YP3yqDE",
+  authDomain: "ssbon-factory.firebaseapp.com",
+  projectId: "ssbon-factory",
+  storageBucket: "ssbon-factory.firebasestorage.app",
+  messagingSenderId: "815013258298",
+  appId: "1:815013258298:web:a80156143cf742ece8c103"
+};
+const factoryApp = initializeApp(factoryConfig, 'factory');
+const factoryDb = getFirestore(factoryApp);
+window._factoryDb = factoryDb;
 window._masters = [];
 window._bom = {};
-window._parsed = { prod: null, labor: null, inv: null, erp: null, erpQty: null };
+window._parsed = { prod: null, labor: null, inv: null, erp: null, erpQty: null, manhours: null };
 
 // ── 차트 인스턴스 저장
 window._charts = { costRate: null, production: null, quarter: null };
@@ -843,11 +912,139 @@ function updateStepIndicators() {
   const expProd=parseFloat(document.getElementById('exp-prod')?.value)||0;
   document.getElementById('step5').className='step'+(p.erpQty?' done':'');
   document.getElementById('step6').className='step'+((expExp||expLabor||expProd)?' done':'');
+  document.getElementById('step7').className='step'+(p.manhours?' done':'');
   if(p.prod&&p.erp) updateCostPreview();
 }
 
 // ════════════════════════════════════
 // ERP 노무비 파싱
+
+// ════════════════════════════════════
+// ⑦ 스마트팩토리 공수 연동
+// ════════════════════════════════════
+window.fetchFactoryManhours = async () => {
+  const month = document.getElementById('inputMonth').value;
+  if(!month) { showToast('❌ 작업월을 먼저 선택하세요'); return; }
+
+  const btn = document.getElementById('btn-fetch-manhours');
+  btn.textContent = '⏳ 가져오는 중...'; btn.disabled = true;
+
+  try {
+    const [y, m] = month.split('-');
+    const daysInMonth = new Date(parseInt(y), parseInt(m), 0).getDate();
+
+    // 해당 월 전체 daily_summary 읽기
+    const dates = [];
+    for(let d = 1; d <= daysInMonth; d++) {
+      dates.push(`${y}-${m}-${String(d).padStart(2,'0')}`);
+    }
+
+    // Firestore에서 해당월 문서 조회
+    const snap = await getDocs(
+      query(collection(factoryDb, 'daily_summary'))
+    );
+    const dayDocs = {};
+    snap.forEach(d => { if(d.id.startsWith(month)) dayDocs[d.id] = d.data(); });
+
+    if(!Object.keys(dayDocs).length) {
+      showToast('❌ 스마트팩토리에 해당 월 데이터가 없습니다');
+      btn.textContent = '⚡ 공수 가져오기'; btn.disabled = false;
+      return;
+    }
+
+    // 공정별·부위별 공수 집계
+    // 구조: { 전처리: {설도: {days,workers,hours,manhours}, 우둔: {...}, ...}, 자숙: {...}, 파쇄: {...}, 포장: {...part별 ea포함} }
+    const processMap = { '전처리':{}, '자숙':{}, '파쇄':{}, '포장':{} };
+    const TARGET_PROCESSES = ['전처리','자숙','파쇄','포장'];
+
+    for(const [date, data] of Object.entries(dayDocs)) {
+      for(const p of (data.processes || [])) {
+        const procName = p.process;
+        if(!TARGET_PROCESSES.includes(procName)) continue;
+
+        // 포장은 "부위 · 제품명" 파싱
+        let partKey = p.part || '기타';
+        let productName = null;
+        if(procName === '포장' && partKey.includes(' · ')) {
+          const parts = partKey.split(' · ');
+          partKey = parts[0].trim();
+          productName = parts[1]?.trim() || null;
+        } else if(procName === '포장' && !partKey.includes(' · ')) {
+          // 무원육 제품 (메추리알 등) — 제품명만
+          productName = partKey;
+          partKey = '무원육';
+        }
+
+        const manhours = (p.workers || 0) * (p.workHours || 0);
+        const key = procName === '포장' ? (productName || partKey) : partKey;
+
+        if(!processMap[procName][key]) {
+          processMap[procName][key] = { days:0, workers:0, hours:0, manhours:0, ea:0, partKey };
+        }
+        processMap[procName][key].days += 1;
+        processMap[procName][key].workers += (p.workers || 0);
+        processMap[procName][key].hours += (p.workHours || 0);
+        processMap[procName][key].manhours += manhours;
+        processMap[procName][key].ea += (p.ea || 0);
+        if(productName) processMap[procName][key].productName = productName;
+      }
+    }
+
+    window._parsed.manhours = processMap;
+
+    // 집계 테이블 표시
+    const tbody = document.getElementById('manhours-table-body');
+    const rows = [];
+    let totalMh = 0;
+    for(const proc of TARGET_PROCESSES) {
+      for(const [key, v] of Object.entries(processMap[proc])) {
+        rows.push(`<tr>
+          <td class="c">${proc}</td>
+          <td class="l">${key}</td>
+          <td class="c">${v.days}일</td>
+          <td class="c">${fmtN(Math.round(v.workers))}</td>
+          <td class="c">${fmt(v.hours,1)}</td>
+          <td style="color:var(--ok);font-weight:700">${fmt(v.manhours,1)}</td>
+          <td class="c">${v.ea > 0 ? fmtN(v.ea) : '—'}</td>
+        </tr>`);
+        totalMh += v.manhours;
+      }
+    }
+    tbody.innerHTML = rows.join('');
+    document.getElementById('manhours-table-wrap').style.display = 'block';
+
+    // 공정별 소계
+    const proc13mh = ['전처리','자숙','파쇄'].map(p =>
+      Object.values(processMap[p]||{}).reduce((s,v)=>s+v.manhours,0)
+    );
+    const packingEa = Object.values(processMap['포장']||{}).reduce((s,v)=>s+v.ea,0);
+    const res = document.getElementById('manhours-result');
+    res.style.display = 'block';
+    res.innerHTML = `✅ ${Object.keys(dayDocs).length}일치 데이터 로드 완료 | `+
+      `전처리 ${fmt(proc13mh[0],1)}인시 / 자숙 ${fmt(proc13mh[1],1)}인시 / 파쇄 ${fmt(proc13mh[2],1)}인시 / `+
+      `포장 EA ${fmtN(packingEa)}ea | 총 공수 ${fmt(totalMh,1)}인시`;
+
+    document.getElementById('manhours-summary').innerHTML =
+      `🔗 스마트팩토리 ${month} 공수 연동 완료 — <b>실공수 기반 노무비 배부가 적용됩니다</b> (임금1~3: 공정별 부위 공수비율 / 임금4: 포장EA비율 / 임금5: 미니5입·코코 수량비율)`;
+
+    showToast(`✅ ${month} 공수 데이터 ${Object.keys(dayDocs).length}일치 로드 완료`);
+    updateStepIndicators();
+  } catch(e) {
+    showToast('❌ 공수 데이터 로드 실패: ' + e.message);
+    console.error(e);
+  } finally {
+    btn.textContent = '⚡ 공수 가져오기'; btn.disabled = false;
+  }
+};
+
+window.clearManhours = () => {
+  window._parsed.manhours = null;
+  document.getElementById('manhours-table-wrap').style.display = 'none';
+  const res = document.getElementById('manhours-result');
+  res.style.display = 'none'; res.innerHTML = '';
+  updateStepIndicators();
+  showToast('🗑️ 공수 데이터 초기화');
+};
 // ════════════════════════════════════
 window.parseErpLabor = () => {
   const raw=document.getElementById('paste-erp').value.trim();
@@ -1201,6 +1398,7 @@ window.saveAllData = async () => {
       total:laborTotal>0?laborTotal:(erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0)+(erp['급여']||0)+(erp['잡급']||0)+(erp['퇴직']||0)
     } : null,
     prodByName, meatInByCode, laborTotal, erpQty,
+    manhoursData: window._parsed.manhours || null,
     updatedAt: new Date().toISOString()
   });
   showToast('✅ 저장 완료!'); loadHistory();
@@ -1231,6 +1429,28 @@ window.loadExistingData = async () => {
   }
   if(d.laborData&&Object.keys(d.laborData).length){window._parsed.labor=d.laborData;}
   if(d.invData?.length){window._parsed.inv=d.invData;}
+  if(d.manhoursData&&Object.keys(d.manhoursData).length){
+    window._parsed.manhours=d.manhoursData;
+    const res=document.getElementById('manhours-result');
+    res.style.display='block';
+    res.innerHTML='✅ 저장된 공수 데이터 불러옴 (실공수 배부 적용 중)';
+    document.getElementById('manhours-table-wrap').style.display='block';
+    // 테이블 재구성
+    const tbody=document.getElementById('manhours-table-body');
+    const rows=[];
+    for(const proc of ['전처리','자숙','파쇄','포장']){
+      for(const [key,v] of Object.entries(d.manhoursData[proc]||{})){
+        rows.push(`<tr><td class="c">${proc}</td><td class="l">${key}</td>
+          <td class="c">${v.days}일</td><td class="c">${fmtN(Math.round(v.workers))}</td>
+          <td class="c">${fmt(v.hours,1)}</td>
+          <td style="color:var(--ok);font-weight:700">${fmt(v.manhours,1)}</td>
+          <td class="c">${v.ea>0?fmtN(v.ea):'—'}</td></tr>`);
+      }
+    }
+    tbody.innerHTML=rows.join('');
+    document.getElementById('manhours-summary').innerHTML=
+      '🔗 저장된 실공수 배부 데이터 — <b>임금1~3: 공정별 공수비율 / 임금4: 포장EA비율 / 임금5: 미니5입·코코 수량비율</b>';
+  }
   updateStepIndicators();
 };
 
@@ -1273,9 +1493,19 @@ function computeMonthCost(d, bomFallback) {
   const laborTotal=d.laborTotal||eL.total||0;
   const e1=eL.임금1||0,e2=eL.임금2||0,e3=eL.임금3||0,e4=eL.임금4||0,e5=eL.임금5||0;
   const eOther=laborTotal>0?laborTotal-(e1+e2+e3+e4+e5):0;
-  const laborMeat=e1+e2+e3;
-  const laborQtyBase=e4+e5+(eOther>0?eOther:0);
   const exp=d.exp||0;
+
+  // 마스터 코드→제품 맵 (노무비 배부용)
+  const masterMap={};
+  window._masters.forEach(m=>masterMap[m.code]=m);
+
+  // ════ 노무비 배부 방식 결정 ════
+  // 실공수 데이터(manhoursData) 있으면 → 방식C(실공수 배부)
+  // 없으면 → 방식A(원육중량+수량 배부, 기존)
+  const mhData = d.manhoursData || null;
+  const useRealManhours = mhData && Object.keys(mhData).length > 0;
+
+  // 원육투입량 (기존 방식A용 + 트렌드 차트용)
   const savedMeat=d.meatInByCode||{};
   const hasSaved=Object.keys(savedMeat).length>0;
   const meatBy={};
@@ -1292,6 +1522,135 @@ function computeMonthCost(d, bomFallback) {
   }
   let totalMeat=0; for(const c of Object.keys(erpQty)) if(erpQty[c]>0) totalMeat+=(meatBy[c]||0);
   const totalQty=Object.values(erpQty).reduce((s,v)=>s+v,0);
+
+  // ── 방식C: 실공수 기반 노무비 배부 ──
+  // 임금1(전처리)/임금2(자숙)/임금3(파쇄): 공정별 부위별 공수 비율
+  // 임금4(내포장): 포장 EA 비율 (제품별)
+  // 임금5(외포장): 미니5입·코코170g 수량 비율
+  // 급여+잡급+퇴직: 전체 수량 비율
+  let laborAllocByCode = {};
+
+  if(useRealManhours) {
+    // 공정별 총 공수
+    const procMh = (proc) => Object.values(mhData[proc]||{}).reduce((s,v)=>s+v.manhours,0);
+    const mh1=procMh('전처리'), mh2=procMh('자숙'), mh3=procMh('파쇄');
+
+    // 포장 EA 총합
+    const totalPackEa = Object.values(mhData['포장']||{}).reduce((s,v)=>s+v.ea,0);
+
+    // 급여+잡급+퇴직 (eOther)
+    const eGlobal = eOther > 0 ? eOther : 0;
+
+    // 부위→코드 매핑 (meatType 기준)
+    // 부위별 총 원육투입량
+    const meatByPart = {}; // {설도:kg, 우둔:kg, 홍두께:kg}
+    for(const [code,qty] of Object.entries(erpQty)){
+      if(qty<=0)continue;
+      const mm=masterMap[code];
+      const part=mm?mm.meatType:'';
+      if(!part)continue;
+      meatByPart[part]=(meatByPart[part]||0)+(meatBy[code]||0);
+    }
+
+    // 임금1~3: 공정별 공수 → 부위별 배부 → 제품별 배부
+    // 예: 전처리 공수가 {설도:10인시, 홍두깨:30인시} → 설도 원육 생산제품들에게 설도 원육투입비율로 배부
+    const allocPerProcess = (wage, proc) => {
+      const byPart = mhData[proc]||{};
+      const totalProcMh = Object.values(byPart).reduce((s,v)=>s+v.manhours,0);
+      if(totalProcMh===0 || wage===0) return {};
+      const result={};
+      for(const [code,qty] of Object.entries(erpQty)){
+        if(qty<=0)continue;
+        const mm=masterMap[code];
+        const part=mm?mm.meatType:'';
+        if(!part){ result[code]=(result[code]||0); continue; }
+        // 이 부위의 공수 비율
+        const partMh=byPart[part]?.manhours||0;
+        const partMhRatio=totalProcMh>0?partMh/totalProcMh:0;
+        // 부위 내에서 이 제품의 원육 비율
+        const partTotalMeat=meatByPart[part]||0;
+        const myMeat=meatBy[code]||0;
+        const meatRatioInPart=partTotalMeat>0?myMeat/partTotalMeat:0;
+        result[code]=(result[code]||0)+wage*partMhRatio*meatRatioInPart;
+      }
+      return result;
+    };
+
+    const alloc1=allocPerProcess(e1,'전처리');
+    const alloc2=allocPerProcess(e2,'자숙');
+    const alloc3=allocPerProcess(e3,'파쇄');
+
+    // 임금4: 포장 EA 기반 (제품명 매칭)
+    // mhData['포장'][제품명] → 제품코드 매칭
+    const alloc4={};
+    if(e4>0 && totalPackEa>0){
+      for(const [prodKey, v] of Object.entries(mhData['포장']||{})){
+        const ea=v.ea||0; if(!ea)continue;
+        // 제품명으로 마스터 코드 찾기
+        let matchCode=null;
+        for(const mm of window._masters){
+          const mname=mm.name.replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
+          if(prodKey.includes(mname)||mname.includes(prodKey)||
+             (mm.alias||[]).some(a=>prodKey.includes(a)||a.includes(prodKey))){
+            matchCode=mm.code; break;
+          }
+        }
+        if(matchCode) alloc4[matchCode]=(alloc4[matchCode]||0)+e4*(ea/totalPackEa);
+      }
+      // 미매칭분은 수량 비율로 배분
+      const allocated4=Object.values(alloc4).reduce((s,v)=>s+v,0);
+      const unalloc4=e4-allocated4;
+      if(unalloc4>0){
+        for(const [code,qty] of Object.entries(erpQty)){
+          if(qty<=0)continue;
+          alloc4[code]=(alloc4[code]||0)+unalloc4*(qty/totalQty);
+        }
+      }
+    } else {
+      // 데이터 없으면 수량 비율
+      for(const [code,qty] of Object.entries(erpQty)){
+        if(qty<=0)continue;
+        alloc4[code]=(alloc4[code]||0)+e4*(qty/totalQty);
+      }
+    }
+
+    // 임금5: 외포장 대상 제품 (미니5입, 코코170g)에만
+    // 제품명에 '5입' 또는 '코코' 포함된 제품
+    const alloc5={};
+    const outerPkgCodes=Object.keys(erpQty).filter(code=>{
+      const mm=masterMap[code];
+      return mm && (mm.name.includes('5입')||mm.name.includes('코코')||mm.name.includes('인케이스'));
+    });
+    const outerTotalQty=outerPkgCodes.reduce((s,c)=>s+(erpQty[c]||0),0);
+    if(e5>0 && outerTotalQty>0){
+      for(const code of outerPkgCodes){
+        alloc5[code]=(alloc5[code]||0)+e5*((erpQty[code]||0)/outerTotalQty);
+      }
+    } else if(e5>0){
+      // 외포장 제품 못 찾으면 전체 수량 배부
+      for(const [code,qty] of Object.entries(erpQty)){
+        if(qty<=0)continue;
+        alloc5[code]=(alloc5[code]||0)+e5*(qty/totalQty);
+      }
+    }
+
+    // 급여+잡급+퇴직: 수량 비율
+    const allocOther={};
+    if(eGlobal>0){
+      for(const [code,qty] of Object.entries(erpQty)){
+        if(qty<=0)continue;
+        allocOther[code]=(allocOther[code]||0)+eGlobal*(qty/totalQty);
+      }
+    }
+
+    // 코드별 최종 합산
+    for(const code of Object.keys(erpQty)){
+      laborAllocByCode[code]=
+        (alloc1[code]||0)+(alloc2[code]||0)+(alloc3[code]||0)+
+        (alloc4[code]||0)+(alloc5[code]||0)+(allocOther[code]||0);
+    }
+  }
+
   const rows=[]; const sum={raw:0,sub:0,labor:0,exp:0,total:0};
   for(const [code,qty] of Object.entries(erpQty)){
     if(qty<=0)continue;
@@ -1302,21 +1661,209 @@ function computeMonthCost(d, bomFallback) {
       if(mat.mcode[0]==='1'||mat.mcode[0]==='2') rawCost+=amt;
       else if(mat.mcode[0]==='4'||mat.mcode[0]==='5') subCost+=amt;
     }
-    const meatShare=totalMeat>0?(meatBy[code]||0)/totalMeat:0;
+
+    let laborAlloc;
+    if(useRealManhours){
+      // 방식C: 실공수 배부
+      laborAlloc = laborAllocByCode[code]||0;
+    } else {
+      // 방식A: 기존 원육중량+수량 배부
+      const laborMeat=e1+e2+e3;
+      const laborQtyBase=e4+e5+(eOther>0?eOther:0);
+      const meatShare=totalMeat>0?(meatBy[code]||0)/totalMeat:0;
+      const qtyShare=totalQty>0?qty/totalQty:0;
+      laborAlloc=laborMeat*meatShare+laborQtyBase*qtyShare;
+    }
+
     const qtyShare=totalQty>0?qty/totalQty:0;
-    const laborAlloc=laborMeat*meatShare+laborQtyBase*qtyShare;
     const expCost=exp*qtyShare;
     const totalCost=rawCost+subCost+laborAlloc+expCost;
     rows.push({code,qty,rawCost,subCost,laborAlloc,expCost,totalCost});
     sum.raw+=rawCost;sum.sub+=subCost;sum.labor+=laborAlloc;sum.exp+=expCost;sum.total+=totalCost;
   }
-  // 총 원육투입량 계산 (트렌드 차트용)
   const totalMeatKg = Object.values(meatBy).reduce((s,v)=>s+v, 0);
-  return {rows,sum,prodAmt:d.prodAmt||0,totalQty,totalMeatKg};
+  return {rows,sum,prodAmt:d.prodAmt||0,totalQty,totalMeatKg,useRealManhours};
 }
 
 // ════════════════════════════════════
 // 차트 유틸
+
+// ════════════════════════════════════
+// 노무비 배부 방식별 계산 함수들
+// ════════════════════════════════════
+
+// 공통: 원재료비·부재료비·경비 계산 (방식 무관)
+function computeRawSubExp(d, bomFallback) {
+  const erpQty = d.erpQty || {};
+  const outAmt = {};
+  (d.invData || []).forEach(it => { outAmt[it.code] = it.outAmt || 0; });
+  const bom = (d.bomSnapshot && Object.keys(d.bomSnapshot).length) ? d.bomSnapshot : (bomFallback || {});
+  const theoryTotal = {};
+  for(const [code, qty] of Object.entries(erpQty)) {
+    const b = bom[code]; if(!b) continue;
+    for(const m of (b.mats || [])) theoryTotal[m.mcode] = (theoryTotal[m.mcode] || 0) + (m.perEa || 0) * qty;
+  }
+  const result = {};
+  const totalQty = Object.values(erpQty).reduce((s, v) => s + v, 0);
+  const exp = d.exp || 0;
+  for(const [code, qty] of Object.entries(erpQty)) {
+    if(qty <= 0) continue;
+    const b = bom[code]; let rawCost = 0, subCost = 0;
+    if(b) for(const mat of (b.mats || [])) {
+      const tt = theoryTotal[mat.mcode] || 0; if(tt <= 0) continue;
+      const amt = ((mat.perEa || 0) * qty) / tt * (outAmt[mat.mcode] || 0);
+      if(mat.mcode[0] === '1' || mat.mcode[0] === '2') rawCost += amt;
+      else if(mat.mcode[0] === '4' || mat.mcode[0] === '5') subCost += amt;
+    }
+    const qtyShare = totalQty > 0 ? qty / totalQty : 0;
+    result[code] = { qty, rawCost, subCost, expCost: exp * qtyShare };
+  }
+  return { result, totalQty, bom };
+}
+
+// ① 수량기준: 전체 노무비를 생산수량 비율로만 배부
+function computeLaborByQty(d) {
+  const erpQty = d.erpQty || {};
+  const eL = d.erpLabor || {};
+  const laborTotal = d.laborTotal || eL.total || 0;
+  const totalQty = Object.values(erpQty).reduce((s, v) => s + v, 0);
+  const laborByCode = {};
+  for(const [code, qty] of Object.entries(erpQty)) {
+    if(qty <= 0) continue;
+    laborByCode[code] = totalQty > 0 ? laborTotal * (qty / totalQty) : 0;
+  }
+  return laborByCode;
+}
+
+// ② 원육중량기준: 임금1~3→원육중량, 임금4~5+기타→수량 (기존 방식A)
+function computeLaborByMeat(d, bomFallback) {
+  const erpQty = d.erpQty || {};
+  const eL = d.erpLabor || {};
+  const laborTotal = d.laborTotal || eL.total || 0;
+  const e1=eL.임금1||0, e2=eL.임금2||0, e3=eL.임금3||0, e4=eL.임금4||0, e5=eL.임금5||0;
+  const eOther = laborTotal > 0 ? laborTotal - (e1+e2+e3+e4+e5) : 0;
+  const laborMeat = e1+e2+e3;
+  const laborQtyBase = e4+e5+(eOther>0?eOther:0);
+  const bom = (d.bomSnapshot && Object.keys(d.bomSnapshot).length) ? d.bomSnapshot : (bomFallback || {});
+  const savedMeat = d.meatInByCode || {};
+  const hasSaved = Object.keys(savedMeat).length > 0;
+  const meatBy = {};
+  for(const [code, qty] of Object.entries(erpQty)) {
+    if(qty <= 0) continue;
+    if(hasSaved) { meatBy[code] = savedMeat[code] || 0; }
+    else {
+      const b = bom[code]; let mk = 0;
+      if(b) for(const m of (b.mats || [])) {
+        if(m.mcode[0]==='1' && /쇠고기|원육|설도|홍두께|우둔/.test(m.mname||'') && !/육수/.test(m.mname||'')) mk += (m.perEa||0)*qty;
+      }
+      meatBy[code] = mk;
+    }
+  }
+  let totalMeat = 0;
+  for(const c of Object.keys(erpQty)) if(erpQty[c]>0) totalMeat += (meatBy[c]||0);
+  const totalQty = Object.values(erpQty).reduce((s,v)=>s+v, 0);
+  const laborByCode = {};
+  for(const [code, qty] of Object.entries(erpQty)) {
+    if(qty <= 0) continue;
+    const meatShare = totalMeat > 0 ? (meatBy[code]||0)/totalMeat : 0;
+    const qtyShare  = totalQty  > 0 ? qty/totalQty : 0;
+    laborByCode[code] = laborMeat*meatShare + laborQtyBase*qtyShare;
+  }
+  return laborByCode;
+}
+
+// ③ 실공수기준: computeMonthCost의 방식C와 동일 로직 (manhoursData 필요)
+function computeLaborByManhours(d, bomFallback) {
+  const erpQty = d.erpQty || {};
+  const mhData = d.manhoursData || null;
+  if(!mhData || !Object.keys(mhData).length) return null; // 데이터 없으면 null
+  const eL = d.erpLabor || {};
+  const laborTotal = d.laborTotal || eL.total || 0;
+  const e1=eL.임금1||0, e2=eL.임금2||0, e3=eL.임금3||0, e4=eL.임금4||0, e5=eL.임금5||0;
+  const eOther = laborTotal > 0 ? laborTotal-(e1+e2+e3+e4+e5) : 0;
+  const eGlobal = eOther > 0 ? eOther : 0;
+  const bom = (d.bomSnapshot && Object.keys(d.bomSnapshot).length) ? d.bomSnapshot : (bomFallback || {});
+  const savedMeat = d.meatInByCode || {};
+  const hasSaved = Object.keys(savedMeat).length > 0;
+  const meatBy = {};
+  for(const [code, qty] of Object.entries(erpQty)) {
+    if(qty <= 0) continue;
+    if(hasSaved) { meatBy[code] = savedMeat[code] || 0; }
+    else {
+      const b = bom[code]; let mk = 0;
+      if(b) for(const m of (b.mats||[])) {
+        if(m.mcode[0]==='1' && /쇠고기|원육|설도|홍두께|우둔/.test(m.mname||'') && !/육수/.test(m.mname||'')) mk+=(m.perEa||0)*qty;
+      }
+      meatBy[code] = mk;
+    }
+  }
+  const meatByPart = {};
+  for(const [code, qty] of Object.entries(erpQty)) {
+    if(qty<=0) continue;
+    const mm = window._masters.find(x=>x.code===code);
+    const part = mm ? mm.meatType : '';
+    if(!part) continue;
+    meatByPart[part] = (meatByPart[part]||0) + (meatBy[code]||0);
+  }
+  const totalQty = Object.values(erpQty).reduce((s,v)=>s+v, 0);
+  const totalPackEa = Object.values(mhData['포장']||{}).reduce((s,v)=>s+v.ea, 0);
+
+  const allocPerProcess = (wage, proc) => {
+    const byPart = mhData[proc] || {};
+    const totalProcMh = Object.values(byPart).reduce((s,v)=>s+v.manhours, 0);
+    if(totalProcMh===0||wage===0) return {};
+    const res = {};
+    for(const [code, qty] of Object.entries(erpQty)) {
+      if(qty<=0) continue;
+      const mm = window._masters.find(x=>x.code===code);
+      const part = mm ? mm.meatType : '';
+      if(!part) { res[code]=(res[code]||0); continue; }
+      const partMh = byPart[part]?.manhours||0;
+      const partMhRatio = totalProcMh>0 ? partMh/totalProcMh : 0;
+      const partTotalMeat = meatByPart[part]||0;
+      const meatRatioInPart = partTotalMeat>0 ? (meatBy[code]||0)/partTotalMeat : 0;
+      res[code] = (res[code]||0) + wage*partMhRatio*meatRatioInPart;
+    }
+    return res;
+  };
+
+  const alloc1 = allocPerProcess(e1,'전처리');
+  const alloc2 = allocPerProcess(e2,'자숙');
+  const alloc3 = allocPerProcess(e3,'파쇄');
+
+  const alloc4 = {};
+  if(e4>0 && totalPackEa>0) {
+    for(const [prodKey, v] of Object.entries(mhData['포장']||{})) {
+      const ea=v.ea||0; if(!ea) continue;
+      let matchCode = null;
+      for(const mm of window._masters) {
+        const mname = mm.name.replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
+        if(prodKey.includes(mname)||mname.includes(prodKey)||(mm.alias||[]).some(a=>prodKey.includes(a)||a.includes(prodKey))) { matchCode=mm.code; break; }
+      }
+      if(matchCode) alloc4[matchCode]=(alloc4[matchCode]||0)+e4*(ea/totalPackEa);
+    }
+    const allocated4 = Object.values(alloc4).reduce((s,v)=>s+v, 0);
+    const unalloc4 = e4-allocated4;
+    if(unalloc4>0) for(const [code,qty] of Object.entries(erpQty)) { if(qty>0) alloc4[code]=(alloc4[code]||0)+unalloc4*(qty/totalQty); }
+  } else {
+    for(const [code,qty] of Object.entries(erpQty)) { if(qty>0) alloc4[code]=(alloc4[code]||0)+e4*(qty/totalQty); }
+  }
+
+  const alloc5 = {};
+  const outerCodes = Object.keys(erpQty).filter(code=>{
+    const mm=window._masters.find(x=>x.code===code);
+    return mm&&(mm.name.includes('5입')||mm.name.includes('코코')||mm.name.includes('인케이스'));
+  });
+  const outerTotalQty = outerCodes.reduce((s,c)=>s+(erpQty[c]||0),0);
+  if(e5>0&&outerTotalQty>0) for(const c of outerCodes) alloc5[c]=(alloc5[c]||0)+e5*((erpQty[c]||0)/outerTotalQty);
+  else if(e5>0) for(const [c,q] of Object.entries(erpQty)) { if(q>0) alloc5[c]=(alloc5[c]||0)+e5*(q/totalQty); }
+
+  const laborByCode = {};
+  for(const code of Object.keys(erpQty)) {
+    laborByCode[code] = (alloc1[code]||0)+(alloc2[code]||0)+(alloc3[code]||0)+(alloc4[code]||0)+(alloc5[code]||0)+(eGlobal*(( erpQty[code]||0)/totalQty));
+  }
+  return laborByCode;
+}
 // ════════════════════════════════════
 function destroyChart(key) {
   if(window._charts[key]) {
@@ -1789,56 +2336,25 @@ window.loadProducts = async () => {
     tbody.innerHTML='<tr><td colspan="10" class="empty">⑤ ERP 생산실적 데이터가 없습니다.</td></tr>';
     return;
   }
-  const outAmt={};
-  (d.invData||[]).forEach(it=>{ outAmt[it.code]=(it.outAmt||0); });
-  const bom=(d.bomSnapshot&&Object.keys(d.bomSnapshot).length)?d.bomSnapshot:window._bom;
-  const theoryTotal={};
-  for(const [code,qty] of Object.entries(erpQty)){
-    const b=bom[code]; if(!b)continue;
-    for(const m of (b.mats||[])) theoryTotal[m.mcode]=(theoryTotal[m.mcode]||0)+(m.perEa||0)*qty;
-  }
-  const erpLabor=d.erpLabor||{};
-  const laborTotal=d.laborTotal||d.erpLabor?.total||0;
-  const erp1=erpLabor.임금1||0,erp2=erpLabor.임금2||0,erp3=erpLabor.임금3||0;
-  const erp4=erpLabor.임금4||0,erp5=erpLabor.임금5||0;
-  const erpOther=laborTotal>0?laborTotal-(erp1+erp2+erp3+erp4+erp5):0;
-  const laborMeat=erp1+erp2+erp3;
-  const laborQtyBase=erp4+erp5+(erpOther>0?erpOther:0);
-  const exp=d.exp||0;
-  const savedMeat=d.meatInByCode||{};
-  const hasSavedMeat=Object.keys(savedMeat).length>0;
-  const meatInByCode={};
-  for(const [code,qty] of Object.entries(erpQty)){
-    if(qty<=0)continue;
-    if(hasSavedMeat){ meatInByCode[code]=savedMeat[code]||0; }
-    else{
-      const b=bom[code]; let mk=0;
-      if(b){ for(const m of (b.mats||[])){ if(m.mcode[0]==='1'&&/쇠고기|원육|설도|홍두께|우둔/.test(m.mname||'')) mk+=(m.perEa||0)*qty; } }
-      meatInByCode[code]=mk;
-    }
-  }
-  let totalMeatKg=0;
-  for(const code of Object.keys(erpQty)) if(erpQty[code]>0) totalMeatKg+=(meatInByCode[code]||0);
-  const totalQty=Object.values(erpQty).reduce((s,v)=>s+v,0);
+
+  // computeMonthCost 통합 계산 (실공수 or 기존방식 자동 선택)
+  const cc = computeMonthCost(d, window._bom);
+
+  // 배부방식 배지 표시
+  const badge = document.getElementById('labor-method-badge');
+  if(badge) badge.textContent = cc.useRealManhours ? '🔗 실공수 배부 적용중' : '📐 원육중량+수량 배부';
+
   const masterMap={}; window._masters.forEach(m=>masterMap[m.code]=m);
+  const bom=(d.bomSnapshot&&Object.keys(d.bomSnapshot).length)?d.bomSnapshot:window._bom;
+
   let sumRaw=0,sumSub=0,sumLabor=0,sumExp=0,sumTotal=0;
   const calcRows=[];
-  const rowsHtml=Object.entries(erpQty).filter(([,q])=>q>0).map(([code,qty])=>{
+  const totalQty=cc.totalQty;
+
+  const rowsHtml=cc.rows.map(r=>{
+    const {code,qty,rawCost,subCost,laborAlloc,expCost,totalCost}=r;
     const m=masterMap[code];
     const b=bom[code];
-    let rawCost=0, subCost=0;
-    if(b){ for(const mat of (b.mats||[])){
-      const tt=theoryTotal[mat.mcode]||0; if(tt<=0)continue;
-      const ratio=((mat.perEa||0)*qty)/tt;
-      const amt=ratio*(outAmt[mat.mcode]||0);
-      if(mat.mcode[0]==='1'||mat.mcode[0]==='2') rawCost+=amt;
-      else if(mat.mcode[0]==='4'||mat.mcode[0]==='5') subCost+=amt;
-    }}
-    const meatShare=totalMeatKg>0?(meatInByCode[code]||0)/totalMeatKg:0;
-    const qtyShare=totalQty>0?qty/totalQty:0;
-    const laborAlloc=laborMeat*meatShare+laborQtyBase*qtyShare;
-    const expCost=exp*qtyShare;
-    const totalCost=rawCost+subCost+laborAlloc+expCost;
     const sp=m?m.supplyPrice:0;
     const rawEa=qty>0?rawCost/qty:0,subEa=qty>0?subCost/qty:0;
     const laborEa=qty>0?laborAlloc/qty:0,expEa=qty>0?expCost/qty:0;
@@ -1866,6 +2382,8 @@ window.loadProducts = async () => {
     <td>${fmtN(Math.round(sumTotal))}</td><td>—</td>
   </tr>`);
   tbody.innerHTML=rowsHtml.join('');
+
+  // 품목 그룹별 평균
   const groups={};
   for(const r of calcRows){
     if(!groups[r.gname])groups[r.gname]={qty:0,raw:0,sub:0,labor:0,exp:0,total:0,spSum:0,meatTypes:[]};
@@ -1895,11 +2413,131 @@ window.loadProducts = async () => {
 
   // 분기 비교 차트 렌더
   await renderQuarterChart();
+
+  // ── 3가지 방식 비교 테이블 ──
+  await renderCompareTable(d);
 };
 
 // ════════════════════════════════════
 // 월별 이력
 // ════════════════════════════════════
+// ════════════════════════════════════
+// 3가지 방식 비교 테이블
+// ════════════════════════════════════
+async function renderCompareTable(d) {
+  const tbody = document.getElementById('compare-body');
+  if(!tbody) return;
+  await ensureMasters();
+  await ensureBom();
+
+  const erpQty = d.erpQty || {};
+  if(!Object.keys(erpQty).length) {
+    tbody.innerHTML = '<tr><td colspan="12" class="empty">ERP 생산실적 데이터가 없습니다.</td></tr>';
+    return;
+  }
+
+  // 공통 (원재료비·부재료비·경비)
+  const { result: baseResult } = computeRawSubExp(d, window._bom);
+
+  // 3가지 방식 노무비
+  const labor1 = computeLaborByQty(d);           // ① 수량
+  const labor2 = computeLaborByMeat(d, window._bom); // ② 원육중량
+  const labor3 = computeLaborByManhours(d, window._bom); // ③ 실공수 (없으면 null)
+
+  const masterMap = {};
+  window._masters.forEach(m => masterMap[m.code] = m);
+
+  // 합계행용
+  let sum = {
+    qty:0,
+    l1:0, l2:0, l3:0,
+    raw:0, sub:0, exp:0,
+    tot1:0, tot2:0, tot3:0
+  };
+
+  const rows = Object.entries(erpQty)
+    .filter(([,q]) => q > 0)
+    .map(([code, qty]) => {
+      const mm = masterMap[code];
+      const base = baseResult[code] || {qty, rawCost:0, subCost:0, expCost:0};
+      const sp = mm ? mm.supplyPrice : 0;
+
+      const lAmt1 = labor1[code] || 0;
+      const lAmt2 = labor2[code] || 0;
+      const lAmt3 = labor3 ? (labor3[code] || 0) : null;
+
+      const rawEa  = qty > 0 ? base.rawCost/qty : 0;
+      const subEa  = qty > 0 ? base.subCost/qty : 0;
+      const expEa  = qty > 0 ? base.expCost/qty : 0;
+      const lEa1   = qty > 0 ? lAmt1/qty : 0;
+      const lEa2   = qty > 0 ? lAmt2/qty : 0;
+      const lEa3   = lAmt3 !== null && qty > 0 ? lAmt3/qty : null;
+
+      const tot1 = rawEa+subEa+expEa+lEa1;
+      const tot2 = rawEa+subEa+expEa+lEa2;
+      const tot3 = lEa3 !== null ? rawEa+subEa+expEa+lEa3 : null;
+
+      const r1 = sp > 0 ? tot1/sp : 0;
+      const r2 = sp > 0 ? tot2/sp : 0;
+      const r3 = sp > 0 && tot3 !== null ? tot3/sp : null;
+
+      sum.qty  += qty;
+      sum.raw  += base.rawCost; sum.sub += base.subCost; sum.exp += base.expCost;
+      sum.l1   += lAmt1; sum.l2 += lAmt2; if(lAmt3!==null) sum.l3 += lAmt3;
+      sum.tot1 += base.rawCost+base.subCost+base.expCost+lAmt1;
+      sum.tot2 += base.rawCost+base.subCost+base.expCost+lAmt2;
+      if(lAmt3!==null) sum.tot3 += base.rawCost+base.subCost+base.expCost+lAmt3;
+
+      // 노무비 3개 중 가장 낮은 것 강조
+      const lEas = [lEa1, lEa2, lEa3 !== null ? lEa3 : Infinity];
+      const minL = Math.min(...lEas.filter(v=>v!==null&&!isNaN(v)));
+
+      const lStyle = (v) => v === minL ? 'style="color:var(--ok);font-weight:700"' : '';
+      const rStyle = (r) => `class="c ${rC(r)}"`;
+
+      return `<tr>
+        <td class="l" style="font-size:11px">${mm ? mm.name : code}</td>
+        <td class="c">${fmtN(qty)}</td>
+        <td>${fmtN(sp)}</td>
+        <td>${fmtN(Math.round(rawEa))}</td>
+        <td>${fmtN(Math.round(subEa))}</td>
+        <td>${fmtN(Math.round(expEa))}</td>
+        <td ${lStyle(lEa1)} style="background:#FFFDE7">${fmtN(Math.round(lEa1))}</td>
+        <td ${rStyle(r1)} style="background:#FFFDE7">${fmtP(r1)}</td>
+        <td ${lStyle(lEa2)} style="background:#F1F8E9">${fmtN(Math.round(lEa2))}</td>
+        <td ${rStyle(r2)} style="background:#F1F8E9">${fmtP(r2)}</td>
+        <td style="background:#EDE7F6">${lEa3!==null ? fmtN(Math.round(lEa3)) : '<span style="color:#bbb">데이터없음</span>'}</td>
+        <td style="background:#EDE7F6">${r3!==null ? `<span class="${rC(r3)}">${fmtP(r3)}</span>` : '<span style="color:#bbb">—</span>'}</td>
+      </tr>`;
+    });
+
+  // 합계행
+  const totalQty = sum.qty;
+  const hasMh = labor3 !== null;
+  const sumRaw = sum.raw, sumSub = sum.sub, sumExp = sum.exp;
+  const prodAmt = d.prodAmt || 0;
+  const rateSum1 = prodAmt>0 ? sum.tot1/prodAmt : 0;
+  const rateSum2 = prodAmt>0 ? sum.tot2/prodAmt : 0;
+  const rateSum3 = hasMh && prodAmt>0 ? sum.tot3/prodAmt : null;
+  const M = v => fmt(v/1000000, 1);
+
+  rows.push(`<tr class="total">
+    <td class="l" colspan="2">합계 / 원가율</td>
+    <td>—</td>
+    <td>${M(sumRaw)}M</td>
+    <td>${M(sumSub)}M</td>
+    <td>${M(sumExp)}M</td>
+    <td style="background:#FFFDE7;font-weight:700">${M(sum.l1)}M</td>
+    <td style="background:#FFFDE7" class="c ${rC(rateSum1)}">${fmtP(rateSum1)}</td>
+    <td style="background:#F1F8E9;font-weight:700">${M(sum.l2)}M</td>
+    <td style="background:#F1F8E9" class="c ${rC(rateSum2)}">${fmtP(rateSum2)}</td>
+    <td style="background:#EDE7F6;font-weight:700">${hasMh ? M(sum.l3)+'M' : '—'}</td>
+    <td style="background:#EDE7F6" class="c ${rateSum3!==null?rC(rateSum3):''}">${rateSum3!==null?fmtP(rateSum3):'—'}</td>
+  </tr>`);
+
+  tbody.innerHTML = rows.join('');
+}
+
 window.loadHistory = async () => {
   await ensureBom();
   const q=query(collection(db,'costData'),orderBy('month'));
