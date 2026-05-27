@@ -79,7 +79,48 @@ tr.total td{background:var(--light);font-weight:700}
 .warn-box{background:#FFF2CC;border:1px solid #FFC000;border-radius:8px;padding:10px 14px;font-size:11px;color:#856404;margin-bottom:10px}
 .info-box{background:var(--calc);border-radius:8px;padding:10px 14px;font-size:11px;color:#155724;margin-bottom:10px}
 
-/* ── 차트 레이아웃 ── */
+/* ── 보고서 인쇄 스타일 ── */
+.report-toolbar{display:flex;align-items:center;gap:10px;background:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:14px;flex-wrap:wrap}
+.report-toolbar label{font-size:12px;font-weight:700;color:var(--primary)}
+.report-preview{background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.12);overflow:hidden}
+
+/* 보고서 본문 */
+.rpt{font-family:'Malgun Gothic',Arial,sans-serif;font-size:11pt;color:#222;line-height:1.6;padding:20mm 18mm;max-width:210mm;margin:0 auto;background:#fff}
+.rpt-header{display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:3px solid #1F3864;margin-bottom:18px}
+.rpt-header .logo-area{display:flex;align-items:center;gap:10px}
+.rpt-header .logo-area img{height:48px}
+.rpt-header .title-area{text-align:right}
+.rpt-header .title-area .doc-title{font-size:18pt;font-weight:700;color:#1F3864}
+.rpt-header .title-area .doc-sub{font-size:10pt;color:#666;margin-top:2px}
+.rpt h1{font-size:13pt;font-weight:700;color:#1F3864;border-left:4px solid #1F3864;padding-left:8px;margin:20px 0 8px}
+.rpt h2{font-size:11pt;font-weight:700;color:#2F5496;margin:14px 0 6px}
+.rpt p{margin:4px 0;font-size:10.5pt}
+.rpt ul{margin:4px 0 4px 18px;padding:0}
+.rpt ul li{font-size:10.5pt;margin:2px 0}
+.rpt table{width:100%;border-collapse:collapse;margin:8px 0;font-size:10pt}
+.rpt table th{background:#1F3864;color:#fff;padding:6px 8px;text-align:center;font-weight:700;border:1px solid #1F3864}
+.rpt table td{padding:5px 8px;border:1px solid #ccc;text-align:right}
+.rpt table td.l{text-align:left}
+.rpt table td.c{text-align:center}
+.rpt table tr:nth-child(even) td{background:#f8f9fa}
+.rpt table tr.total td{background:#D6E4F7;font-weight:700}
+.rpt table tr.highlight td{background:#FFF2CC}
+.rpt .ok{color:#1D9E75;font-weight:700}
+.rpt .warn{color:#ED7D31;font-weight:700}
+.rpt .bad{color:#C00000;font-weight:700}
+.rpt .section-box{background:#EBF3E8;border-left:4px solid #1D9E75;padding:8px 12px;margin:10px 0;border-radius:0 6px 6px 0;font-size:10.5pt}
+.rpt .warn-box{background:#FFF2CC;border-left:4px solid #ED7D31;padding:8px 12px;margin:10px 0;border-radius:0 6px 6px 0;font-size:10.5pt}
+.rpt .rpt-footer{margin-top:24px;padding-top:8px;border-top:1px solid #ccc;font-size:9pt;color:#888;display:flex;justify-content:space-between}
+.rpt .page-break{page-break-before:always;height:0;margin:0;padding:0}
+
+@media print {
+  body > *:not(#tab-report){display:none!important}
+  #tab-report .report-toolbar{display:none!important}
+  #tab-report .report-preview{box-shadow:none}
+  .rpt{padding:15mm 15mm;max-width:100%}
+  @page{size:A4;margin:10mm}
+}
+
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
 @media(max-width:900px){.chart-grid{grid-template-columns:1fr}}
 .chart-card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
@@ -113,6 +154,7 @@ tr.total td{background:var(--light);font-weight:700}
   <button onclick="goTab('products',this)">📦 제품별 원가</button>
   <button onclick="goTab('history',this)">📅 월별 이력</button>
   <button onclick="goTab('settings',this)">⚙️ 설정</button>
+  <button onclick="goTab('report',this)">📄 보고서</button>
 </nav>
 <main>
 
@@ -376,20 +418,23 @@ tr.total td{background:var(--light);font-weight:700}
             <th rowspan="2">원재료비/EA</th>
             <th rowspan="2">부재료비/EA</th>
             <th rowspan="2">경비/EA</th>
-            <th colspan="2" style="background:#FFF2CC;color:#856404">① 수량기준</th>
-            <th colspan="2" style="background:#E8F4E8;color:#155724">② 원육중량기준</th>
-            <th colspan="2" style="background:#E8EAF6;color:#1a237e">③ 실공수기준</th>
+            <th colspan="3" style="background:#FFF2CC;color:#856404">① 수량기준</th>
+            <th colspan="3" style="background:#E8F4E8;color:#155724">② 원육중량기준</th>
+            <th colspan="3" style="background:#E8EAF6;color:#1a237e">③ 실공수기준</th>
           </tr>
           <tr>
             <th style="background:#FFF9E6;color:#856404">노무비/EA</th>
+            <th style="background:#FFF9E6;color:#856404">원가/EA</th>
             <th style="background:#FFF9E6;color:#856404">원가율</th>
             <th style="background:#F0FAF0;color:#155724">노무비/EA</th>
+            <th style="background:#F0FAF0;color:#155724">원가/EA</th>
             <th style="background:#F0FAF0;color:#155724">원가율</th>
             <th style="background:#ECEEF9;color:#1a237e">노무비/EA</th>
+            <th style="background:#ECEEF9;color:#1a237e">원가/EA</th>
             <th style="background:#ECEEF9;color:#1a237e">원가율</th>
           </tr>
         </thead>
-        <tbody id="compare-body"><tr><td colspan="12" class="loading">월을 선택하세요</td></tr></tbody>
+        <tbody id="compare-body"><tr><td colspan="15" class="loading">월을 선택하세요</td></tr></tbody>
       </table></div>
     </div>
   </div>
@@ -553,6 +598,25 @@ tr.total td{background:var(--light);font-weight:700}
   </div>
 </div>
 
+<!-- ══ 보고서 ══ -->
+<div id="tab-report" class="tab">
+  <div class="report-toolbar">
+    <label>기준월</label>
+    <input type="month" id="reportMonth" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--input);outline:none">
+    <button class="btn btn-primary btn-sm" onclick="buildReport('monthly')">📋 월간 보고서</button>
+    <button class="btn btn-ok btn-sm" onclick="buildReport('quarterly')">📊 분기 누적 보고서</button>
+    <button class="btn btn-warn btn-sm" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
+    <span id="report-status" style="font-size:11px;color:#888;margin-left:4px"></span>
+  </div>
+  <div class="report-preview">
+    <div id="report-content" style="padding:20px">
+      <div style="text-align:center;padding:60px;color:#bbb;font-size:13px">
+        기준월을 선택하고 보고서 유형을 선택하세요.
+      </div>
+    </div>
+  </div>
+</div>
+
 </main>
 <div id="toast"></div>
 
@@ -618,6 +682,7 @@ window.goTab = (name,btn) => {
   if(name==='history')   loadHistory();
   if(name==='settings')  { loadMaster(); loadBomProductList(); loadTargetCostList(); }
   if(name==='input')     loadExistingData();
+  if(name==='report')    { document.getElementById('reportMonth').value = document.getElementById('dashMonth').value || thisMonth(); }
 };
 
 // ════════════════════════════════════
@@ -2473,14 +2538,6 @@ async function renderCompareTable(d) {
       const lEa2   = qty > 0 ? lAmt2/qty : 0;
       const lEa3   = lAmt3 !== null && qty > 0 ? lAmt3/qty : null;
 
-      const tot1 = rawEa+subEa+expEa+lEa1;
-      const tot2 = rawEa+subEa+expEa+lEa2;
-      const tot3 = lEa3 !== null ? rawEa+subEa+expEa+lEa3 : null;
-
-      const r1 = sp > 0 ? tot1/sp : 0;
-      const r2 = sp > 0 ? tot2/sp : 0;
-      const r3 = sp > 0 && tot3 !== null ? tot3/sp : null;
-
       sum.qty  += qty;
       sum.raw  += base.rawCost; sum.sub += base.subCost; sum.exp += base.expCost;
       sum.l1   += lAmt1; sum.l2 += lAmt2; if(lAmt3!==null) sum.l3 += lAmt3;
@@ -2488,12 +2545,21 @@ async function renderCompareTable(d) {
       sum.tot2 += base.rawCost+base.subCost+base.expCost+lAmt2;
       if(lAmt3!==null) sum.tot3 += base.rawCost+base.subCost+base.expCost+lAmt3;
 
-      // 노무비 3개 중 가장 낮은 것 강조
-      const lEas = [lEa1, lEa2, lEa3 !== null ? lEa3 : Infinity];
-      const minL = Math.min(...lEas.filter(v=>v!==null&&!isNaN(v)));
+      // 총원가/EA
+      const unitCost1 = rawEa+subEa+expEa+lEa1;
+      const unitCost2 = rawEa+subEa+expEa+lEa2;
+      const unitCost3 = lEa3 !== null ? rawEa+subEa+expEa+lEa3 : null;
+      // 원가율
+      const r1 = sp > 0 ? unitCost1/sp : 0;
+      const r2 = sp > 0 ? unitCost2/sp : 0;
+      const r3 = sp > 0 && unitCost3 !== null ? unitCost3/sp : null;
 
-      const lStyle = (v) => v === minL ? 'style="color:var(--ok);font-weight:700"' : '';
-      const rStyle = (r) => `class="c ${rC(r)}"`;
+      // 가장 낮은 원가/EA 강조
+      const costs = [unitCost1, unitCost2, unitCost3!==null?unitCost3:Infinity];
+      const minCost = Math.min(...costs.filter(v=>v!==Infinity));
+
+      const lBg1='background:#FFFDE7', lBg2='background:#F1F8E9', lBg3='background:#EDE7F6';
+      const boldIfMin = (v) => v === minCost ? 'font-weight:700;color:var(--ok)' : '';
 
       return `<tr>
         <td class="l" style="font-size:11px">${mm ? mm.name : code}</td>
@@ -2502,12 +2568,15 @@ async function renderCompareTable(d) {
         <td>${fmtN(Math.round(rawEa))}</td>
         <td>${fmtN(Math.round(subEa))}</td>
         <td>${fmtN(Math.round(expEa))}</td>
-        <td ${lStyle(lEa1)} style="background:#FFFDE7">${fmtN(Math.round(lEa1))}</td>
-        <td ${rStyle(r1)} style="background:#FFFDE7">${fmtP(r1)}</td>
-        <td ${lStyle(lEa2)} style="background:#F1F8E9">${fmtN(Math.round(lEa2))}</td>
-        <td ${rStyle(r2)} style="background:#F1F8E9">${fmtP(r2)}</td>
-        <td style="background:#EDE7F6">${lEa3!==null ? fmtN(Math.round(lEa3)) : '<span style="color:#bbb">데이터없음</span>'}</td>
-        <td style="background:#EDE7F6">${r3!==null ? `<span class="${rC(r3)}">${fmtP(r3)}</span>` : '<span style="color:#bbb">—</span>'}</td>
+        <td style="${lBg1}">${fmtN(Math.round(lEa1))}</td>
+        <td style="${lBg1};${boldIfMin(unitCost1)}">${fmtN(Math.round(unitCost1))}</td>
+        <td class="c ${rC(r1)}" style="${lBg1}">${fmtP(r1)}</td>
+        <td style="${lBg2}">${fmtN(Math.round(lEa2))}</td>
+        <td style="${lBg2};${boldIfMin(unitCost2)}">${fmtN(Math.round(unitCost2))}</td>
+        <td class="c ${rC(r2)}" style="${lBg2}">${fmtP(r2)}</td>
+        <td style="${lBg3}">${lEa3!==null ? fmtN(Math.round(lEa3)) : '<span style="color:#bbb">데이터없음</span>'}</td>
+        <td style="${lBg3};${unitCost3!==null?boldIfMin(unitCost3):''}">${unitCost3!==null ? fmtN(Math.round(unitCost3)) : '<span style="color:#bbb">—</span>'}</td>
+        <td class="c" style="${lBg3}">${r3!==null ? `<span class="${rC(r3)}">${fmtP(r3)}</span>` : '<span style="color:#bbb">—</span>'}</td>
       </tr>`;
     });
 
@@ -2520,18 +2589,20 @@ async function renderCompareTable(d) {
   const rateSum2 = prodAmt>0 ? sum.tot2/prodAmt : 0;
   const rateSum3 = hasMh && prodAmt>0 ? sum.tot3/prodAmt : null;
   const M = v => fmt(v/1000000, 1);
-
   rows.push(`<tr class="total">
     <td class="l" colspan="2">합계 / 원가율</td>
     <td>—</td>
     <td>${M(sumRaw)}M</td>
     <td>${M(sumSub)}M</td>
     <td>${M(sumExp)}M</td>
-    <td style="background:#FFFDE7;font-weight:700">${M(sum.l1)}M</td>
+    <td style="background:#FFFDE7">${M(sum.l1)}M</td>
+    <td style="background:#FFFDE7;font-weight:700">${M(sum.tot1)}M</td>
     <td style="background:#FFFDE7" class="c ${rC(rateSum1)}">${fmtP(rateSum1)}</td>
-    <td style="background:#F1F8E9;font-weight:700">${M(sum.l2)}M</td>
+    <td style="background:#F1F8E9">${M(sum.l2)}M</td>
+    <td style="background:#F1F8E9;font-weight:700">${M(sum.tot2)}M</td>
     <td style="background:#F1F8E9" class="c ${rC(rateSum2)}">${fmtP(rateSum2)}</td>
-    <td style="background:#EDE7F6;font-weight:700">${hasMh ? M(sum.l3)+'M' : '—'}</td>
+    <td style="background:#EDE7F6">${hasMh ? M(sum.l3)+'M' : '—'}</td>
+    <td style="background:#EDE7F6;font-weight:700">${hasMh ? M(sum.tot3)+'M' : '—'}</td>
     <td style="background:#EDE7F6" class="c ${rateSum3!==null?rC(rateSum3):''}">${rateSum3!==null?fmtP(rateSum3):'—'}</td>
   </tr>`);
 
@@ -2684,6 +2755,315 @@ window.loadDashboard = async () => {
       <td class="c">${badge(rate_)}</td></tr>`;
   }).join('');
 };
+
+// ════════════════════════════════════
+// 보고서 생성
+// ════════════════════════════════════
+const LOGO_B64 = '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';
+
+// ── 유틸
+const fmtM = v => (!v&&v!==0)?'—':fmt(v/1000000,1);
+const fmtPct = v => (!v&&v!==0)?'—':(v*100).toFixed(1)+'%';
+
+function rptHeader(title, subtitle, date) {
+  return `
+  <div class="rpt-header">
+    <div class="logo-area">
+      <img src="data:image/jpeg;base64,${LOGO_B64}" alt="BON 로고">
+      <div>
+        <div style="font-size:13pt;font-weight:700;color:#1F3864">순수본 2공장</div>
+        <div style="font-size:9pt;color:#666">제조원가 관리시스템</div>
+      </div>
+    </div>
+    <div class="title-area">
+      <div class="doc-title">${title}</div>
+      <div class="doc-sub">${subtitle}</div>
+      <div class="doc-sub">작성일: ${date}</div>
+    </div>
+  </div>`;
+}
+
+function rptCostTable(rows, title) {
+  const hdr = `<tr><th class="l" style="width:22%">항목</th><th>금액(원)</th><th>구성비율</th><th>전기 금액(원)</th><th>전기 비율</th><th>증감</th></tr>`;
+  const trs = rows.map(r => {
+    const isTotal = r.total;
+    const isHighlight = r.highlight;
+    const cls = isTotal?'total':isHighlight?'highlight':'';
+    const diff = r.curr - r.prev;
+    const diffStr = r.prev ? (diff>=0?'+':'')+fmtM(diff)+'M' : '—';
+    const diffCls = diff>0?'bad':diff<0?'ok':'';
+    return `<tr class="${cls}">
+      <td class="l">${r.label}</td>
+      <td>${fmtM(r.curr)}M</td>
+      <td class="c">${r.currRate||'—'}</td>
+      <td>${r.prev?fmtM(r.prev)+'M':'—'}</td>
+      <td class="c">${r.prevRate||'—'}</td>
+      <td class="c ${diffCls}">${diffStr}</td>
+    </tr>`;
+  }).join('');
+  return `<h2>${title}</h2><table><thead>${hdr}</thead><tbody>${trs}</tbody></table>`;
+}
+
+function rptProdTable(rows) {
+  const hdr = `<tr><th class="l">품목명</th><th>수량</th><th>공급단가</th><th>원재료비/EA</th><th>노무비/EA</th><th>경비/EA</th><th>원가/EA</th><th>원가율</th><th>판정</th></tr>`;
+  const trs = rows.map(r => {
+    const rateCls = r.rate>=1?'bad':r.rate>=0.85?'warn':'ok';
+    const badge = r.rate>=1?'🔴 검토필요':r.rate>=0.85?'🟡 주의':'🟢 양호';
+    return `<tr>
+      <td class="l" style="font-size:9.5pt">${r.name}</td>
+      <td class="c">${Number(r.qty).toLocaleString('ko-KR')}</td>
+      <td>${Number(r.sp).toLocaleString('ko-KR')}</td>
+      <td>${Math.round(r.rawEa).toLocaleString('ko-KR')}</td>
+      <td>${Math.round(r.laborEa).toLocaleString('ko-KR')}</td>
+      <td>${Math.round(r.expEa).toLocaleString('ko-KR')}</td>
+      <td style="font-weight:700">${Math.round(r.unitCost).toLocaleString('ko-KR')}</td>
+      <td class="c ${rateCls}" style="font-weight:700">${(r.rate*100).toFixed(1)}%</td>
+      <td class="c">${badge}</td>
+    </tr>`;
+  }).join('');
+  return `<table><thead>${hdr}</thead><tbody>${trs}</tbody></table>`;
+}
+
+function rptTrendTable(allRows) {
+  // allRows: [{month, sum, prodAmt}]
+  const hdr = `<tr><th>구분</th>${allRows.map(r=>`<th>${monthLabel(r.month)}</th>`).join('')}</tr>`;
+  const items = [
+    { label:'생산금액(백만)', fn: r=>fmtM(r.prodAmt) },
+    { label:'원재료비(백만)', fn: r=>fmtM(r.sum.raw) },
+    { label:'부재료비(백만)', fn: r=>fmtM(r.sum.sub) },
+    { label:'노무비(백만)', fn: r=>r.sum.labor>0?fmtM(r.sum.labor):'—' },
+    { label:'경비(백만)', fn: r=>fmtM(r.sum.exp) },
+    { label:'제조원가(백만)', fn: r=>fmtM(r.sum.total), bold:true },
+    { label:'원가율', fn: r=>r.prodAmt>0?fmtPct(r.sum.total/r.prodAmt):'—', bold:true, highlight:true },
+    { label:'원재료비율', fn: r=>r.sum.total>0?fmtPct(r.sum.raw/r.sum.total):'—' },
+    { label:'노무비율', fn: r=>r.sum.total>0?fmtPct(r.sum.labor/r.sum.total):'—' },
+    { label:'경비율', fn: r=>r.sum.total>0?fmtPct(r.sum.exp/r.sum.total):'—' },
+  ];
+  const trs = items.map(item=>{
+    const cls = item.highlight?'highlight':item.bold?'total':'';
+    return `<tr class="${cls}">
+      <td class="l" style="font-weight:${item.bold?'700':'400'}">${item.label}</td>
+      ${allRows.map(r=>`<td class="c">${item.fn(r)}</td>`).join('')}
+    </tr>`;
+  }).join('');
+  return `<table><thead>${hdr}</thead><tbody>${trs}</tbody></table>`;
+}
+
+window.buildReport = async (type) => {
+  const month = document.getElementById('reportMonth').value;
+  if(!month){showToast('❌ 기준월을 선택하세요');return;}
+  const status = document.getElementById('report-status');
+  status.textContent = '⏳ 보고서 생성 중...';
+  await ensureMasters(); await ensureBom();
+
+  const [y,m] = month.split('-').map(Number);
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}년 ${today.getMonth()+1}월 ${today.getDate()}일`;
+
+  if(type==='monthly') {
+    await buildMonthlyReport(month, y, m, dateStr);
+  } else {
+    await buildQuarterlyReport(month, y, m, dateStr);
+  }
+  status.textContent = '';
+};
+
+// ── 월간 보고서
+async function buildMonthlyReport(month, y, m, dateStr) {
+  const snap = await getDoc(doc(db,'costData',month));
+  if(!snap.exists()){showToast('❌ 해당 월 데이터가 없습니다');return;}
+  const d = snap.data();
+  const cc = computeMonthCost(d, window._bom);
+  const {sum, prodAmt, rows} = cc;
+
+  // 전월
+  const pm = m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;
+  const prevSnap = await getDoc(doc(db,'costData',pm));
+  const prev = prevSnap.exists()?prevSnap.data():null;
+  const prevCc = prev?computeMonthCost(prev,window._bom):null;
+  const prevSum = prevCc?.sum;
+  const prevProd = prev?.prodAmt||0;
+
+  const rate = prodAmt>0?sum.total/prodAmt:0;
+  const prevRate = prevSum&&prevProd>0?prevSum.total/prevProd:null;
+  const diff = prevRate!==null?rate-prevRate:null;
+
+  // 제품별 개당단가 행 구성
+  const masterMap={}; window._masters.forEach(m=>masterMap[m.code]=m);
+  const prodRows = rows.map(r=>{
+    const mm=masterMap[r.code];
+    const sp=mm?mm.supplyPrice:0;
+    const rawEa=r.qty>0?r.rawCost/r.qty:0;
+    const subEa=r.qty>0?r.subCost/r.qty:0;
+    const laborEa=r.qty>0?r.laborAlloc/r.qty:0;
+    const expEa=r.qty>0?r.expCost/r.qty:0;
+    const unitCost=rawEa+subEa+laborEa+expEa;
+    return {name:mm?mm.name:r.code, qty:r.qty, sp, rawEa, subEa, laborEa, expEa, unitCost, rate:sp>0?unitCost/sp:0};
+  });
+
+  const html = `<div class="rpt">
+    ${rptHeader('제조원가 분석 보고서', `${y}년 ${m}월 실적 기준 (전월 비교)`, dateStr)}
+
+    <h1>1. 원가 구성 요약</h1>
+    ${rptCostTable([
+      {label:'원재료비', curr:sum.raw, prev:prevSum?.raw||0,
+        currRate:(prodAmt>0?fmtPct(sum.raw/prodAmt):'—'), prevRate:(prevProd>0&&prevSum?fmtPct(prevSum.raw/prevProd):'—')},
+      {label:'부재료비', curr:sum.sub, prev:prevSum?.sub||0,
+        currRate:(prodAmt>0?fmtPct(sum.sub/prodAmt):'—'), prevRate:(prevProd>0&&prevSum?fmtPct(prevSum.sub/prevProd):'—')},
+      {label:'노무비', curr:sum.labor, prev:prevSum?.labor||0,
+        currRate:(prodAmt>0?fmtPct(sum.labor/prodAmt):'—'), prevRate:(prevProd>0&&prevSum?fmtPct(prevSum.labor/prevProd):'—')},
+      {label:'경비', curr:sum.exp, prev:prevSum?.exp||0,
+        currRate:(prodAmt>0?fmtPct(sum.exp/prodAmt):'—'), prevRate:(prevProd>0&&prevSum?fmtPct(prevSum.exp/prevProd):'—')},
+      {label:'제조원가 합계', curr:sum.total, prev:prevSum?.total||0,
+        currRate:(prodAmt>0?fmtPct(rate):'—'), prevRate:(prevProd>0&&prevSum?fmtPct(prevSum.total/prevProd):'—'), total:true},
+      {label:'생산금액', curr:prodAmt, prev:prevProd, currRate:'100%', prevRate:(prevProd?'100%':'—'), highlight:true},
+    ], '■ 당월 vs 전월 비교')}
+
+    <div class="section-box">
+      ▶ 당월 제조원가율: <strong>${fmtPct(rate)}</strong>
+      ${diff!==null?` / 전월 대비: <strong class="${diff>0?'bad':'ok'}">${diff>=0?'+':''}${(diff*100).toFixed(1)}%p</strong>`:''}
+      ${prevRate!==null?` (전월 ${fmtPct(prevRate)})`:''}
+    </div>
+
+    <h1>2. 제품별 원가 분석</h1>
+    <h2>■ 제품별 개당 원가 (원육중량+수량 배부 기준)</h2>
+    ${rptProdTable(prodRows)}
+
+    <div class="${prodRows.some(r=>r.rate>=1)?'warn-box':'section-box'}">
+      ${prodRows.some(r=>r.rate>=1)
+        ? '⚠️ 원가율 100% 초과 제품이 있습니다. 공급단가 또는 레시피 검토가 필요합니다.'
+        : '✅ 전 제품 원가율 100% 미만으로 수익 구조 양호합니다.'}
+    </div>
+
+    <h1>3. 비고 및 특이사항</h1>
+    <ul>
+      <li>본 원가는 BOM 4단계 계산 기준이며 ERP 재고평가 출고금액 기반입니다.</li>
+      <li>노무비 배부 기준: 임금1~3(전처리/자숙/파쇄) → 원육 중량 비율 / 임금4~5+기타 → 생산수량 비율</li>
+      <li>${d.manhoursData?'실공수 데이터 연동 적용됨':'실공수 데이터 미연동 — 원육중량+수량 배부 기준 적용'}</li>
+    </ul>
+
+    <div class="rpt-footer">
+      <span>순수본 2공장 운영팀</span>
+      <span>작성일: ${dateStr}</span>
+      <span>본 자료는 내부 관리용입니다.</span>
+    </div>
+  </div>`;
+
+  document.getElementById('report-content').innerHTML = html;
+  showToast('✅ 월간 보고서 생성 완료');
+}
+
+// ── 분기 누적 보고서
+async function buildQuarterlyReport(month, y, m, dateStr) {
+  // 해당 분기 월 목록
+  const q = Math.ceil(m/3);
+  const qMonths = [1,2,3].map(i=>{
+    const mo = (q-1)*3+i;
+    return `${y}-${String(mo).padStart(2,'0')}`;
+  }).filter(mo=>mo<=month);
+
+  // 전분기 월 목록
+  const prevQ = q-1;
+  const prevQMonths = prevQ>0 ? [1,2,3].map(i=>{
+    const mo = (prevQ-1)*3+i;
+    return `${y}-${String(mo).padStart(2,'0')}`;
+  }) : [];
+
+  // 데이터 로드
+  const loadMonthData = async (mo) => {
+    const s = await getDoc(doc(db,'costData',mo));
+    if(!s.exists()) return null;
+    const d = s.data();
+    const cc = computeMonthCost(d, window._bom);
+    return {month:mo, sum:cc.sum, prodAmt:d.prodAmt||0, totalQty:cc.totalQty, totalMeatKg:cc.totalMeatKg};
+  };
+
+  const currData = (await Promise.all(qMonths.map(loadMonthData))).filter(Boolean);
+  const prevData = prevQ>0 ? (await Promise.all(prevQMonths.map(loadMonthData))).filter(Boolean) : [];
+
+  if(!currData.length){showToast('❌ 해당 분기 데이터가 없습니다');return;}
+
+  // 분기 합산
+  const qSum = (rows) => rows.reduce((acc,r)=>{
+    acc.raw+=r.sum.raw; acc.sub+=r.sum.sub; acc.labor+=r.sum.labor;
+    acc.exp+=r.sum.exp; acc.total+=r.sum.total; acc.prod+=r.prodAmt; acc.qty+=r.totalQty;
+    return acc;
+  }, {raw:0,sub:0,labor:0,exp:0,total:0,prod:0,qty:0});
+
+  const currQ = qSum(currData);
+  const prevQSum = prevData.length?qSum(prevData):null;
+
+  const currQRate = currQ.prod>0?currQ.total/currQ.prod:0;
+  const prevQRate = prevQSum&&prevQSum.prod>0?prevQSum.total/prevQSum.prod:null;
+  const qDiff = prevQRate!==null?currQRate-prevQRate:null;
+
+  const qLabel = `${y}년 Q${q}`;
+  const prevQLabel = prevQ>0?`${y}년 Q${prevQ}`:'전분기';
+
+  const html = `<div class="rpt">
+    ${rptHeader('분기 누적 제조원가 보고서', `${qLabel} 실적 기준`, dateStr)}
+
+    <h1>1. 분기 원가 구성 (${qLabel} 누적)</h1>
+    ${rptCostTable([
+      {label:'원재료비', curr:currQ.raw, prev:prevQSum?.raw||0,
+        currRate:currQ.prod>0?fmtPct(currQ.raw/currQ.prod):'—',
+        prevRate:prevQSum?.prod>0?fmtPct(prevQSum.raw/prevQSum.prod):'—'},
+      {label:'부재료비', curr:currQ.sub, prev:prevQSum?.sub||0,
+        currRate:currQ.prod>0?fmtPct(currQ.sub/currQ.prod):'—',
+        prevRate:prevQSum?.prod>0?fmtPct(prevQSum.sub/prevQSum.prod):'—'},
+      {label:'노무비', curr:currQ.labor, prev:prevQSum?.labor||0,
+        currRate:currQ.prod>0?fmtPct(currQ.labor/currQ.prod):'—',
+        prevRate:prevQSum?.prod>0?fmtPct(prevQSum.labor/prevQSum.prod):'—'},
+      {label:'경비', curr:currQ.exp, prev:prevQSum?.exp||0,
+        currRate:currQ.prod>0?fmtPct(currQ.exp/currQ.prod):'—',
+        prevRate:prevQSum?.prod>0?fmtPct(prevQSum.exp/prevQSum.prod):'—'},
+      {label:`제조원가 합계 (${qLabel})`, curr:currQ.total, prev:prevQSum?.total||0,
+        currRate:fmtPct(currQRate), prevRate:prevQRate!==null?fmtPct(prevQRate):'—', total:true},
+      {label:'생산금액', curr:currQ.prod, prev:prevQSum?.prod||0, currRate:'100%', prevRate:prevQSum?'100%':'—', highlight:true},
+    ], `■ ${qLabel} vs ${prevQLabel} 비교`)}
+
+    <div class="section-box">
+      ▶ ${qLabel} 제조원가율: <strong>${fmtPct(currQRate)}</strong>
+      ${qDiff!==null?` / 전분기 대비: <strong class="${qDiff>0?'bad':'ok'}">${qDiff>=0?'+':''}${(qDiff*100).toFixed(1)}%p</strong>`:''}
+      &nbsp;|&nbsp; 총 생산수량: <strong>${currQ.qty.toLocaleString('ko-KR')} EA</strong>
+    </div>
+
+    <h1>2. 월별 원가율 추이 (${qLabel})</h1>
+    ${rptTrendTable(currData)}
+
+    ${currData.length>1?`
+    <div class="section-box">
+      ▶ ${qLabel} 월별 원가율 추이: ${currData.map(r=>`${monthLabel(r.month)} ${r.prodAmt>0?fmtPct(r.sum.total/r.prodAmt):'—'}`).join(' → ')}
+    </div>`:''}
+
+    <h1>3. 생산량 추이 (${qLabel})</h1>
+    <table>
+      <thead><tr><th>구분</th>${currData.map(r=>`<th>${monthLabel(r.month)}</th>`).join('')}<th>분기 합계</th></tr></thead>
+      <tbody>
+        <tr><td class="l">생산수량 (EA)</td>${currData.map(r=>`<td class="c">${r.totalQty.toLocaleString('ko-KR')}</td>`).join('')}<td class="c" style="font-weight:700">${currQ.qty.toLocaleString('ko-KR')}</td></tr>
+        <tr><td class="l">원육투입량 (kg)</td>${currData.map(r=>`<td class="c">${Math.round(r.totalMeatKg).toLocaleString('ko-KR')}</td>`).join('')}<td class="c" style="font-weight:700">${Math.round(currData.reduce((s,r)=>s+r.totalMeatKg,0)).toLocaleString('ko-KR')}</td></tr>
+        <tr class="highlight"><td class="l">생산금액 (백만)</td>${currData.map(r=>`<td class="c">${fmtM(r.prodAmt)}M</td>`).join('')}<td class="c" style="font-weight:700">${fmtM(currQ.prod)}M</td></tr>
+      </tbody>
+    </table>
+
+    <h1>4. 비고 및 특이사항</h1>
+    <ul>
+      <li>본 원가는 BOM 4단계 계산 기준이며 ERP 재고평가 출고금액 기반입니다.</li>
+      <li>${qLabel} 집계 대상: ${qMonths.join(', ')} (${currData.length}개월 데이터 반영)</li>
+      ${prevData.length?`<li>전분기(${prevQLabel}) 집계: ${prevQMonths.slice(0,prevData.length).join(', ')} (${prevData.length}개월)</li>`:'<li>전분기 데이터 없음 — 비교 불가</li>'}
+      <li>노무비 배부: 임금1~3 → 원육 중량 비율 / 임금4~5+기타 → 수량 비율</li>
+    </ul>
+
+    <div class="rpt-footer">
+      <span>순수본 2공장 운영팀</span>
+      <span>작성일: ${dateStr}</span>
+      <span>본 자료는 내부 관리용입니다.</span>
+    </div>
+  </div>`;
+
+  document.getElementById('report-content').innerHTML = html;
+  showToast(`✅ ${qLabel} 분기 보고서 생성 완료`);
+}
 
 // 초기화
 document.getElementById('dashMonth').value=thisMonth();
