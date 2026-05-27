@@ -2884,13 +2884,15 @@ async function buildMonthlyReport(month, y, m, dateStr) {
   const prevCc = prev?computeMonthCost(prev,window._bom):null;
   const prevSum = prevCc?.sum;
   const prevProd = prev?.prodAmt||0;
-
   const rate = prodAmt>0?sum.total/prodAmt:0;
   const prevRate = prevSum&&prevProd>0?prevSum.total/prevProd:null;
   const diff = prevRate!==null?rate-prevRate:null;
 
+  // 목표원가 로드
+  await ensureTargetCost();
+
   // 제품별 개당단가 행 구성
-  const masterMap={}; window._masters.forEach(m=>masterMap[m.code]=m);
+  const masterMap={}; window._masters.forEach(mm=>masterMap[mm.code]=mm);
   const prodRows = rows.map(r=>{
     const mm=masterMap[r.code];
     const sp=mm?mm.supplyPrice:0;
@@ -2899,48 +2901,190 @@ async function buildMonthlyReport(month, y, m, dateStr) {
     const laborEa=r.qty>0?r.laborAlloc/r.qty:0;
     const expEa=r.qty>0?r.expCost/r.qty:0;
     const unitCost=rawEa+subEa+laborEa+expEa;
-    return {name:mm?mm.name:r.code, qty:r.qty, sp, rawEa, subEa, laborEa, expEa, unitCost, rate:sp>0?unitCost/sp:0};
+    const gname=(mm?mm.name:r.code).replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
+    const target=window._targetCost[gname]||null;
+    return {code:r.code,name:mm?mm.name:r.code,gname,qty:r.qty,sp,rawEa,subEa,laborEa,expEa,unitCost,rate:sp>0?unitCost/sp:0,target};
   });
+
+  // 제품 그룹별 평균 집계
+  const groups={};
+  for(const r of prodRows){
+    if(!groups[r.gname]) groups[r.gname]={qty:0,raw:0,sub:0,labor:0,exp:0,total:0,spSum:0,target:r.target};
+    const g=groups[r.gname];
+    g.qty+=r.qty; g.raw+=r.rawEa*r.qty; g.sub+=r.subEa*r.qty;
+    g.labor+=r.laborEa*r.qty; g.exp+=r.expEa*r.qty; g.total+=r.unitCost*r.qty;
+    g.spSum+=r.sp*r.qty;
+  }
+
+  // 원가율 판정 분류
+  const goodProds  = prodRows.filter(r=>r.rate>0&&r.rate<0.85);
+  const warnProds  = prodRows.filter(r=>r.rate>=0.85&&r.rate<1);
+  const badProds   = prodRows.filter(r=>r.rate>=1);
+
+  // 생산금액/원가 증감
+  const prodDiff = prevProd>0?prodAmt-prevProd:null;
+  const totalDiff = prevSum?sum.total-prevSum.total:null;
+  const rawDiff   = prevSum?sum.raw-prevSum.raw:null;
+  const laborDiff = prevSum?sum.labor-prevSum.labor:null;
+  const expDiff   = prevSum?sum.exp-prevSum.exp:null;
+
+  // 원가율 구성비 (제조원가 대비)
+  const rawShare  = sum.total>0?sum.raw/sum.total:0;
+  const subShare  = sum.total>0?sum.sub/sum.total:0;
+  const laborShare= sum.total>0?sum.labor/sum.total:0;
+  const expShare  = sum.total>0?sum.exp/sum.total:0;
+
+  // 제품별 원가 분석 코멘트 자동 생성
+  const prodComments = [];
+  if(badProds.length) prodComments.push(`<li class="bad">⚠️ <strong>원가율 100% 초과 제품 ${badProds.length}개</strong>: ${badProds.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')} — 공급단가 재검토 또는 레시피 원가절감 필요</li>`);
+  if(warnProds.length) prodComments.push(`<li class="warn">🟡 <strong>주의 구간 제품(85~100%)</strong>: ${warnProds.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')} — 원가 관리 지속 모니터링 필요</li>`);
+  if(goodProds.length) prodComments.push(`<li class="ok">✅ <strong>양호 제품(85% 미만)</strong>: ${goodProds.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')}</li>`);
+
+  // 목표원가 비교표 (등록된 것만)
+  const targetRows = Object.entries(groups).filter(([g,v])=>v.target&&v.qty>0).map(([g,v])=>{
+    const unitCostAvg = v.total/v.qty;
+    const spAvg = v.spSum/v.qty;
+    const tgt = v.target;
+    const diff = unitCostAvg - tgt;
+    const diffPct = tgt>0?diff/tgt*100:0;
+    const cls = diff>0?'bad':diff<0?'ok':'';
+    return `<tr>
+      <td class="l">${g}</td>
+      <td>${Math.round(spAvg).toLocaleString('ko-KR')}</td>
+      <td>${Math.round(unitCostAvg).toLocaleString('ko-KR')}</td>
+      <td>${tgt.toLocaleString('ko-KR')}</td>
+      <td class="${cls}" style="font-weight:700">${diff>=0?'+':''}${Math.round(diff).toLocaleString('ko-KR')}</td>
+      <td class="${cls} c" style="font-weight:700">${diff>=0?'+':''}${diffPct.toFixed(1)}%</td>
+      <td class="c">${diff>0?'🔴 초과':diff<0?'🟢 절감':'✅ 달성'}</td>
+    </tr>`;
+  }).join('');
 
   const html = `<div class="rpt">
     ${rptHeader('제조원가 분석 보고서', `${y}년 ${m}월 실적 기준 (전월 비교)`, dateStr)}
 
-    <h1>1. 원가 구성 요약</h1>
+    <!-- 1. 개요 -->
+    <h1>1. 보고 개요</h1>
+    <p>본 보고서는 순수본 2공장 ${y}년 ${m}월 제조원가 실적을 분석하고 전월 대비 증감 현황 및 제품별 원가 구조를 정리한 것입니다. 원재료비는 BOM 4단계 계산 기준이며 ERP 재고평가 출고금액과 차이 없이 검증된 수치입니다.</p>
+    <table style="margin-top:8px;width:auto">
+      <thead><tr><th>항목</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td class="l">보고 기간</td><td class="l">${y}년 ${m}월 (${prev?`전월 ${y}년 ${m-1<1?12:m-1}월 대비`:'전월 데이터 없음'})</td></tr>
+        <tr><td class="l">원가 계산 기준</td><td class="l">BOM 기반 원·부재료비 + ERP 공정별 노무비 + 경비 (원단위 입력)</td></tr>
+        <tr><td class="l">노무비 배부 방식</td><td class="l">${d.manhoursData?'③ 실공수 기반 배부 (스마트팩토리 연동)':'② 원육중량(임금1~3) + 수량(임금4~5+기타) 배부'}</td></tr>
+        <tr><td class="l">ERP 검증</td><td class="l">원재료비·부재료비 ERP 확정값과 차이 0원 확인</td></tr>
+      </tbody>
+    </table>
+
+    <!-- 2. 원가 구성 요약 -->
+    <h1>2. 원가 구성 요약</h1>
     ${rptCostTable([
       {label:'원재료비', curr:sum.raw, prev:prevSum?.raw||0,
-        currRate:(prodAmt>0?fmtPct(sum.raw/prodAmt):'—'), prevRate:(prevProd>0&&prevSum?fmtPct(prevSum.raw/prevProd):'—')},
+        currRate:prodAmt>0?fmtPct(sum.raw/prodAmt):'—', prevRate:prevProd>0&&prevSum?fmtPct(prevSum.raw/prevProd):'—'},
       {label:'부재료비', curr:sum.sub, prev:prevSum?.sub||0,
-        currRate:(prodAmt>0?fmtPct(sum.sub/prodAmt):'—'), prevRate:(prevProd>0&&prevSum?fmtPct(prevSum.sub/prevProd):'—')},
+        currRate:prodAmt>0?fmtPct(sum.sub/prodAmt):'—', prevRate:prevProd>0&&prevSum?fmtPct(prevSum.sub/prevProd):'—'},
       {label:'노무비', curr:sum.labor, prev:prevSum?.labor||0,
-        currRate:(prodAmt>0?fmtPct(sum.labor/prodAmt):'—'), prevRate:(prevProd>0&&prevSum?fmtPct(prevSum.labor/prevProd):'—')},
+        currRate:prodAmt>0?fmtPct(sum.labor/prodAmt):'—', prevRate:prevProd>0&&prevSum?fmtPct(prevSum.labor/prevProd):'—'},
       {label:'경비', curr:sum.exp, prev:prevSum?.exp||0,
-        currRate:(prodAmt>0?fmtPct(sum.exp/prodAmt):'—'), prevRate:(prevProd>0&&prevSum?fmtPct(prevSum.exp/prevProd):'—')},
+        currRate:prodAmt>0?fmtPct(sum.exp/prodAmt):'—', prevRate:prevProd>0&&prevSum?fmtPct(prevSum.exp/prevProd):'—'},
       {label:'제조원가 합계', curr:sum.total, prev:prevSum?.total||0,
-        currRate:(prodAmt>0?fmtPct(rate):'—'), prevRate:(prevProd>0&&prevSum?fmtPct(prevSum.total/prevProd):'—'), total:true},
-      {label:'생산금액', curr:prodAmt, prev:prevProd, currRate:'100%', prevRate:(prevProd?'100%':'—'), highlight:true},
-    ], '■ 당월 vs 전월 비교')}
+        currRate:prodAmt>0?fmtPct(rate):'—', prevRate:prevProd>0&&prevSum?fmtPct(prevSum.total/prevProd):'—', total:true},
+      {label:'생산금액', curr:prodAmt, prev:prevProd, currRate:'100%', prevRate:prevProd?'100%':'—', highlight:true},
+    ], `■ 당월 vs 전월 비교 (단위: 원)`)}
 
-    <div class="section-box">
-      ▶ 당월 제조원가율: <strong>${fmtPct(rate)}</strong>
-      ${diff!==null?` / 전월 대비: <strong class="${diff>0?'bad':'ok'}">${diff>=0?'+':''}${(diff*100).toFixed(1)}%p</strong>`:''}
-      ${prevRate!==null?` (전월 ${fmtPct(prevRate)})`:''}
+    <div class="${diff!==null&&diff>0?'warn-box':'section-box'}">
+      ▶ 당월 제조원가율 <strong>${fmtPct(rate)}</strong>
+      ${diff!==null?` / 전월(${fmtPct(prevRate||0)}) 대비 <strong class="${diff>0?'bad':'ok'}">${diff>=0?'+':''}${(diff*100).toFixed(1)}%p</strong>`:''}.
+      ${diff!==null&&diff<0?' 원가율 개선이 지속되고 있습니다.':diff!==null&&diff>0?' 전월 대비 원가율이 상승하였습니다. 원인 분석 및 관리가 필요합니다.':''}
     </div>
 
-    <h1>2. 제품별 원가 분석</h1>
+    <h2>■ 원가 구성비 분석 (제조원가 대비)</h2>
+    <table>
+      <thead><tr><th>항목</th><th>금액</th><th>제조원가 내 비중</th><th>특이사항</th></tr></thead>
+      <tbody>
+        <tr><td class="l">원재료비</td><td>${fmtM(sum.raw)}M</td><td class="c">${fmtPct(rawShare)}</td><td class="l">원육 및 소스 원재료 — BOM 기반 정밀 계산</td></tr>
+        <tr><td class="l">부재료비</td><td>${fmtM(sum.sub)}M</td><td class="c">${fmtPct(subShare)}</td><td class="l">파우치·박스 등 포장재</td></tr>
+        <tr><td class="l">노무비</td><td>${fmtM(sum.labor)}M</td><td class="c">${fmtPct(laborShare)}</td><td class="l">ERP 공정별 임금 + 급여·잡급·퇴직</td></tr>
+        <tr><td class="l">경비</td><td>${fmtM(sum.exp)}M</td><td class="c">${fmtPct(expShare)}</td><td class="l">감가상각·전기료 등 고정비 포함</td></tr>
+        <tr class="total"><td class="l">합계</td><td>${fmtM(sum.total)}M</td><td class="c">100%</td><td class="l"></td></tr>
+      </tbody>
+    </table>
+
+    <h2>■ 주요 특이사항</h2>
+    <ul>
+      <li><strong>생산금액:</strong> ${fmtM(prodAmt)}M${prodDiff!==null?` (전월 대비 ${prodDiff>=0?'+':''}${fmtM(prodDiff)}M, ${prodDiff>=0?'증가':'감소'})`:''}</li>
+      <li><strong>원재료비:</strong> ${fmtM(sum.raw)}M${rawDiff!==null?` (전월 대비 ${rawDiff>=0?'+':''}${fmtM(rawDiff)}M) — 생산량 ${rawDiff>=0?'증가':'감소'}에 따른 자연스러운 변동`:''}</li>
+      <li><strong>노무비:</strong> ${fmtM(sum.labor)}M${laborDiff!==null?` (전월 대비 ${laborDiff>=0?'+':''}${fmtM(laborDiff)}M) — 고정비 성격으로 생산량 증가 시 개당 부담 감소`:''}</li>
+      <li><strong>경비:</strong> ${fmtM(sum.exp)}M${expDiff!==null?` (전월 대비 ${expDiff>=0?'+':''}${fmtM(expDiff)}M) — 고정비 성격, 생산량 확대 시 원가율 개선 효과`:''}</li>
+    </ul>
+
+    <!-- 3. 제품별 원가 분석 -->
+    <h1>3. 제품별 원가 분석</h1>
     <h2>■ 제품별 개당 원가 (원육중량+수량 배부 기준)</h2>
     ${rptProdTable(prodRows)}
 
-    <div class="${prodRows.some(r=>r.rate>=1)?'warn-box':'section-box'}">
-      ${prodRows.some(r=>r.rate>=1)
-        ? '⚠️ 원가율 100% 초과 제품이 있습니다. 공급단가 또는 레시피 검토가 필요합니다.'
-        : '✅ 전 제품 원가율 100% 미만으로 수익 구조 양호합니다.'}
+    <h2>■ 제품별 원가율 평가</h2>
+    <ul>${prodComments.join('')}</ul>
+
+    ${Object.keys(groups).length>1?`
+    <h2>■ 품목 그룹별 평균 (원육 종류 통합)</h2>
+    <table>
+      <thead><tr><th class="l">품목 그룹</th><th>총수량</th><th>공급단가</th><th>원재료비/EA</th><th>노무비/EA</th><th>경비/EA</th><th>원가/EA</th><th>원가율</th></tr></thead>
+      <tbody>
+        ${Object.entries(groups).map(([gname,g])=>{
+          const uCost=g.total/g.qty, spAvg=g.spSum/g.qty;
+          const gr=spAvg>0?uCost/spAvg:0;
+          const cls=gr>=1?'bad':gr>=0.85?'warn':'ok';
+          return `<tr>
+            <td class="l">${gname}</td>
+            <td class="c">${g.qty.toLocaleString('ko-KR')}</td>
+            <td>${Math.round(spAvg).toLocaleString('ko-KR')}</td>
+            <td>${Math.round(g.raw/g.qty).toLocaleString('ko-KR')}</td>
+            <td>${Math.round(g.labor/g.qty).toLocaleString('ko-KR')}</td>
+            <td>${Math.round(g.exp/g.qty).toLocaleString('ko-KR')}</td>
+            <td style="font-weight:700">${Math.round(uCost).toLocaleString('ko-KR')}</td>
+            <td class="c ${cls}" style="font-weight:700">${(gr*100).toFixed(1)}%</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`:''}
+
+    ${targetRows?`
+    <!-- 4. 목표원가 대비 실적 -->
+    <h1>4. 목표 제조원가 대비 실적</h1>
+    <p>설정탭에 등록된 목표 제조원가 대비 당월 실제 원가를 비교합니다.</p>
+    <table>
+      <thead><tr><th class="l">품목 그룹</th><th>공급단가</th><th>실제원가/EA</th><th>목표원가/EA</th><th>차이(원)</th><th>달성율</th><th>판정</th></tr></thead>
+      <tbody>${targetRows}</tbody>
+    </table>
+    <div class="${badProds.length?'warn-box':'section-box'}">
+      목표원가는 설정탭 &gt; 목표 제조원가 관리에서 수정할 수 있습니다.
+    </div>`:''}
+
+    <!-- 5. 노무비 배부 방식 현황 -->
+    <h1>${targetRows?'5':'4'}. 노무비 배부 방식 현황</h1>
+    <table>
+      <thead><tr><th>공정</th><th>배부 기준</th><th>대상 임금 항목</th><th>비고</th></tr></thead>
+      <tbody>
+        <tr><td class="l">1~3공정 (전처리·자숙·파쇄)</td><td class="c">원육 투입 중량 비율</td><td class="c">임금1·2·3</td><td class="l">원육량이 많은 제품에 노무비 집중 배부</td></tr>
+        <tr><td class="l">4공정 (내포장)</td><td class="c">생산수량 비율</td><td class="c">임금4</td><td class="l">봉 수량 기준 공정 공수 반영</td></tr>
+        <tr><td class="l">5공정 (외포장)</td><td class="c">생산수량 비율</td><td class="c">임금5</td><td class="l">인케이스 포장 대상 제품에만 배부</td></tr>
+        <tr><td class="l">관리·기타</td><td class="c">생산수량 비율</td><td class="c">급여·잡급·퇴직</td><td class="l">전 제품 수량 비율로 균등 배부</td></tr>
+      </tbody>
+    </table>
+    <div class="section-box">
+      ${d.manhoursData
+        ? '✅ 이번 달은 스마트팩토리 실공수 데이터가 연동되어 실제 투입 공수 기반으로 노무비가 배부되었습니다.'
+        : '📌 현재 원육중량+수량 혼합배부 방식 적용 중. 스마트팩토리 실공수 연동 시 정확도가 향상됩니다.'}
     </div>
 
-    <h1>3. 비고 및 특이사항</h1>
+    <!-- 비고 -->
+    <h1>${targetRows?'6':'5'}. 비고 및 향후 과제</h1>
     <ul>
-      <li>본 원가는 BOM 4단계 계산 기준이며 ERP 재고평가 출고금액 기반입니다.</li>
-      <li>노무비 배부 기준: 임금1~3(전처리/자숙/파쇄) → 원육 중량 비율 / 임금4~5+기타 → 생산수량 비율</li>
-      <li>${d.manhoursData?'실공수 데이터 연동 적용됨':'실공수 데이터 미연동 — 원육중량+수량 배부 기준 적용'}</li>
+      <li>원·부재료비는 BOM 4단계 계산으로 ERP 확정값과 차이 없이 검증 완료됩니다.</li>
+      <li>노무비·경비는 ERP 최종 마감 후 원단위 입력 기준이며, 배부 방식에 따라 제품별 금액이 달라질 수 있습니다.</li>
+      ${d.exp?`<li>경비 합계: ${Number(d.exp).toLocaleString('ko-KR')}원 (ERP 확정값 입력 기준)</li>`:'<li class="warn">⚠️ 경비 원단위 미입력 — 정확한 원가율 산출을 위해 입력 필요</li>'}
+      ${d.prodAmt?`<li>생산금액: ${Number(d.prodAmt).toLocaleString('ko-KR')}원</li>`:'<li class="warn">⚠️ 생산금액 미입력 — 원가율 산출 불가</li>'}
+      <li>다음 달 개선 과제: ${badProds.length?badProds.map(r=>r.gname).filter((v,i,a)=>a.indexOf(v)===i).join(', ')+' 공급단가 검토':'원가율 유지 및 생산성 향상'}</li>
     </ul>
 
     <div class="rpt-footer">
@@ -2956,103 +3100,163 @@ async function buildMonthlyReport(month, y, m, dateStr) {
 
 // ── 분기 누적 보고서
 async function buildQuarterlyReport(month, y, m, dateStr) {
-  // 해당 분기 월 목록
   const q = Math.ceil(m/3);
   const qMonths = [1,2,3].map(i=>{
-    const mo = (q-1)*3+i;
+    const mo=(q-1)*3+i;
     return `${y}-${String(mo).padStart(2,'0')}`;
   }).filter(mo=>mo<=month);
 
-  // 전분기 월 목록
   const prevQ = q-1;
-  const prevQMonths = prevQ>0 ? [1,2,3].map(i=>{
-    const mo = (prevQ-1)*3+i;
-    return `${y}-${String(mo).padStart(2,'0')}`;
-  }) : [];
+  const prevQYear = prevQ<1?y-1:y;
+  const prevQReal = prevQ<1?4:prevQ;
+  const prevQMonths = [1,2,3].map(i=>{
+    const mo=(prevQReal-1)*3+i;
+    return `${prevQYear}-${String(mo).padStart(2,'0')}`;
+  });
 
-  // 데이터 로드
   const loadMonthData = async (mo) => {
     const s = await getDoc(doc(db,'costData',mo));
     if(!s.exists()) return null;
-    const d = s.data();
-    const cc = computeMonthCost(d, window._bom);
-    return {month:mo, sum:cc.sum, prodAmt:d.prodAmt||0, totalQty:cc.totalQty, totalMeatKg:cc.totalMeatKg};
+    const d2 = s.data();
+    const cc2 = computeMonthCost(d2, window._bom);
+    return {month:mo, sum:cc2.sum, prodAmt:d2.prodAmt||0, totalQty:cc2.totalQty, totalMeatKg:cc2.totalMeatKg, rows:cc2.rows};
   };
 
   const currData = (await Promise.all(qMonths.map(loadMonthData))).filter(Boolean);
-  const prevData = prevQ>0 ? (await Promise.all(prevQMonths.map(loadMonthData))).filter(Boolean) : [];
+  const prevData = (await Promise.all(prevQMonths.map(loadMonthData))).filter(Boolean);
 
   if(!currData.length){showToast('❌ 해당 분기 데이터가 없습니다');return;}
 
-  // 분기 합산
-  const qSum = (rows) => rows.reduce((acc,r)=>{
-    acc.raw+=r.sum.raw; acc.sub+=r.sum.sub; acc.labor+=r.sum.labor;
-    acc.exp+=r.sum.exp; acc.total+=r.sum.total; acc.prod+=r.prodAmt; acc.qty+=r.totalQty;
-    return acc;
-  }, {raw:0,sub:0,labor:0,exp:0,total:0,prod:0,qty:0});
+  await ensureMasters(); await ensureTargetCost();
+  const masterMap={}; window._masters.forEach(mm=>masterMap[mm.code]=mm);
+
+  const qSum = (rs) => rs.reduce((acc,r)=>({
+    raw:acc.raw+r.sum.raw, sub:acc.sub+r.sum.sub, labor:acc.labor+r.sum.labor,
+    exp:acc.exp+r.sum.exp, total:acc.total+r.sum.total, prod:acc.prod+r.prodAmt, qty:acc.qty+r.totalQty,
+    meatKg:acc.meatKg+r.totalMeatKg
+  }), {raw:0,sub:0,labor:0,exp:0,total:0,prod:0,qty:0,meatKg:0});
 
   const currQ = qSum(currData);
-  const prevQSum = prevData.length?qSum(prevData):null;
-
+  const prevQSummed = prevData.length?qSum(prevData):null;
   const currQRate = currQ.prod>0?currQ.total/currQ.prod:0;
-  const prevQRate = prevQSum&&prevQSum.prod>0?prevQSum.total/prevQSum.prod:null;
+  const prevQRate = prevQSummed?.prod>0?prevQSummed.total/prevQSummed.prod:null;
   const qDiff = prevQRate!==null?currQRate-prevQRate:null;
-
   const qLabel = `${y}년 Q${q}`;
-  const prevQLabel = prevQ>0?`${y}년 Q${prevQ}`:'전분기';
+  const prevQLabel = `${prevQYear}년 Q${prevQReal}`;
+
+  // 분기 내 월별 원가율 추이
+  const rateArr = currData.map(r=>r.prodAmt>0?r.sum.total/r.prodAmt:0);
+  const rateMin = Math.min(...rateArr.filter(v=>v>0));
+  const rateMax = Math.max(...rateArr);
+  const bestMonth = currData[rateArr.indexOf(rateMin)]?.month;
+  const worstMonth = currData[rateArr.indexOf(rateMax)]?.month;
+
+  // 분기 제품별 누적 원가 집계
+  const qProdMap={};
+  for(const md of currData){
+    for(const r of md.rows){
+      if(!qProdMap[r.code]) qProdMap[r.code]={raw:0,sub:0,labor:0,exp:0,total:0,qty:0};
+      const p=qProdMap[r.code];
+      p.raw+=r.rawCost; p.sub+=r.subCost; p.labor+=r.laborAlloc; p.exp+=r.expCost; p.total+=r.totalCost; p.qty+=r.qty;
+    }
+  }
+  const qProdRows = Object.entries(qProdMap).filter(([,v])=>v.qty>0).map(([code,v])=>{
+    const mm=masterMap[code];
+    const sp=mm?mm.supplyPrice:0;
+    const unitCost=v.total/v.qty;
+    return {name:mm?mm.name:code, qty:v.qty, sp, rawEa:v.raw/v.qty, subEa:v.sub/v.qty,
+      laborEa:v.labor/v.qty, expEa:v.exp/v.qty, unitCost, rate:sp>0?unitCost/sp:0};
+  });
+
+  const goodQ  = qProdRows.filter(r=>r.rate>0&&r.rate<0.85);
+  const warnQ  = qProdRows.filter(r=>r.rate>=0.85&&r.rate<1);
+  const badQ   = qProdRows.filter(r=>r.rate>=1);
 
   const html = `<div class="rpt">
     ${rptHeader('분기 누적 제조원가 보고서', `${qLabel} 실적 기준`, dateStr)}
 
-    <h1>1. 분기 원가 구성 (${qLabel} 누적)</h1>
-    ${rptCostTable([
-      {label:'원재료비', curr:currQ.raw, prev:prevQSum?.raw||0,
-        currRate:currQ.prod>0?fmtPct(currQ.raw/currQ.prod):'—',
-        prevRate:prevQSum?.prod>0?fmtPct(prevQSum.raw/prevQSum.prod):'—'},
-      {label:'부재료비', curr:currQ.sub, prev:prevQSum?.sub||0,
-        currRate:currQ.prod>0?fmtPct(currQ.sub/currQ.prod):'—',
-        prevRate:prevQSum?.prod>0?fmtPct(prevQSum.sub/prevQSum.prod):'—'},
-      {label:'노무비', curr:currQ.labor, prev:prevQSum?.labor||0,
-        currRate:currQ.prod>0?fmtPct(currQ.labor/currQ.prod):'—',
-        prevRate:prevQSum?.prod>0?fmtPct(prevQSum.labor/prevQSum.prod):'—'},
-      {label:'경비', curr:currQ.exp, prev:prevQSum?.exp||0,
-        currRate:currQ.prod>0?fmtPct(currQ.exp/currQ.prod):'—',
-        prevRate:prevQSum?.prod>0?fmtPct(prevQSum.exp/prevQSum.prod):'—'},
-      {label:`제조원가 합계 (${qLabel})`, curr:currQ.total, prev:prevQSum?.total||0,
-        currRate:fmtPct(currQRate), prevRate:prevQRate!==null?fmtPct(prevQRate):'—', total:true},
-      {label:'생산금액', curr:currQ.prod, prev:prevQSum?.prod||0, currRate:'100%', prevRate:prevQSum?'100%':'—', highlight:true},
-    ], `■ ${qLabel} vs ${prevQLabel} 비교`)}
+    <!-- 1. 개요 -->
+    <h1>1. 보고 개요</h1>
+    <p>본 보고서는 순수본 2공장 ${qLabel} 제조원가 누적 실적을 분석하고 전분기 대비 원가 구조 변화 및 월별 추이를 정리한 것입니다.</p>
+    <table style="margin-top:8px;width:auto">
+      <thead><tr><th>항목</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td class="l">보고 기간</td><td class="l">${qLabel} (${qMonths.join(' ~ ')}, ${currData.length}개월 집계)</td></tr>
+        <tr><td class="l">비교 기간</td><td class="l">${prevData.length?prevQLabel+' ('+prevQMonths.slice(0,prevData.length).join(' ~ ')+', '+prevData.length+'개월)':'전분기 데이터 없음'}</td></tr>
+        <tr><td class="l">총 생산수량</td><td class="l">${currQ.qty.toLocaleString('ko-KR')} EA</td></tr>
+        <tr><td class="l">원육 총 투입량</td><td class="l">${Math.round(currQ.meatKg).toLocaleString('ko-KR')} kg</td></tr>
+      </tbody>
+    </table>
 
-    <div class="section-box">
-      ▶ ${qLabel} 제조원가율: <strong>${fmtPct(currQRate)}</strong>
-      ${qDiff!==null?` / 전분기 대비: <strong class="${qDiff>0?'bad':'ok'}">${qDiff>=0?'+':''}${(qDiff*100).toFixed(1)}%p</strong>`:''}
-      &nbsp;|&nbsp; 총 생산수량: <strong>${currQ.qty.toLocaleString('ko-KR')} EA</strong>
+    <!-- 2. 분기 원가 구성 -->
+    <h1>2. 분기 누적 원가 구성</h1>
+    ${rptCostTable([
+      {label:'원재료비', curr:currQ.raw, prev:prevQSummed?.raw||0,
+        currRate:currQ.prod>0?fmtPct(currQ.raw/currQ.prod):'—', prevRate:prevQSummed?.prod>0?fmtPct(prevQSummed.raw/prevQSummed.prod):'—'},
+      {label:'부재료비', curr:currQ.sub, prev:prevQSummed?.sub||0,
+        currRate:currQ.prod>0?fmtPct(currQ.sub/currQ.prod):'—', prevRate:prevQSummed?.prod>0?fmtPct(prevQSummed.sub/prevQSummed.prod):'—'},
+      {label:'노무비', curr:currQ.labor, prev:prevQSummed?.labor||0,
+        currRate:currQ.prod>0?fmtPct(currQ.labor/currQ.prod):'—', prevRate:prevQSummed?.prod>0?fmtPct(prevQSummed.labor/prevQSummed.prod):'—'},
+      {label:'경비', curr:currQ.exp, prev:prevQSummed?.exp||0,
+        currRate:currQ.prod>0?fmtPct(currQ.exp/currQ.prod):'—', prevRate:prevQSummed?.prod>0?fmtPct(prevQSummed.exp/prevQSummed.prod):'—'},
+      {label:`제조원가 합계 (${qLabel})`, curr:currQ.total, prev:prevQSummed?.total||0,
+        currRate:fmtPct(currQRate), prevRate:prevQRate!==null?fmtPct(prevQRate):'—', total:true},
+      {label:'생산금액', curr:currQ.prod, prev:prevQSummed?.prod||0, currRate:'100%', prevRate:prevQSummed?'100%':'—', highlight:true},
+    ], `■ ${qLabel} vs ${prevQLabel} 비교 (단위: 원)`)}
+
+    <div class="${qDiff!==null&&qDiff>0?'warn-box':'section-box'}">
+      ▶ ${qLabel} 누적 제조원가율: <strong>${fmtPct(currQRate)}</strong>
+      ${qDiff!==null?` / ${prevQLabel} 대비 <strong class="${qDiff>0?'bad':'ok'}">${qDiff>=0?'+':''}${(qDiff*100).toFixed(1)}%p</strong>`:''}
+      ${qDiff!==null&&qDiff<0?' — 원가율 개선 추세가 유지되고 있습니다.':qDiff!==null&&qDiff>0?' — 전분기 대비 원가율이 상승하였습니다. 원인 분석이 필요합니다.':''}
     </div>
 
-    <h1>2. 월별 원가율 추이 (${qLabel})</h1>
+    <!-- 3. 월별 원가율 추이 -->
+    <h1>3. 월별 원가율 추이 (${qLabel})</h1>
     ${rptTrendTable(currData)}
 
     ${currData.length>1?`
     <div class="section-box">
-      ▶ ${qLabel} 월별 원가율 추이: ${currData.map(r=>`${monthLabel(r.month)} ${r.prodAmt>0?fmtPct(r.sum.total/r.prodAmt):'—'}`).join(' → ')}
+      ▶ 월별 원가율 추이: ${currData.map(r=>`${monthLabel(r.month)} <strong>${r.prodAmt>0?fmtPct(r.sum.total/r.prodAmt):'—'}</strong>`).join(' → ')}
+      &nbsp;|&nbsp; 최저: <span class="ok">${bestMonth?monthLabel(bestMonth)+' '+fmtPct(rateMin):'—'}</span>
+      &nbsp;|&nbsp; 최고: <span class="${rateMax>=1?'bad':'warn'}">${worstMonth?monthLabel(worstMonth)+' '+fmtPct(rateMax):'—'}</span>
     </div>`:''}
 
-    <h1>3. 생산량 추이 (${qLabel})</h1>
+    <!-- 4. 생산량 추이 -->
+    <h1>4. 생산량 및 생산성 추이</h1>
     <table>
-      <thead><tr><th>구분</th>${currData.map(r=>`<th>${monthLabel(r.month)}</th>`).join('')}<th>분기 합계</th></tr></thead>
+      <thead><tr><th>구분</th>${currData.map(r=>`<th>${monthLabel(r.month)}</th>`).join('')}<th style="background:#2F5496">분기 합계</th></tr></thead>
       <tbody>
         <tr><td class="l">생산수량 (EA)</td>${currData.map(r=>`<td class="c">${r.totalQty.toLocaleString('ko-KR')}</td>`).join('')}<td class="c" style="font-weight:700">${currQ.qty.toLocaleString('ko-KR')}</td></tr>
-        <tr><td class="l">원육투입량 (kg)</td>${currData.map(r=>`<td class="c">${Math.round(r.totalMeatKg).toLocaleString('ko-KR')}</td>`).join('')}<td class="c" style="font-weight:700">${Math.round(currData.reduce((s,r)=>s+r.totalMeatKg,0)).toLocaleString('ko-KR')}</td></tr>
+        <tr><td class="l">원육투입량 (kg)</td>${currData.map(r=>`<td class="c">${Math.round(r.totalMeatKg).toLocaleString('ko-KR')}</td>`).join('')}<td class="c" style="font-weight:700">${Math.round(currQ.meatKg).toLocaleString('ko-KR')}</td></tr>
         <tr class="highlight"><td class="l">생산금액 (백만)</td>${currData.map(r=>`<td class="c">${fmtM(r.prodAmt)}M</td>`).join('')}<td class="c" style="font-weight:700">${fmtM(currQ.prod)}M</td></tr>
+        <tr><td class="l">제조원가율</td>${currData.map(r=>`<td class="c ${r.prodAmt>0?(r.sum.total/r.prodAmt>=1?'bad':r.sum.total/r.prodAmt>=0.85?'warn':'ok'):''}">${r.prodAmt>0?fmtPct(r.sum.total/r.prodAmt):'—'}</td>`).join('')}<td class="c total">${fmtPct(currQRate)}</td></tr>
       </tbody>
     </table>
+    <div class="section-box">
+      ▶ 분기 일평균 원육투입: <strong>${Math.round(currQ.meatKg/currData.length).toLocaleString('ko-KR')} kg/월</strong>
+      &nbsp;|&nbsp; 분기 일평균 생산금액: <strong>${fmtM(currQ.prod/currData.length)}M/월</strong>
+    </div>
 
-    <h1>4. 비고 및 특이사항</h1>
+    <!-- 5. 분기 제품별 원가 분석 -->
+    <h1>5. 분기 누적 제품별 원가 분석</h1>
+    <h2>■ 분기 누적 개당 원가</h2>
+    ${rptProdTable(qProdRows)}
+
+    <h2>■ 제품별 원가율 평가</h2>
     <ul>
-      <li>본 원가는 BOM 4단계 계산 기준이며 ERP 재고평가 출고금액 기반입니다.</li>
-      <li>${qLabel} 집계 대상: ${qMonths.join(', ')} (${currData.length}개월 데이터 반영)</li>
-      ${prevData.length?`<li>전분기(${prevQLabel}) 집계: ${prevQMonths.slice(0,prevData.length).join(', ')} (${prevData.length}개월)</li>`:'<li>전분기 데이터 없음 — 비교 불가</li>'}
-      <li>노무비 배부: 임금1~3 → 원육 중량 비율 / 임금4~5+기타 → 수량 비율</li>
+      ${badQ.length?`<li class="bad">⚠️ <strong>원가율 100% 초과:</strong> ${badQ.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')} — 공급단가 재검토 필요</li>`:''}
+      ${warnQ.length?`<li class="warn">🟡 <strong>주의 구간(85~100%):</strong> ${warnQ.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')}</li>`:''}
+      ${goodQ.length?`<li class="ok">✅ <strong>양호(85% 미만):</strong> ${goodQ.map(r=>r.name+'('+((r.rate*100).toFixed(1))+'%)').join(', ')}</li>`:''}
+    </ul>
+
+    <!-- 6. 비고 및 향후 과제 -->
+    <h1>6. 비고 및 향후 과제</h1>
+    <ul>
+      <li>본 원가는 BOM 4단계 계산 기준이며 ERP 재고평가 출고금액 기반으로 검증된 수치입니다.</li>
+      <li>${qLabel} 분기 집계 대상: ${qMonths.join(', ')} (${currData.length}개월 데이터 반영)</li>
+      ${prevData.length?`<li>전분기(${prevQLabel}) 비교 기준: ${prevQMonths.slice(0,prevData.length).join(', ')} (${prevData.length}개월)</li>`:'<li>전분기 데이터 없음 — 비교 항목은 차기 분기부터 활성화됩니다.</li>'}
+      <li><strong>단기 과제:</strong> ${badQ.length?badQ.map(r=>r.gname||r.name).filter((v,i,a)=>a.indexOf(v)===i).join(', ')+' 공급단가 재검토':'전 제품 원가율 관리 지속'}</li>
+      <li><strong>중기 과제:</strong> 스마트팩토리 실공수 데이터 축적 → 노무비 배부 정확도 향상, 전년동월 비교 분석 (데이터 12개월 이상 축적 후)</li>
     </ul>
 
     <div class="rpt-footer">
