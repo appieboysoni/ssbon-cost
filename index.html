@@ -2110,25 +2110,68 @@ function renderCostRateChart(allRows) {
     }
   });
 
-  // 합계 % 데이터 레이블을 꺾은선 포인트 위에 직접 그리기 (afterDatasetsDraw)
-  // → Chart.js 플러그인 없이 canvas 직접 annotation
-  const originalDraw = window._charts.costRate.draw.bind(window._charts.costRate);
-  window._charts.costRate.draw = function() {
-    originalDraw();
-    const chart = window._charts.costRate;
+  // afterDraw 플러그인으로 스택 바 내부 레이블 + 합계 꺾은선 레이블 동시 처리
+  window._charts.costRate._labelData = { rawR, subR, labR, expR, totals };
+}
+
+// 원가율 차트 데이터 레이블 플러그인 (afterDraw)
+const costRateLabelPlugin = {
+  id: 'costRateLabels',
+  afterDraw(chart) {
+    if(chart.canvas.id !== 'chartCostRate') return;
+    const ld = chart._labelData;
+    if(!ld) return;
     const ctx2 = chart.ctx;
-    const meta = chart.getDatasetMeta(4); // 합계 라인 (index 4)
-    if(!meta || !meta.data) return;
-    ctx2.save();
-    ctx2.font = 'bold 11px Malgun Gothic, Arial';
-    ctx2.fillStyle = '#1F3864';
-    ctx2.textAlign = 'center';
-    meta.data.forEach((pt, i) => {
-      const val = totals[i];
-      if(val > 0) ctx2.fillText(val.toFixed(1) + '%', pt.x, pt.y - 8);
+    const { rawR, subR, labR, expR, totals } = ld;
+
+    // 스택 바 각 세그먼트 중앙에 % 표시
+    // dataset 순서: 0=원재료비(rawR), 1=부재료비(subR), 2=노무비(labR), 3=경비(expR)
+    const dsLabels = [rawR, subR, labR, expR];
+    const dsColors = ['#333','#333','#333','#fff'];
+    const minShow = 2.5; // 2.5% 미만은 레이블 생략
+
+    dsLabels.forEach((dataArr, dsIdx) => {
+      const meta = chart.getDatasetMeta(dsIdx);
+      if(!meta || !meta.data) return;
+      ctx2.save();
+      ctx2.font = 'bold 10px Malgun Gothic, Arial';
+      ctx2.fillStyle = dsColors[dsIdx];
+      ctx2.textAlign = 'center';
+      ctx2.textBaseline = 'middle';
+      meta.data.forEach((bar, i) => {
+        const val = dataArr[i];
+        if(val < minShow) return;
+        const {x, y, height} = bar.getProps(['x','y','height'], true);
+        ctx2.fillText(val.toFixed(1) + '%', x, y + height / 2);
+      });
+      ctx2.restore();
     });
-    ctx2.restore();
-  };
+
+    // 합계 꺾은선 포인트 위 레이블
+    const metaLine = chart.getDatasetMeta(4);
+    if(metaLine && metaLine.data) {
+      ctx2.save();
+      ctx2.font = 'bold 12px Malgun Gothic, Arial';
+      ctx2.fillStyle = '#1F3864';
+      ctx2.textAlign = 'center';
+      ctx2.textBaseline = 'bottom';
+      metaLine.data.forEach((pt, i) => {
+        const val = totals[i];
+        if(val > 0) ctx2.fillText(val.toFixed(1) + '%', pt.x, pt.y - 5);
+      });
+      ctx2.restore();
+    }
+  }
+};
+
+// 기존 draw 오버라이드 제거 후 플러그인 방식으로 교체
+if(window._charts.costRate) {
+  Chart.registry.plugins.register(costRateLabelPlugin);
+  window._charts.costRate.update();
+}
+// 차트 생성 후 플러그인 등록 (최초 1회)
+if(!Chart.registry.plugins.get('costRateLabels')) {
+  Chart.registry.plugins.register(costRateLabelPlugin);
 }
 
 // ════════════════════════════════════
@@ -2215,10 +2258,59 @@ function renderProductionChart(allRows) {
       }
     }
   });
+
+  // 생산량 차트 데이터 레이블 (afterDraw)
+  window._charts.production._labelData = { meatKgs, qtys };
 }
 
-// ════════════════════════════════════
-// 제품별 원가율 분기 비교 차트 (제품 선택식)
+const productionLabelPlugin = {
+  id: 'productionLabels',
+  afterDraw(chart) {
+    if(chart.canvas.id !== 'chartProduction') return;
+    const ld = chart._labelData;
+    if(!ld) return;
+    const { meatKgs, qtys } = ld;
+    const ctx2 = chart.ctx;
+
+    // 원육투입량 — 막대 위
+    const metaBar = chart.getDatasetMeta(0);
+    if(metaBar && metaBar.data) {
+      ctx2.save();
+      ctx2.font = 'bold 10px Malgun Gothic, Arial';
+      ctx2.fillStyle = '#2F5496';
+      ctx2.textAlign = 'center';
+      ctx2.textBaseline = 'bottom';
+      metaBar.data.forEach((bar, i) => {
+        const val = meatKgs[i];
+        if(!val) return;
+        const {x, y} = bar.getProps(['x','y'], true);
+        const label = val >= 1000 ? (val/1000).toFixed(1)+'t' : val.toLocaleString('ko-KR')+'kg';
+        ctx2.fillText(label, x, y - 4);
+      });
+      ctx2.restore();
+    }
+
+    // 생산수량 — 꺾은선 포인트 위
+    const metaLine = chart.getDatasetMeta(1);
+    if(metaLine && metaLine.data) {
+      ctx2.save();
+      ctx2.font = 'bold 10px Malgun Gothic, Arial';
+      ctx2.fillStyle = '#ED7D31';
+      ctx2.textAlign = 'center';
+      ctx2.textBaseline = 'bottom';
+      metaLine.data.forEach((pt, i) => {
+        const val = qtys[i];
+        if(!val) return;
+        const label = val >= 10000 ? (val/10000).toFixed(1)+'만ea' : val.toLocaleString('ko-KR')+'ea';
+        ctx2.fillText(label, pt.x, pt.y - 6);
+      });
+      ctx2.restore();
+    }
+  }
+};
+if(!Chart.registry.plugins.get('productionLabels')) {
+  Chart.registry.plugins.register(productionLabelPlugin);
+}
 // ════════════════════════════════════
 window._quarterAllGroups = [];
 window._quarterData = {};
@@ -2388,7 +2480,33 @@ function drawQuarterChart() {
           grid: { color: '#f0f0f0' }
         }
       }
-    }
+    },
+    plugins: [{
+      id: 'quarterLabels',
+      afterDraw(chart) {
+        const ctx2 = chart.ctx;
+        chart.data.datasets.forEach((ds, dsIdx) => {
+          if(ds._type !== 'cost') return; // 실선만
+          const meta = chart.getDatasetMeta(dsIdx);
+          if(!meta || !meta.data) return;
+          const color = ds.borderColor || '#333';
+          ctx2.save();
+          ctx2.font = 'bold 10px Malgun Gothic, Arial';
+          ctx2.fillStyle = color;
+          ctx2.textAlign = 'center';
+          ctx2.textBaseline = 'bottom';
+          meta.data.forEach((pt, i) => {
+            const val = ds.data[i];
+            if(val === null || val === undefined) return;
+            const label = val >= 10000
+              ? (val/10000).toFixed(1).replace(/\.0$/,'') + '만원'
+              : val.toLocaleString('ko-KR') + '원';
+            ctx2.fillText(label, pt.x, pt.y - 8);
+          });
+          ctx2.restore();
+        });
+      }
+    }]
   });
 }
 
