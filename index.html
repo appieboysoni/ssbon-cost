@@ -791,10 +791,26 @@ window.saveTargetCost = async () => {
 
 window.editTargetCost = (name, cost) => {
   const sel = document.getElementById('tc-product');
-  // 해당 제품명과 가장 가깝게 매칭
-  const m = window._masters.find(x => x.name.replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim() === name);
-  if(m && sel) sel.value = m.code;
+  if(!sel) return;
+  // 퍼지 매칭 — 언더바·공백·원육종류 무시하고 가장 유사한 제품 찾기
+  const normalize = s => s.replace(/\s+/g,'').replace(/_/g,'')
+    .replace(/\(설도\)|\(우둔\)|\(홍두께\)/g,'').toLowerCase();
+  const nName = normalize(name);
+  let best = null, bestScore = 0;
+  for(const mm of window._masters) {
+    const nMaster = normalize(mm.name);
+    if(nMaster === nName) { best = mm; break; }
+    // 부분 매칭 점수
+    const shorter = nName.length < nMaster.length ? nName : nMaster;
+    const longer  = nName.length < nMaster.length ? nMaster : nName;
+    if(longer.includes(shorter) && shorter.length > bestScore) {
+      bestScore = shorter.length; best = mm;
+    }
+  }
+  if(best) sel.value = best.code;
   document.getElementById('tc-cost').value = cost;
+  // 입력 영역으로 스크롤
+  sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
 };
 
 window.deleteTargetCost = async (name) => {
