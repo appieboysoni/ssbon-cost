@@ -762,16 +762,56 @@ function renderTargetCostTable() {
   }
   tbody.innerHTML = entries
     .sort((a,b) => a[0].localeCompare(b[0]))
-    .map(([name, cost]) => `
-      <tr>
+    .map(([name, cost]) => {
+      const safeId = name.replace(/[^a-zA-Z0-9가-힣]/g,'_');
+      return `<tr id="tcrow_${safeId}">
         <td class="l">${name}</td>
-        <td style="color:var(--ok);font-weight:700">${fmtN(cost)}원</td>
+        <td id="tccell_${safeId}" style="color:var(--ok);font-weight:700;text-align:right">${fmtN(cost)}원</td>
         <td class="c">
-          <button class="btn btn-primary btn-sm" onclick="editTargetCost('${name.replace(/'/g,"\\'")}',${cost})">수정</button>
+          <button class="btn btn-primary btn-sm" onclick="inlineEditTarget('${name.replace(/'/g,"\\'")}',${cost})">✏️ 수정</button>
           <button class="btn btn-bad btn-sm" onclick="deleteTargetCost('${name.replace(/'/g,"\\'")}')">삭제</button>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
 }
+
+window.inlineEditTarget = (name, cost) => {
+  const safeId = name.replace(/[^a-zA-Z0-9가-힣]/g,'_');
+  const cell = document.getElementById('tccell_'+safeId);
+  const row  = document.getElementById('tcrow_'+safeId);
+  if(!cell) return;
+  // 이미 편집 중이면 무시
+  if(cell.querySelector('input')) return;
+  // 인라인 입력으로 교체
+  cell.innerHTML = `<input type="number" id="tcinput_${safeId}" value="${cost}" step="1"
+    style="width:130px;padding:5px 8px;border:2px solid var(--ok);border-radius:6px;font-size:13px;font-weight:700;text-align:right;background:var(--input)"
+    onkeydown="if(event.key==='Enter')saveInlineTarget('${name.replace(/'/g,"\\'")}');if(event.key==='Escape')cancelInlineTarget('${name.replace(/'/g,"\\'")}',${cost})"
+    onfocus="this.select()">`;
+  // 버튼 교체
+  const btnCell = cell.nextElementSibling;
+  btnCell.innerHTML = `
+    <button class="btn btn-ok btn-sm" onclick="saveInlineTarget('${name.replace(/'/g,"\\'")}')">✅ 저장</button>
+    <button class="btn btn-primary btn-sm" onclick="cancelInlineTarget('${name.replace(/'/g,"\\'")}',${cost})">취소</button>`;
+  // 자동 포커스
+  setTimeout(()=>document.getElementById('tcinput_'+safeId)?.focus(), 50);
+};
+
+window.saveInlineTarget = async (name) => {
+  const safeId = name.replace(/[^a-zA-Z0-9가-힣]/g,'_');
+  const input = document.getElementById('tcinput_'+safeId);
+  if(!input) return;
+  const newCost = parseFloat(input.value);
+  if(!newCost || newCost <= 0) { showToast('❌ 올바른 금액을 입력하세요'); input.focus(); return; }
+  const docId = name.replace(/[\/\s]/g,'_');
+  await setDoc(doc(db,'targetCost', docId), { name, cost: newCost });
+  window._targetCost[name] = newCost;
+  showToast(`✅ ${name} → ${fmtN(newCost)}원 저장`);
+  renderTargetCostTable();
+};
+
+window.cancelInlineTarget = (name, cost) => {
+  renderTargetCostTable();
+};
 
 window.saveTargetCost = async () => {
   const sel = document.getElementById('tc-product');
