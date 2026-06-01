@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>순수본 2공장 CAPA 분석기</title>
+<style>
+:root {
+  --p:#1F3864; --mid:#2F5496; --lt:#D6E4F7;
+  --ok:#1D9E75; --warn:#ED7D31; --bad:#C00000;
+  --pur:#8064A2; --teal:#0D7377;
+  --bg:#f5f6fa; --card:#fff; --border:#e4e6ef;
+  --text:#1a1d2e; --sub:#6b7280; --light:#f9fafb;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--text);font-size:13px}
+
+/* ─ 헤더 */
+.hdr{background:linear-gradient(135deg,var(--p) 0%,var(--mid) 100%);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.hdr-logo{font-size:18px;font-weight:700;letter-spacing:-0.5px}
+.hdr-sub{font-size:11px;opacity:.75}
+.hdr-badge{margin-left:auto;background:rgba(255,255,255,.18);padding:4px 10px;border-radius:20px;font-size:10px}
+
+/* ─ 탭 */
+.tab-nav{background:var(--card);border-bottom:1px solid var(--border);padding:0 20px;display:flex;gap:0;overflow-x:auto}
+.tnav{padding:11px 16px;border:none;background:none;font-size:12px;font-weight:500;color:var(--sub);cursor:pointer;border-bottom:2.5px solid transparent;white-space:nowrap;font-family:inherit;transition:color .15s}
+.tnav.active{color:var(--p);border-bottom-color:var(--p)}
+.tnav:hover:not(.active){color:var(--text)}
+
+/* ─ 페이지 */
+.page{display:none;padding:16px 20px}.page.active{display:block}
+
+/* ─ KPI 카드 */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.kpi{background:var(--card);border-radius:10px;padding:12px 14px;border:1px solid var(--border);position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:var(--accent,var(--mid))}
+.kpi .kl{font-size:10px;color:var(--sub);margin-bottom:3px}
+.kpi .kv{font-size:22px;font-weight:600;color:var(--accent,var(--p))}
+.kpi .ks{font-size:10px;color:var(--sub);margin-top:2px}
+
+/* ─ 섹션 */
+.section{background:var(--card);border-radius:10px;border:1px solid var(--border);margin-bottom:14px;overflow:hidden}
+.sec-hdr{padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--p);display:flex;align-items:center;gap:8px;background:var(--light)}
+.sec-body{padding:14px}
+
+/* ─ 표 */
+.tbl{width:100%;border-collapse:collapse;font-size:11px}
+.tbl th{background:var(--p);color:#fff;padding:6px 8px;text-align:left;font-weight:500}
+.tbl th.c{text-align:center}.tbl th.r{text-align:right}
+.tbl td{padding:5px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl td.c{text-align:center}.tbl td.r{text-align:right}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:#f8f9ff}
+.tbl td.ok{color:var(--ok);font-weight:600}.tbl td.warn{color:var(--warn);font-weight:600}.tbl td.bad{color:var(--bad);font-weight:600}
+
+/* ─ 배지 */
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:500}
+.badge.ok{background:#d1fae5;color:#065f46}
+.badge.warn{background:#fef3c7;color:#92400e}
+.badge.bad{background:#fee2e2;color:#991b1b}
+.badge.mid{background:#dbeafe;color:#1e40af}
+.badge.pur{background:#ede9fe;color:#5b21b6}
+
+/* ─ 타임테이블 */
+.tt-wrap{overflow-x:auto}
+.tt{position:relative;min-width:800px;background:var(--light);border-radius:8px;padding:10px 12px 30px 140px;border:1px solid var(--border)}
+.tt-bar{position:absolute;height:22px;border-radius:5px;display:flex;align-items:center;padding:0 6px;font-size:9px;font-weight:600;color:#fff;overflow:hidden;white-space:nowrap;cursor:default;transition:opacity .15s}
+.tt-bar:hover{opacity:.85}
+.tt-lbl{position:absolute;width:134px;right:calc(100% - 138px);text-align:right;font-size:10px;color:var(--sub);padding-right:10px;display:flex;align-items:center;justify-content:flex-end}
+.tt-vl{position:absolute;top:0;bottom:26px;width:1px;background:var(--border);opacity:.7}
+.tt-vl.hour-mark{background:#ccc;opacity:1}
+.tt-axis{position:absolute;bottom:26px;left:140px;right:12px;height:1px;background:var(--border)}
+.tt-ticks{position:absolute;bottom:6px;left:140px;right:12px;display:flex;justify-content:space-between;font-size:9px;color:var(--sub)}
+.tt-now{position:absolute;top:0;bottom:26px;width:2px;background:rgba(192,0,0,.5);z-index:10}
+.tt-now::after{content:attr(data-time);position:absolute;top:-2px;left:4px;font-size:9px;color:var(--bad);white-space:nowrap;font-weight:600}
+
+/* ─ 병목 바 */
+.bn-item{margin-bottom:8px}
+.bn-hd{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px}
+.bn-hd .lbl{color:var(--sub)}
+.bn-hd .val{font-weight:600;color:var(--text)}
+.bn-track{height:24px;background:var(--light);border-radius:5px;overflow:hidden;border:1px solid var(--border)}
+.bn-fill{height:100%;border-radius:5px;display:flex;align-items:center;padding-left:8px;font-size:10px;font-weight:600;color:#fff;transition:width .4s ease}
+
+/* ─ 슬라이더 */
+.ctrl-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:11px}
+.ctrl-row label{width:145px;color:var(--sub);flex-shrink:0;font-weight:500}
+.ctrl-row input[type=range]{flex:1;accent-color:var(--mid)}
+.ctrl-row select{flex:1;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit;background:var(--card)}
+.ctrl-out{width:90px;text-align:right;font-weight:600;color:var(--p);font-size:11px}
+
+/* ─ 결과 카드 */
+.res-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.res-card{background:var(--light);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:center}
+.res-card .rv{font-size:18px;font-weight:600;margin-bottom:2px}
+.res-card .rl{font-size:10px;color:var(--sub)}
+
+/* ─ 스텝 */
+.step-list{display:flex;flex-direction:column;gap:10px}
+.step{display:flex;gap:10px;align-items:flex-start}
+.step-dot{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;margin-top:2px}
+.step-body{flex:1;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px}
+.step-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px}
+.step-desc{font-size:11px;color:var(--sub);line-height:1.6}
+.step-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+
+/* ─ 범례 */
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--sub)}
+.leg-box{width:14px;height:14px;border-radius:3px;flex-shrink:0}
+
+/* ─ 알림박스 */
+.alert{padding:10px 14px;border-radius:8px;font-size:11px;line-height:1.7;margin-bottom:10px}
+.alert.ok{background:#d1fae5;border:1px solid #6ee7b7;color:#065f46}
+.alert.warn{background:#fef3c7;border:1px solid #fcd34d;color:#92400e}
+.alert.bad{background:#fee2e2;border:1px solid #fca5a5;color:#991b1b}
+.alert.info{background:#dbeafe;border:1px solid #93c5fd;color:#1e40af}
+
+/* ─ 야간 비용 계산 */
+.cost-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cost-card{background:var(--light);border:1px solid var(--border);border-radius:8px;padding:12px}
+.cost-title{font-size:11px;font-weight:600;color:var(--text);margin-bottom:8px}
+.cost-row{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid var(--border)}
+.cost-row:last-child{border:none;font-weight:600;font-size:12px;padding-top:6px}
+
+/* ─ 2열 그리드 */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+/* ─ 실측 데이터 입력 */
+.data-row{display:grid;grid-template-columns:80px 100px 70px 70px 70px 70px 80px auto;gap:6px;align-items:center;margin-bottom:6px;font-size:11px}
+.data-row input{padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;width:100%;font-family:inherit}
+.data-row input:focus{outline:none;border-color:var(--mid)}
+
+/* ─ 반응형 */
+@media(max-width:700px){
+  .kpi-row{grid-template-columns:1fr 1fr}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .res-grid{grid-template-columns:1fr 1fr}
+  .cost-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div>
+    <div class="hdr-logo">🏭 순수본 2공장 CAPA 분석기</div>
+    <div class="hdr-sub">설비 실측 기반 생산능력 분석 · 타임테이블 · 시뮬레이터</div>
+  </div>
+  <div class="hdr-badge">v4.0 · 실측 기준 2026-05</div>
+</div>
+
+<div class="tab-nav">
+  <button class="tnav active" onclick="goPage('overview',this)">📊 개요</button>
+  <button class="tnav" onclick="goPage('timetable',this)">⏱ 타임테이블</button>
+  <button class="tnav" onclick="goPage('bottleneck',this)">🔴 병목 분석</button>
+  <button class="tnav" onclick="goPage('simulator',this)">🎛 CAPA 시뮬레이터</button>
+  <button class="tnav" onclick="goPage('mixed',this)">🔀 혼합생산</button>
+  <button class="tnav" onclick="goPage('nightshift',this)">🌙 야간 운영</button>
+  <button class="tnav" onclick="goPage('roadmap',this)">🗺 단계별 목표</button>
+  <button class="tnav" onclick="goPage('realdata',this)">📋 실측 데이터</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     1. 개요
+══════════════════════════════════════ -->
+<div id="page-overview" class="page active">
+  <div class="kpi-row">
+    <div class="kpi" style="--accent:var(--bad)">
+      <div class="kl">현재 실질 CAPA (파쇄 병목)</div>
+      <div class="kv">1,506</div>
+      <div class="ks">kg/일 · 홍두께 기준 실측</div>
+    </div>
+    <div class="kpi" style="--accent:var(--warn)">
+      <div class="kl">야간전처리 후 목표 (Step 1)</div>
+      <div class="kv">2,490</div>
+      <div class="ks">kg/일 · 15명×20.8×8hr</div>
+    </div>
+    <div class="kpi" style="--accent:var(--ok)">
+      <div class="kl">파쇄기 2대 목표 (Step 2)</div>
+      <div class="kv">4,150</div>
+      <div class="ks">kg/일 · 25명×20.8×8hr</div>
+    </div>
+    <div class="kpi" style="--accent:var(--mid)">
+      <div class="kl">자숙 설비 이론 상한</div>
+      <div class="kv">12,800</div>
+      <div class="ks">kg/일 · 모드A 연장 기준</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="section">
+      <div class="sec-hdr">🏗 탱크 구성 및 공정 스펙</div>
+      <div class="sec-body">
+        <table class="tbl">
+          <thead><tr><th>공정</th><th>설비</th><th class="c">스펙</th><th class="r">이론 CAPA</th></tr></thead>
+          <tbody>
+            <tr><td>RF 해동</td><td>RF해동기 1대</td><td class="c">35분/배치</td><td class="r ok">800 kg/배치</td></tr>
+            <tr><td>방혈</td><td>방혈실</td><td class="c">12~16hr</td><td class="r">전날 준비 필수</td></tr>
+            <tr><td>자숙 가압</td><td><span class="badge mid">T1·T2 신규 2대</span></td><td class="c">115℃ · 2hr+벤트0.5hr</td><td class="r ok">4사이클/일 = 6,400 kg</td></tr>
+            <tr><td>자숙 상압</td><td><span class="badge warn">T3~T6 기존 4대</span></td><td class="c">95℃ · 4.5hr</td><td class="r warn">2사이클/일 = 6,400 kg</td></tr>
+            <tr><td>파쇄·선별</td><td>파쇄기 1대 <span class="badge pur">+1대 예정</span></td><td class="c">이론 800 kg/hr</td><td class="r bad">실질 선별 병목</td></tr>
+            <tr><td>내포장 1호기</td><td>2열 소포장</td><td class="c">60 ea/min</td><td class="r ok">28,800 ea/일</td></tr>
+            <tr><td>내포장 2호기</td><td>대용량(1~3kg)</td><td class="c">15 ea/min</td><td class="r ok">7,200 ea/일</td></tr>
+            <tr><td>내포장 3·4호기</td><td>로터리 2대</td><td class="c">각 45 ea/min</td><td class="r ok">각 21,600 ea/일</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-hdr">📐 실측 생산성 기준치 (4일 실측)</div>
+      <div class="sec-body">
+        <table class="tbl">
+          <thead><tr><th>공정</th><th class="c">부위</th><th class="r">실측 생산성</th><th class="c">데이터</th><th>비고</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="2">전처리</td><td class="c">설도</td><td class="r ok">84.1 kg/인시</td><td class="c">n=3</td><td>5/22·27·28</td></tr>
+            <tr><td class="c">홍두께</td><td class="r warn">59.9 kg/인시</td><td class="c">n=2</td><td>5/22·29 · 설도의 71%</td></tr>
+            <tr><td rowspan="2">파쇄·선별</td><td class="c">설도</td><td class="r warn">28.2 kg/인시</td><td class="c">n=3</td><td>소분 공정 포함</td></tr>
+            <tr><td class="c">홍두께</td><td class="r bad">20.8 kg/인시</td><td class="c">n=2</td><td>덩어리 선별 · 설도의 74%</td></tr>
+            <tr><td>자숙 수율</td><td class="c">전 부위</td><td class="r ok">57~59%</td><td class="c">n=4</td><td>부위 무관 안정적</td></tr>
+            <tr><td colspan="5"><div class="alert info" style="margin:4px 0 0">⚠️ 5/29 파쇄 인원 역설: 16명→14~16 kg/인시, 9명→20~27 kg/인시. 인원 과다 시 동선 간섭 발생. 파쇄기 2대 증설 시 라인 분리 필수.</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-hdr">📋 운영 모드별 CAPA 요약</div>
+    <div class="sec-body">
+      <table class="tbl">
+        <thead><tr><th>모드</th><th>탱크 구성</th><th class="r">자숙 이론</th><th class="r">파쇄 현재</th><th class="r">실질 CAPA</th><th class="c">병목</th><th>달성 조건</th></tr></thead>
+        <tbody>
+          <tr><td><strong>모드A 기본</strong><br><small>장조림 단독 06~15시</small></td><td>가압T1·T2 × 3사이클<br>상압T3~T6 × 1사이클</td><td class="r">8,800 kg</td><td class="r bad">1,506 kg</td><td class="r bad">1,506 kg</td><td class="c"><span class="badge bad">파쇄</span></td><td>현재 운영</td></tr>
+          <tr><td><strong>모드A 연장</strong><br><small>장조림 단독 06~17:30</small></td><td>가압T1·T2 × 4사이클<br>상압T3~T6 × 2사이클</td><td class="r">12,800 kg</td><td class="r bad">1,506 kg</td><td class="r bad">1,506 kg</td><td class="c"><span class="badge bad">파쇄</span></td><td>파쇄 병목 미해소 시 의미 없음</td></tr>
+          <tr><td><strong>모드B FC</strong><br><small>FC 3kg 전용 05~</small></td><td>상압 6대 × 1사이클</td><td class="r">4,800 kg</td><td class="r warn">2,490 kg*</td><td class="r warn">2,490 kg</td><td class="c"><span class="badge warn">파쇄</span></td><td>*FC는 선별 부담 낮음</td></tr>
+          <tr><td><strong>모드C 혼합</strong><br><small>장조림+FC 동시</small></td><td>가압2=장조림<br>상압4=FC 3kg</td><td class="r">16,000 kg</td><td class="r bad">제한적</td><td class="r bad">~2,000 kg</td><td class="c"><span class="badge bad">파쇄</span></td><td>5/22 실측 참고</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     2. 타임테이블
+══════════════════════════════════════ -->
+<div id="page-timetable" class="page">
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:11px;font-weight:600;color:var(--sub)">시나리오:</span>
+    <button class="tnav active" onclick="setTTScen('current',this)" style="padding:5px 12px;border:1px solid var(--border);border-radius:20px">현재 (홍두께 주간)</button>
+    <button class="tnav" onclick="setTTScen('seodo',this)" style="padding:5px 12px;border:1px solid var(--border);border-radius:20px">설도 단독 주간</button>
+    <button class="tnav" onclick="setTTScen('night_pre',this)" style="padding:5px 12px;border:1px solid var(--border);border-radius:20px">야간 전처리+자숙</button>
+    <button class="tnav" onclick="setTTScen('night_late',this)" style="padding:5px 12px;border:1px solid var(--border);border-radius:20px">주간후반+야간자숙</button>
+    <button class="tnav" onclick="setTTScen('double_frag',this)" style="padding:5px 12px;border:1px solid var(--border);border-radius:20px">파쇄기 2대+야간</button>
+    <button class="tnav" onclick="setTTScen('mixed522',this)" style="padding:5px 12px;border:1px solid var(--border);border-radius:20px">5/22 혼합생산 실측</button>
+  </div>
+
+  <div class="legend">
+    <div class="leg-item"><div class="leg-box" style="background:#1F3864"></div>전처리 (주간)</div>
+    <div class="leg-item"><div class="leg-box" style="background:#5B9BD5"></div>전처리 (야간)</div>
+    <div class="leg-item"><div class="leg-box" style="background:#1D9E75"></div>자숙 (가압)</div>
+    <div class="leg-item"><div class="leg-box" style="background:#ED7D31"></div>자숙 (상압)</div>
+    <div class="leg-item"><div class="leg-box" style="background:#8064A2"></div>파쇄·선별</div>
+    <div class="leg-item"><div class="leg-box" style="background:#C00000"></div>내포장</div>
+    <div class="leg-item"><div class="leg-box" style="background:#888;opacity:.5"></div>대기</div>
+  </div>
+
+  <div class="section">
+    <div class="sec-hdr" id="tt-title">타임테이블</div>
+    <div class="sec-body" style="padding:10px">
+      <div class="tt-wrap">
+        <div class="tt" id="tt-canvas"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert info" id="tt-summary"></div>
+
+  <div class="section">
+    <div class="sec-hdr">📊 시나리오별 CAPA 비교</div>
+    <div class="sec-body">
+      <table class="tbl">
+        <thead><tr><th>시나리오</th><th class="r">파쇄 CAPA</th><th class="r">전일 대비</th><th class="c">병목</th><th>핵심 조건</th></tr></thead>
+        <tbody>
+          <tr><td>현재 (홍두께 주간 11명×6.6hr)</td><td class="r bad">1,506 kg/일</td><td class="c">—</td><td class="c"><span class="badge bad">전처리→파쇄 연쇄</span></td><td>추가 비용 없음</td></tr>
+          <tr><td>설도 단독 (7명×1.2hr 전처리)</td><td class="r warn">2,768 kg/일</td><td class="r ok">+84%</td><td class="c"><span class="badge warn">파쇄</span></td><td>부위 변경만으로 개선</td></tr>
+          <tr><td>야간 전처리 (외국인 9명 22:00)</td><td class="r warn">2,490 kg/일</td><td class="r ok">+65%</td><td class="c"><span class="badge warn">파쇄</span></td><td>야간수당만 추가</td></tr>
+          <tr><td>주간후반 전처리+야간자숙</td><td class="r warn">2,490 kg/일</td><td class="r ok">+65%</td><td class="c"><span class="badge warn">파쇄</span></td><td>자숙 2~3명 야간 잔류</td></tr>
+          <tr><td>파쇄기 2대+야간전처리 (20명×8hr)</td><td class="r ok">3,328 kg/일</td><td class="r ok">+121%</td><td class="c"><span class="badge ok">크게 완화</span></td><td>파쇄기 증설 + 야간</td></tr>
+          <tr><td>파쇄기 2대+25명×25kg/hr×8hr</td><td class="r ok">5,000 kg/일</td><td class="r ok">+232%</td><td class="c"><span class="badge ok">자숙 수요</span></td><td>숙련도 향상 필요</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     3. 병목 분석
+══════════════════════════════════════ -->
+<div id="page-bottleneck" class="page">
+  <div class="section">
+    <div class="sec-hdr">🔴 각 공정 독립 최대 CAPA (타 공정 제약 없다고 가정)</div>
+    <div class="sec-body" id="indep-bars"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="section">
+      <div class="sec-hdr">📉 파쇄·선별 개선 시나리오</div>
+      <div class="sec-body" id="frag-scen-bars"></div>
+    </div>
+    <div class="section">
+      <div class="sec-hdr">🌾 전처리 부위별 CAPA (주간 11명 기준)</div>
+      <div class="sec-body" id="pretreat-bars"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-hdr">⚠️ 파쇄 인원 역설 분석 (5/29 실측)</div>
+    <div class="sec-body">
+      <div class="alert warn">5/29 홍두께 파쇄 배치별 실측: 인원이 많을수록 생산성이 낮아지는 역설 현상 발생. 파쇄 테이블 공간·동선 간섭이 원인으로 추정.</div>
+      <table class="tbl" style="margin-top:8px">
+        <thead><tr><th>시간대</th><th class="c">인원</th><th class="r">배치 생산성</th><th class="r">인당 생산성</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr><td>10:46~12:06 (초반 3배치)</td><td class="c bad">16명</td><td class="r bad">~107 kg/배치</td><td class="r bad">14~16 kg/인시</td><td>인원 과다 → 동선 간섭</td></tr>
+          <tr><td>12:06~15:48 (중반 7배치)</td><td class="c ok">9명</td><td class="r ok">~103 kg/배치</td><td class="r ok">20~27 kg/인시</td><td>최적 구간</td></tr>
+          <tr><td>15:48~16:15</td><td class="c bad">15명</td><td class="r bad">116 kg/배치</td><td class="r bad">17 kg/인시</td><td>다시 저하</td></tr>
+          <tr><td>16:15~17:22 (마지막 3배치)</td><td class="c ok">9명</td><td class="r ok">~96 kg/배치</td><td class="r ok">23~32 kg/인시</td><td>피로도 있으나 공간 최적</td></tr>
+        </tbody>
+      </table>
+      <div class="alert bad" style="margin-top:8px">👉 파쇄기 2대 증설 시 반드시 라인별 독립 운영 (각 9~10명씩 분리). 한 라인에 몰지 말 것.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     4. CAPA 시뮬레이터
+══════════════════════════════════════ -->
+<div id="page-simulator" class="page">
+  <div class="grid2">
+    <div>
+      <div class="section">
+        <div class="sec-hdr">🌾 전처리 조건</div>
+        <div class="sec-body">
+          <div class="ctrl-row">
+            <label>원육 부위</label>
+            <select id="s-part" onchange="runSim()">
+              <option value="84.1">설도 (84.1 kg/인시)</option>
+              <option value="59.9" selected>홍두께 (59.9 kg/인시)</option>
+              <option value="72.0">우둔 (추정 72.0 kg/인시)</option>
+            </select>
+            <span class="ctrl-out" id="s-part-out">59.9 kg/인시</span>
+          </div>
+          <div class="ctrl-row">
+            <label>전처리 인원</label>
+            <input type="range" min="5" max="20" value="11" step="1" oninput="runSim()" id="s-pre-w">
+            <span class="ctrl-out" id="s-pre-w-out">11 명</span>
+          </div>
+          <div class="ctrl-row">
+            <label>목표 원육량</label>
+            <input type="range" min="500" max="6000" value="2737" step="100" oninput="runSim()" id="s-meat">
+            <span class="ctrl-out" id="s-meat-out">2,737 kg</span>
+          </div>
+          <div class="ctrl-row">
+            <label>야간 전처리</label>
+            <select id="s-night-pre" onchange="runSim()">
+              <option value="0">없음 (주간만)</option>
+              <option value="9">야간 9명 (22:00 출근)</option>
+              <option value="12">야간 12명 (최대)</option>
+            </select>
+            <span class="ctrl-out" id="s-night-out">없음</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-hdr">🔧 자숙 조건</div>
+        <div class="sec-body">
+          <div class="ctrl-row">
+            <label>가압탱크(T1·T2) 사이클</label>
+            <input type="range" min="1" max="5" value="3" step="1" oninput="runSim()" id="s-pc">
+            <span class="ctrl-out" id="s-pc-out">3 사이클</span>
+          </div>
+          <div class="ctrl-row">
+            <label>상압탱크(T3~T6) 사이클</label>
+            <input type="range" min="1" max="3" value="1" step="1" oninput="runSim()" id="s-ac">
+            <span class="ctrl-out" id="s-ac-out">1 사이클</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section">
+        <div class="sec-hdr">⚙️ 파쇄·선별 조건</div>
+        <div class="sec-body">
+          <div class="ctrl-row">
+            <label>파쇄기 대수</label>
+            <select id="s-frag-m" onchange="runSim()">
+              <option value="1" selected>1대 (현재)</option>
+              <option value="2">2대 (증설)</option>
+            </select>
+            <span class="ctrl-out" id="s-frag-m-out">1대</span>
+          </div>
+          <div class="ctrl-row">
+            <label>선별 총 인원</label>
+            <input type="range" min="5" max="35" value="11" step="1" oninput="runSim()" id="s-frag-w">
+            <span class="ctrl-out" id="s-frag-w-out">11 명</span>
+          </div>
+          <div class="ctrl-row">
+            <label>인당 생산성</label>
+            <input type="range" min="15" max="45" value="20.8" step="2.5" oninput="runSim()" id="s-frag-pr">
+            <span class="ctrl-out" id="s-frag-pr-out">20.8 kg/인시</span>
+          </div>
+          <div class="ctrl-row">
+            <label>파쇄 가동시간</label>
+            <input type="range" min="4" max="11" value="6.6" step="0.5" oninput="runSim()" id="s-frag-h">
+            <span class="ctrl-out" id="s-frag-h-out">6.6 hr</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="sim-verdict-box"></div>
+    </div>
+  </div>
+
+  <div class="res-grid" id="sim-res"></div>
+
+  <div class="section" style="margin-top:14px">
+    <div class="sec-hdr">⏱ 시뮬레이션 타임테이블</div>
+    <div class="sec-body" style="padding:10px">
+      <div class="tt-wrap"><div class="tt" id="sim-tt" style="height:200px"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     5. 혼합생산
+══════════════════════════════════════ -->
+<div id="page-mixed" class="page">
+  <div class="alert info">혼합생산(모드C) = 가압T1·T2(장조림) + 상압T3~T6(FC 3kg) 동시 생산. 5/22 실측 데이터 기반.</div>
+
+  <div class="grid2" style="margin-top:12px">
+    <div class="section">
+      <div class="sec-hdr">📊 5/22 혼합생산 실측</div>
+      <div class="sec-body">
+        <table class="tbl">
+          <thead><tr><th>공정</th><th>품목</th><th class="r">투입 kg</th><th class="r">산출 kg</th><th class="c">인원</th><th class="c">시간</th><th class="r">생산성</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="2">전처리</td><td>홍두께</td><td class="r">1,400</td><td class="r">1,271</td><td class="c">7명</td><td class="c">3.3h</td><td class="r warn">61.2 kg/인시</td></tr>
+            <tr><td>설도</td><td class="r">300</td><td class="r">288</td><td class="c">7명</td><td class="c">0.5h</td><td class="r ok">80.9 kg/인시</td></tr>
+            <tr><td rowspan="2">자숙</td><td>홍두께 (상압)</td><td class="r">1,271</td><td class="r">728</td><td class="c">2명</td><td class="c">6.0h</td><td class="r">수율 57.2%</td></tr>
+            <tr><td>설도 (가압?)</td><td class="r">288</td><td class="r">146</td><td class="c">2명</td><td class="c">2.9h</td><td class="r bad">수율 50.7%⚠</td></tr>
+            <tr><td rowspan="2">파쇄</td><td>홍두께</td><td class="r">728</td><td class="r">697</td><td class="c">11명</td><td class="c">3.1h</td><td class="r bad">20.6 kg/인시</td></tr>
+            <tr><td>설도</td><td class="r">146</td><td class="r">129</td><td class="c">11명</td><td class="c">0.5h</td><td class="r warn">23.0 kg/인시</td></tr>
+            <tr><td rowspan="2">포장</td><td>미니 70g</td><td class="r">—</td><td class="r">5,737 ea</td><td class="c">7명</td><td class="c">2.0h</td><td class="r ok">409 EA/인시</td></tr>
+            <tr><td>FC 3kg</td><td class="r">—</td><td class="r">519 ea</td><td class="c">6명</td><td class="c">2.2h</td><td class="r">39.9 EA/인시</td></tr>
+          </tbody>
+        </table>
+        <div class="alert warn" style="margin-top:8px">⚠ 설도 자숙 수율 50.7%: 소량(288kg) 투입으로 열전달 불균일 추정. 탱크당 최소 투입량 기준 수립 필요.</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-hdr">🔀 혼합생산 시뮬레이터</div>
+      <div class="sec-body">
+        <div class="ctrl-row">
+          <label>장조림 투입량 (가압)</label>
+          <input type="range" min="0" max="3200" value="1600" step="100" oninput="runMixed()" id="m-jj">
+          <span class="ctrl-out" id="m-jj-out">1,600 kg</span>
+        </div>
+        <div class="ctrl-row">
+          <label>FC 3kg 투입량 (상압)</label>
+          <input type="range" min="0" max="3200" value="800" step="100" oninput="runMixed()" id="m-fc">
+          <span class="ctrl-out" id="m-fc-out">800 kg</span>
+        </div>
+        <div class="ctrl-row">
+          <label>파쇄 인원</label>
+          <input type="range" min="5" max="25" value="11" step="1" oninput="runMixed()" id="m-fw">
+          <span class="ctrl-out" id="m-fw-out">11 명</span>
+        </div>
+        <div id="mixed-res" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-hdr">⏱ 혼합생산 타임테이블 (5/22 실측 기반)</div>
+    <div class="sec-body" style="padding:10px">
+      <div class="tt-wrap"><div class="tt" id="mixed-tt" style="height:220px"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     6. 야간 운영
+══════════════════════════════════════ -->
+<div id="page-nightshift" class="page">
+  <div class="alert info">야간 가용 인원: 외국인 7명 (고정) + 지원 최대 5명 = <strong>최대 12명</strong>. 자숙 전담 2~3명이면 충분하므로 전처리에 9~10명 집중 가능.</div>
+
+  <div class="grid2" style="margin-top:12px">
+    <div class="section">
+      <div class="sec-hdr">🌙 야간 운영 시나리오 3가지</div>
+      <div class="sec-body">
+        <table class="tbl">
+          <thead><tr><th>시나리오</th><th>흐름</th><th class="r">파쇄 가동시간</th><th class="r">CAPA 효과</th></tr></thead>
+          <tbody>
+            <tr><td><strong>X. 야간 전처리+자숙</strong></td><td>22:00 전처리 → ~03:11 완료 → 새벽 자숙 → 09:00 파쇄 8hr</td><td class="r ok">8.0 hr</td><td class="r ok">+65% (2,490 kg)</td></tr>
+            <tr><td><strong>Y. 주간후반 전처리+야간자숙</strong></td><td>주간 13~17시 전처리 완료 → 야간 2~3명 자숙만 → 익일 09:00 파쇄</td><td class="r ok">8.0 hr</td><td class="r ok">+65% (2,490 kg)</td></tr>
+            <tr><td><strong>Z. 전처리팀이 야간 외포장</strong></td><td>주간 포장·멸균·제수·외포장 → 야간에 전처리인원이 외포장 마무리</td><td class="r warn">6.6 hr (동일)</td><td class="r warn">주간 포장 효율화</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-hdr">💰 야간 비용 대비 효과 계산기</div>
+      <div class="sec-body">
+        <div class="ctrl-row">
+          <label>야간 인원 수</label>
+          <input type="range" min="5" max="12" value="9" step="1" oninput="runNightCost()" id="n-workers">
+          <span class="ctrl-out" id="n-workers-out">9 명</span>
+        </div>
+        <div class="ctrl-row">
+          <label>시간당 기본급 (원)</label>
+          <input type="range" min="9000" max="15000" value="10030" step="500" oninput="runNightCost()" id="n-wage">
+          <span class="ctrl-out" id="n-wage-out">10,030원</span>
+        </div>
+        <div class="ctrl-row">
+          <label>야간 작업시간</label>
+          <input type="range" min="3" max="8" value="5.2" step="0.5" oninput="runNightCost()" id="n-hrs">
+          <span class="ctrl-out" id="n-hrs-out">5.2 hr</span>
+        </div>
+        <div class="ctrl-row">
+          <label>130g 공급단가</label>
+          <input type="range" min="2000" max="5000" value="3332" step="100" oninput="runNightCost()" id="n-price">
+          <span class="ctrl-out" id="n-price-out">3,332원</span>
+        </div>
+        <div id="night-cost-res"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-hdr">⏱ 시나리오 X: 야간 전처리+새벽 자숙 타임테이블</div>
+    <div class="sec-body" style="padding:10px">
+      <div class="legend">
+        <div class="leg-item"><div class="leg-box" style="background:#5B9BD5"></div>야간 전처리</div>
+        <div class="leg-item"><div class="leg-box" style="background:#1D9E75"></div>새벽 자숙</div>
+        <div class="leg-item"><div class="leg-box" style="background:#8064A2"></div>파쇄·선별 (8hr 풀가동)</div>
+        <div class="leg-item"><div class="leg-box" style="background:#C00000"></div>내포장</div>
+      </div>
+      <div class="tt-wrap"><div class="tt" id="night-tt" style="height:220px"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     7. 단계별 목표
+══════════════════════════════════════ -->
+<div id="page-roadmap" class="page">
+  <div class="step-list" id="roadmap-list"></div>
+
+  <div class="section" style="margin-top:14px">
+    <div class="sec-hdr">📊 단계별 CAPA 달성 추이</div>
+    <div class="sec-body" id="roadmap-bars"></div>
+  </div>
+
+  <div class="section" style="margin-top:14px">
+    <div class="sec-hdr">⏱ 단계별 타임테이블 비교</div>
+    <div class="sec-body" style="padding:10px">
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <button class="tnav active" onclick="setRoadmapTT('current',this)" style="padding:4px 10px;border:1px solid var(--border);border-radius:16px;font-size:11px">현재</button>
+        <button class="tnav" onclick="setRoadmapTT('step1',this)" style="padding:4px 10px;border:1px solid var(--border);border-radius:16px;font-size:11px">Step 1</button>
+        <button class="tnav" onclick="setRoadmapTT('step2',this)" style="padding:4px 10px;border:1px solid var(--border);border-radius:16px;font-size:11px">Step 2</button>
+        <button class="tnav" onclick="setRoadmapTT('step3',this)" style="padding:4px 10px;border:1px solid var(--border);border-radius:16px;font-size:11px">Step 3</button>
+      </div>
+      <div class="tt-wrap"><div class="tt" id="roadmap-tt" style="height:220px"></div></div>
+      <div class="alert info" id="roadmap-tt-summary" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     8. 실측 데이터
+══════════════════════════════════════ -->
+<div id="page-realdata" class="page">
+  <div class="section">
+    <div class="sec-hdr">📋 실측 데이터 현황 (스마트팩토리 기반)</div>
+    <div class="sec-body">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>날짜</th><th>제품</th><th>부위</th>
+            <th class="r">전처리 kg/인시</th>
+            <th class="r">파쇄 kg/인시</th>
+            <th class="r">자숙 수율</th>
+            <th class="r">투입 kg</th>
+            <th class="r">파쇄시간</th>
+            <th>특이사항</th>
+          </tr>
+        </thead>
+        <tbody id="realdata-tbody"></tbody>
+        <tfoot>
+          <tr style="background:var(--light);font-weight:600">
+            <td colspan="3">설도 평균</td>
+            <td class="r ok">84.1 kg/인시</td>
+            <td class="r warn">28.2 kg/인시</td>
+            <td class="r ok">57.8%</td>
+            <td colspan="3"></td>
+          </tr>
+          <tr style="background:var(--light);font-weight:600">
+            <td colspan="3">홍두께 평균</td>
+            <td class="r warn">59.9 kg/인시</td>
+            <td class="r bad">20.8 kg/인시</td>
+            <td class="r ok">57.2~58.7%</td>
+            <td colspan="3">설도 대비 71%/74%</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-hdr">📈 데이터 부족 현황 및 향후 수집 계획</div>
+    <div class="sec-body">
+      <table class="tbl">
+        <thead><tr><th>항목</th><th class="c">현재 n</th><th class="c">목표 n</th><th class="c">신뢰도</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr><td>설도 전처리 생산성</td><td class="c ok">3</td><td class="c">10+</td><td class="c"><span class="badge warn">보통</span></td><td>범위 80.9~87.3 kg/인시, 편차 있음</td></tr>
+          <tr><td>홍두께 전처리 생산성</td><td class="c warn">2</td><td class="c">10+</td><td class="c"><span class="badge bad">낮음</span></td><td>추가 데이터 필요</td></tr>
+          <tr><td>설도 파쇄 생산성</td><td class="c ok">3</td><td class="c">10+</td><td class="c"><span class="badge warn">보통</span></td><td>23~31 kg/인시 편차 큼</td></tr>
+          <tr><td>홍두께 파쇄 생산성</td><td class="c warn">2</td><td class="c">10+</td><td class="c"><span class="badge bad">낮음</span></td><td>추가 데이터 필요</td></tr>
+          <tr><td>혼합생산</td><td class="c warn">1</td><td class="c">5+</td><td class="c"><span class="badge bad">낮음</span></td><td>5/22 1건 → 패턴 파악 불가</td></tr>
+          <tr><td>우둔 생산성</td><td class="c bad">0</td><td class="c">5+</td><td class="c"><span class="badge bad">없음</span></td><td>현재 추정치만 (72 kg/인시)</td></tr>
+          <tr><td>야간 전처리 생산성</td><td class="c bad">0</td><td class="c">3+</td><td class="c"><span class="badge bad">없음</span></td><td>파일럿 운영 후 실측 필요</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════ 데이터 ══════════════════════
+const REALDATA = [
+  {date:'5/22(금)',product:'미니70g+FC3kg',part:'홍두께+설도',preP_h:61.2,preP_s:80.9,fraP_h:20.6,fraP_s:23.0,yield_h:57.2,yield_s:50.7,totalKg:1700,fragHr:3.6,note:'혼합생산 실측. 설도 수율 50.7% 이상'},
+  {date:'5/27(수)',product:'시그니처130g',part:'설도',preP:87.3,fraP:31.0,yld:57.9,totalKg:662,fragHr:1.1,note:'소량 단독 생산'},
+  {date:'5/28(목)',product:'미니70g',part:'설도',preP:84.2,fraP:30.6,yld:57.6,totalKg:688,fragHr:1.25,note:''},
+  {date:'5/29(금)',product:'FC3kg',part:'홍두께',preP:58.6,fraP:20.9,yld:58.7,totalKg:2737,fragHr:6.6,note:'파쇄 인원 역설 확인'},
+];
+
+const STEPS = [
+  {color:'#C00000',num:'현재',title:'현재 운영 (2026 Q2)',
+   desc:'홍두께 3ton 전처리 4.5h → 자숙 완료 13:40 → 파쇄 시작 10:46 → 6.6h 가동<br>전처리→자숙→파쇄 연쇄 지연 구조. 자숙 설비 활용률 14%.',
+   tags:[{t:'파쇄 1,506 kg/일',c:'bad'},{t:'자숙 활용 14%',c:'bad'},{t:'전처리 59.9 kg/인시',c:'warn'},{t:'파쇄 20.8 kg/인시',c:'warn'}],
+   capa:1506},
+  {color:'#ED7D31',num:'Step 1',title:'야간 전처리 도입 (외국인 9명 22:00 출근)',
+   desc:'22:00 전처리 → 03:11 완료 → 새벽 자숙 → 09:00 파쇄 8hr 풀가동<br>추가 설비 투자 없음. 야간수당만 추가. 가장 빠른 CAPA 개선 방법.',
+   tags:[{t:'파쇄 2,490 kg/일',c:'warn'},{t:'+65% 개선',c:'ok'},{t:'야간 9명',c:''},{t:'추가 설비 불필요',c:'ok'}],
+   capa:2490},
+  {color:'#2F5496',num:'Step 2',title:'파쇄기 2대 증설 + 20명 분리 운영',
+   desc:'각 라인 10명씩 분리 배치 (인원 역설 방지). 20명 × 20.8 × 8hr = 3,328 kg/일<br>숙련도 향상 병행 시 25 kg/인시 → 4,000 kg/일 달성 가능.',
+   tags:[{t:'파쇄 3,328 kg/일',c:'mid'},{t:'+121% 개선',c:'ok'},{t:'파쇄기 2대',c:'mid'},{t:'라인 독립 운영',c:''}],
+   capa:3328},
+  {color:'#1D9E75',num:'Step 3',title:'숙련도 향상 (25 kg/인시 목표)',
+   desc:'25명 × 25 kg/인시 × 8hr = 5,000 kg/일. 홍두께 전처리도 75 kg/인시 목표.<br>자숙 2사이클 전환 검토 시점.',
+   tags:[{t:'파쇄 5,000 kg/일',c:'ok'},{t:'+232% 개선',c:'ok'},{t:'자숙 57% 활용',c:'ok'},{t:'130g 32,000 ea/일',c:'ok'}],
+   capa:5000},
+  {color:'#8064A2',num:'Step 4',title:'자숙 2사이클 전환 (파쇄 완전 해소 후)',
+   desc:'파쇄 5,000+ 달성 후 야간+주간 연속 자숙 운영. 목표 8,000~9,600 kg/일.<br>내포장 4라인 풀가동 → 51,000+ ea/일.',
+   tags:[{t:'파쇄 8,000+ 필요',c:'warn'},{t:'자숙 모드A연장',c:'mid'},{t:'35명 × 30 kg/hr',c:''},{t:'130g 62,000 ea/일',c:'ok'}],
+   capa:8000},
+];
+
+// ══════════════════════ 탭 ══════════════════════
+function goPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tnav').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  const inits = {timetable:initTT, bottleneck:initBN, simulator:initSim,
+    mixed:initMixed, nightshift:initNight, roadmap:initRoadmap, realdata:initRealdata};
+  if (inits[name]) inits[name]();
+}
+
+// ══════════════════════ 타임테이블 공통 ══════════════════════
+function buildTT(canvasId, lanes, timeStart, timeEnd, height) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  canvas.innerHTML = '';
+  canvas.style.height = (height || lanes.length * 34 + 40) + 'px';
+
+  const W = canvas.clientWidth || 800;
+  const CW = W - 140 - 12;
+  const TW = (timeEnd - timeStart) * 60;
+  const LANE_H = 32;
+  const TOP = 8;
+
+  function minToX(m) { return ((m - timeStart * 60) / TW) * CW; }
+  function fmt(m) {
+    const h = Math.floor(m / 60), mn = Math.round(m % 60);
+    return (h % 24).toString().padStart(2,'0') + ':' + mn.toString().padStart(2,'0');
+  }
+  function addEl(tag, styles, parent) {
+    const el = document.createElement(tag);
+    Object.assign(el.style, styles); (parent || canvas).appendChild(el); return el;
+  }
+
+  // 눈금선
+  for (let h = Math.ceil(timeStart); h <= timeEnd; h++) {
+    const x = minToX(h * 60);
+    if (x < 0 || x > CW) continue;
+    const vl = addEl('div', {
+      position:'absolute', left:(140+x)+'px', top:'0', bottom:'26px',
+      width: h % 2 === 0 ? '1px' : '0.5px',
+      background: h % 2 === 0 ? '#bbb' : '#ddd'
+    });
+  }
+
+  // 시간 축
+  addEl('div', {position:'absolute',bottom:'26px',left:'140px',right:'12px',height:'1px',background:'#ccc'});
+  const ticks = addEl('div', {position:'absolute',bottom:'6px',left:'140px',right:'12px',display:'flex',justifyContent:'space-between',fontSize:'9px',color:'#999'});
+  for (let h = Math.ceil(timeStart); h <= timeEnd; h += 2) {
+    const s = document.createElement('span');
+    s.textContent = fmt(h * 60); ticks.appendChild(s);
+  }
+
+  // 레인
+  lanes.forEach((lane, i) => {
+    const top = TOP + i * LANE_H;
+    // 레이블
+    const lbl = addEl('div', {
+      position:'absolute', width:'134px', right:'calc(100% - 138px)',
+      top: top + 'px', textAlign:'right', fontSize:'10px', color:'#666',
+      paddingRight:'8px', lineHeight:'1.3', display:'flex',
+      alignItems:'center', justifyContent:'flex-end'
+    });
+    lbl.innerHTML = lane.label;
+
+    // 바들
+    (lane.bars || []).forEach(b => {
+      let s = b.s, e = b.e;
+      // 자정 넘어가는 바 처리
+      if (s > timeEnd * 60) return;
+      if (e > timeEnd * 60) e = timeEnd * 60;
+      if (s < timeStart * 60) s = timeStart * 60;
+
+      const x = minToX(s);
+      const w = Math.max(minToX(e) - x, 2);
+      const bar = addEl('div', {
+        position:'absolute',
+        left: (140 + x) + 'px',
+        width: w + 'px',
+        top: (top + 5) + 'px',
+        height: '22px',
+        borderRadius: '5px',
+        background: b.color,
+        opacity: b.opacity || '1',
+        display:'flex', alignItems:'center',
+        padding:'0 5px',
+        fontSize:'9px', fontWeight:'600', color:'#fff',
+        overflow:'hidden', whiteSpace:'nowrap',
+        cursor:'default',
+        zIndex:'5'
+      });
+      const tooltip = `${lane.label}: ${fmt(b.s)}~${fmt(b.e)}${b.note ? ' · '+b.note : ''}`;
+      bar.title = tooltip;
+      if (b.label && w > 35) bar.textContent = b.label;
+      canvas.appendChild(bar);
+    });
+  });
+}
+
+// ══════════════════════ 타임테이블 탭 ══════════════════════
+var currentTTScen = 'current';
+function setTTScen(scen, btn) {
+  currentTTScen = scen;
+  document.querySelectorAll('#page-timetable .tnav').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTT();
+}
+
+const TT_SCENES = {
+  current: {
+    title:'현재 운영 (홍두께 주간 실측 5/29)', tStart:4, tEnd:19,
+    summary:'전처리 05:00 출근 (11명+지원5명=16명 초기) → 09:30 완료 → 자숙 06:25~13:40 → 파쇄 10:46 시작 → 6.6hr 가동<br><strong style="color:var(--bad)">실질 CAPA: 1,506 kg/일</strong> · 자숙 대비 파쇄 처리율 17%',
+    lanes: [
+      {label:'전처리<br>(11~16명)',bars:[
+        {s:5*60,e:6.35*60,color:'#1F3864',label:'전처리 ①1배치',note:'7명'},
+        {s:6.35*60,e:7.42*60,color:'#1F3864',label:'②2배치',note:'12명'},
+        {s:7.43*60,e:8.5*60,color:'#1F3864',label:'③3배치',note:'12명'},
+        {s:8.52*60,e:9.5*60,color:'#1F3864',label:'④4배치',note:'12명'},
+      ]},
+      {label:'자숙T2<br>(상압 4.5h)',bars:[{s:6.42*60,e:10.43*60,color:'#ED7D31',label:'자숙①',note:'583kg'}]},
+      {label:'자숙T3<br>(상압 4.5h)',bars:[{s:7.5*60,e:11.52*60,color:'#ED7D31',label:'자숙②',note:'642kg'}]},
+      {label:'자숙T5<br>(상압 4.5h)',bars:[{s:8.58*60,e:13.17*60,color:'#ED7D31',label:'자숙③',note:'788kg'}]},
+      {label:'자숙T6<br>(상압 4.5h)',bars:[{s:9.58*60,e:13.67*60,color:'#ED7D31',label:'자숙④',note:'724kg'}]},
+      {label:'파쇄·선별<br>(11명)',bars:[{s:10.77*60,e:17.37*60,color:'#8064A2',label:'파쇄·선별 6.6hr (1,496 kg)',note:'14배치'}]},
+      {label:'내포장<br>(2호기)',bars:[{s:14.08*60,e:17.92*60,color:'#C00000',label:'FC 3kg 포장 1,133봉'}]},
+    ]
+  },
+  seodo: {
+    title:'설도 단독 주간 (5/28 실측 기반)', tStart:4, tEnd:18,
+    summary:'전처리 05:00~06:10 (7명 × 1.2hr) → 자숙 06:15~08:40 (1탱크) → 파쇄 09:11~10:26 (9명 × 1.25hr)<br><strong style="color:var(--ok)">설도는 전처리 빠름 → 파쇄 조기 시작 가능. 파쇄 8hr 풀가동 시 2,768 kg/일</strong>',
+    lanes: [
+      {label:'전처리<br>(7명)',bars:[{s:5*60,e:6.17*60,color:'#1F3864',label:'설도 전처리 1.17hr (7명)',note:'88.7 kg/인시'}]},
+      {label:'자숙T6<br>(상압)',bars:[{s:6.25*60,e:8.67*60,color:'#ED7D31',label:'자숙 2.4hr (수율 57.6%)'}]},
+      {label:'파쇄·선별<br>(9명)',bars:[
+        {s:9.18*60,e:9.53*60,color:'#8064A2',label:'①'},
+        {s:9.53*60,e:9.85*60,color:'#8064A2',label:'②'},
+        {s:9.85*60,e:10.13*60,color:'#8064A2',label:'③'},
+        {s:10.13*60,e:10.43*60,color:'#8064A2',label:'④'},
+        {s:10.5*60,e:17*60,color:'#8064A2',label:'추가 물량 파쇄 (8hr 풀가동 가정)',opacity:'0.5'}
+      ]},
+      {label:'내포장<br>(1호기)',bars:[{s:10.67*60,e:15.75*60,color:'#C00000',label:'미니 70g 14,983ea (5.1hr)'}]},
+    ]
+  },
+  night_pre: {
+    title:'시나리오 X: 야간 전처리 + 새벽 자숙', tStart:21, tEnd:38,
+    summary:'야간 9명 22:00 출근 → 03:11 전처리 완료 (5.18hr) → 새벽 자숙 03:11~07:41 → 파쇄팀 09:00 출근 즉시 시작<br><strong style="color:var(--ok)">파쇄 8hr 풀가동 = 15명 × 20.8 × 8hr = 2,496 kg/일 (+66%)</strong>',
+    lanes: [
+      {label:'야간전처리<br>(9명)',bars:[{s:22*60,e:27.18*60,color:'#5B9BD5',label:'홍두께 야간 전처리 (9명 × 5.18hr)',note:'59.9 kg/인시'}]},
+      {label:'자숙T3<br>새벽투입',bars:[{s:27.2*60,e:31.7*60,color:'#ED7D31',label:'상압 자숙 ① 4.5hr'}]},
+      {label:'자숙T4',bars:[{s:27.37*60,e:31.87*60,color:'#ED7D31',label:'상압 자숙 ② 4.5hr'}]},
+      {label:'자숙T5',bars:[{s:27.53*60,e:32.03*60,color:'#ED7D31',label:'상압 자숙 ③ 4.5hr'}]},
+      {label:'자숙T6',bars:[{s:27.7*60,e:32.2*60,color:'#ED7D31',label:'상압 자숙 ④ 4.5hr'}]},
+      {label:'파쇄·선별<br>(15명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'파쇄 8hr 풀가동 (2,496 kg)',note:'자숙 완료 후 4~5hr 안정'}]},
+      {label:'내포장',bars:[{s:35*60,e:41.5*60,color:'#C00000',label:'내포장'}]},
+    ]
+  },
+  night_late: {
+    title:'시나리오 Y: 주간 후반 전처리 + 야간 자숙', tStart:4, tEnd:34,
+    summary:'주간 13~17시 전처리 완료 → 야간 소수인원(2~3명) 자숙 담당 → 익일 09:00 파쇄 즉시 시작<br>전처리 팀이 야간에 외포장 병행 가능. <strong style="color:var(--ok)">파쇄 8hr = 2,496 kg/일</strong>',
+    lanes: [
+      {label:'전처리<br>주간전반',bars:[{s:6*60,e:9.5*60,color:'#1F3864',label:'오전 전처리',opacity:'0.5'}]},
+      {label:'전처리<br>주간후반',bars:[{s:13*60,e:17*60,color:'#1F3864',label:'후반 집중 전처리 (익일분 준비)'}]},
+      {label:'야간자숙<br>(2~3명)',bars:[
+        {s:20*60,e:24.5*60,color:'#ED7D31',label:'야간 자숙 ①②③ (2~3명)'},
+        {s:20.17*60,e:24.67*60,color:'#1D9E75',label:'',opacity:'0.6'},
+      ]},
+      {label:'파쇄·선별<br>(익일)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'익일 09:00 파쇄 8hr 풀가동'}]},
+      {label:'외포장<br>(야간 겸용)',bars:[{s:17.5*60,e:21*60,color:'#888',label:'전처리팀 외포장 마무리',opacity:'0.6'}]},
+    ]
+  },
+  double_frag: {
+    title:'파쇄기 2대 + 야간 전처리', tStart:21, tEnd:38,
+    summary:'야간 전처리 완료 → 파쇄기 2대 각 10명씩 독립 운영 (인원 역설 방지)<br><strong style="color:var(--ok)">20명 × 20.8 × 8hr = 3,328 kg/일. 숙련 25 kg/hr 달성 시 4,000 kg/일</strong>',
+    lanes: [
+      {label:'야간전처리<br>(9명)',bars:[{s:22*60,e:27.18*60,color:'#5B9BD5',label:'야간 전처리 22:00~03:11'}]},
+      {label:'자숙 ①~④',bars:[
+        {s:27.2*60,e:31.7*60,color:'#ED7D31',label:'자숙 4탱크 순차'},
+        {s:27.37*60,e:31.87*60,color:'#ED7D31',label:''},
+      ]},
+      {label:'파쇄기 1호<br>(10명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'파쇄기 1호 10명 × 8hr (1,664 kg)'}]},
+      {label:'파쇄기 2호<br>(10명)',bars:[{s:33*60,e:41*60,color:'#pur',label:'파쇄기 2호 10명 × 8hr (1,664 kg)'}]},
+      {label:'내포장<br>(전 라인)',bars:[{s:35*60,e:42*60,color:'#C00000',label:'내포장 3·4호기 병행'}]},
+    ]
+  },
+  mixed522: {
+    title:'5/22 혼합생산 실측 (홍두께 FC + 설도 미니)', tStart:4, tEnd:18,
+    summary:'<strong>5/22 실측:</strong> 전처리 05:00~08:50 (홍두께 3.3hr + 설도 0.5hr) → 자숙 06:40~12:40 (3건 6hr) → 파쇄 11:29~16:29 (3.6hr)<br>혼합생산 시 파쇄 시간 3.6hr (홍두께 단독 6.6hr vs 혼합 3.6hr) · 총 6,256ea 생산',
+    lanes: [
+      {label:'전처리<br>홍두께(7명)',bars:[{s:5*60,e:8.83*60,color:'#1F3864',label:'홍두께 1,400kg 전처리 3.3hr (61.2 kg/인시)'}]},
+      {label:'전처리<br>설도(7명)',bars:[{s:5*60,e:5.5*60,color:'#2F5496',label:'설도 0.5hr'}]},
+      {label:'자숙①<br>(상압)',bars:[{s:6.67*60,e:12.67*60,color:'#ED7D31',label:'홍두께 상압 6hr (수율57.2%)'}]},
+      {label:'자숙②<br>(가압?)',bars:[{s:6.67*60,e:9.57*60,color:'#1D9E75',label:'설도 2.9hr (수율50.7%⚠)'}]},
+      {label:'파쇄<br>(11명)',bars:[
+        {s:11.48*60,e:14.65*60,color:'#8064A2',label:'홍두께 파쇄 3.1hr (20.6 kg/인시)'},
+        {s:14.65*60,e:15.15*60,color:'#5B9BD5',label:'설도 0.5hr'}
+      ]},
+      {label:'포장①<br>미니70g(7명)',bars:[{s:13.58*60,e:15.58*60,color:'#C00000',label:'미니 70g 5,737ea (2hr)'}]},
+      {label:'포장②<br>FC3kg(6명)',bars:[{s:13.58*60,e:15.75*60,color:'#8B0000',label:'FC 3kg 519봉 (2.2hr)'}]},
+    ]
+  }
+};
+
+function initTT() { renderTT(); }
+function renderTT() {
+  const scen = TT_SCENES[currentTTScen];
+  if (!scen) return;
+  document.getElementById('tt-title').textContent = scen.title;
+  document.getElementById('tt-summary').innerHTML = scen.summary;
+  const laneCount = scen.lanes.length;
+  buildTT('tt-canvas', scen.lanes, scen.tStart, scen.tEnd, laneCount * 34 + 44);
+}
+
+// ══════════════════════ 병목 분석 ══════════════════════
+function initBN() {
+  const indep = [
+    {l:'전처리 설도 (11명×9hr)', v:Math.round(11*84.1*9), max:15000, c:'#2F5496'},
+    {l:'전처리 홍두께 (11명×4.5hr)', v:Math.round(11*59.9*4.5), max:15000, c:'#ED7D31'},
+    {l:'전처리 홍두께 야간 (9명×5.2hr)', v:Math.round(9*59.9*5.2), max:15000, c:'#5B9BD5'},
+    {l:'자숙 모드A 기본 (06~15시)', v:8800, max:15000, c:'#1D9E75'},
+    {l:'자숙 모드A 연장 (06~17:30)', v:12800, max:15000, c:'#1D9E75'},
+    {l:'자숙 모드B FC (상압6대×1사이클)', v:4800, max:15000, c:'#ED7D31'},
+    {l:'파쇄 현재 (11명×20.8×6.6hr)', v:1506, max:15000, c:'#C00000'},
+    {l:'파쇄 야간전처리 후 (15명×20.8×8hr)', v:2496, max:15000, c:'#C00000'},
+    {l:'파쇄기 2대 (20명×20.8×8hr)', v:3328, max:15000, c:'#8064A2'},
+    {l:'파쇄기 2대+숙련 (25명×25×8hr)', v:5000, max:15000, c:'#8064A2'},
+    {l:'내포장 이론 (4라인 65% 효율)', v:51480, max:100000, c:'#2F5496'},
+  ];
+  renderBars('indep-bars', indep);
+
+  const frags = [
+    {l:'현재 (11명×20.8×6.6hr)', v:1506, max:9000, c:'#C00000'},
+    {l:'8hr 확보 (15명×20.8×8hr)', v:2496, max:9000, c:'#ED7D31'},
+    {l:'파쇄기 2대 (20명×20.8×8hr)', v:3328, max:9000, c:'#ED7D31'},
+    {l:'2대+숙련22.5 (20명×22.5×8hr)', v:3600, max:9000, c:'#1D9E75'},
+    {l:'2대+숙련25 (25명×25×8hr)', v:5000, max:9000, c:'#1D9E75'},
+    {l:'2대+숙련30 (25명×30×8hr)', v:6000, max:9000, c:'#2F5496'},
+  ];
+  renderBars('frag-scen-bars', frags);
+
+  const pres = [
+    {l:'설도 주간 (11명×84.1×9hr)', v:Math.round(11*84.1*9), max:10000, c:'#2F5496'},
+    {l:'홍두께 주간 (11명×59.9×4.5hr)', v:Math.round(11*59.9*4.5), max:10000, c:'#ED7D31'},
+    {l:'홍두께 야간 (9명×59.9×5.2hr)', v:Math.round(9*59.9*5.2), max:10000, c:'#5B9BD5'},
+    {l:'홍두께 야간 향상 (9명×75×4.4hr)', v:Math.round(9*75*4.4), max:10000, c:'#1D9E75'},
+  ];
+  renderBars('pretreat-bars', pres);
+}
+
+function renderBars(id, items) {
+  const max = Math.max(...items.map(i => i.max || i.v));
+  let html = '';
+  items.forEach(p => {
+    const pct = Math.min(Math.round(p.v / (p.max || max) * 100), 100);
+    html += `<div class="bn-item">
+      <div class="bn-hd"><span class="lbl">${p.l}</span><span class="val">${p.v.toLocaleString('ko-KR')} kg/일</span></div>
+      <div class="bn-track"><div class="bn-fill" style="width:${pct}%;background:${p.c}">${pct}%</div></div>
+    </div>`;
+  });
+  document.getElementById(id).innerHTML = html;
+}
+
+// ══════════════════════ 시뮬레이터 ══════════════════════
+function initSim() { runSim(); }
+function runSim() {
+  const partProd = parseFloat(document.getElementById('s-part').value);
+  const preW = parseInt(document.getElementById('s-pre-w').value);
+  const meatKg = parseInt(document.getElementById('s-meat').value);
+  const nightW = parseInt(document.getElementById('s-night-pre').value);
+  const pc = parseInt(document.getElementById('s-pc').value);
+  const ac = parseInt(document.getElementById('s-ac').value);
+  const fragM = parseInt(document.getElementById('s-frag-m').value);
+  const fragW = parseInt(document.getElementById('s-frag-w').value);
+  const fragPr = parseFloat(document.getElementById('s-frag-pr').value);
+  const fragH = parseFloat(document.getElementById('s-frag-h').value);
+
+  document.getElementById('s-part-out').textContent = partProd + ' kg/인시';
+  document.getElementById('s-pre-w-out').textContent = preW + ' 명';
+  document.getElementById('s-meat-out').textContent = meatKg.toLocaleString('ko-KR') + ' kg';
+  document.getElementById('s-night-out').textContent = nightW > 0 ? `야간 ${nightW}명` : '없음';
+  document.getElementById('s-pc-out').textContent = pc + ' 사이클';
+  document.getElementById('s-ac-out').textContent = ac + ' 사이클';
+  document.getElementById('s-frag-m-out').textContent = fragM + '대';
+  document.getElementById('s-frag-w-out').textContent = fragW + ' 명';
+  document.getElementById('s-frag-pr-out').textContent = fragPr.toFixed(1) + ' kg/인시';
+  document.getElementById('s-frag-h-out').textContent = fragH.toFixed(1) + ' hr';
+
+  // 전처리 시간
+  const dayPreW = nightW > 0 ? preW : preW;
+  const preHr = nightW > 0
+    ? meatKg / (nightW * partProd)   // 야간 인원으로 처리
+    : meatKg / (preW * partProd);
+
+  // 자숙 CAPA
+  const sterilKg = (2 * pc + 4 * ac) * 800;
+
+  // 파쇄 CAPA (파쇄기 2대면 라인 분리 → 최대 효율 보정)
+  const efficiencyFactor = fragM === 2 ? 1.0 : (fragW > 12 ? 0.85 : 1.0);
+  const fragKg = Math.round(fragW * fragPr * fragH * efficiencyFactor);
+
+  // 실질
+  const realKg = Math.min(sterilKg, fragKg, meatKg);
+  const ea130 = Math.round(realKg * 0.88 / 0.130);
+  const fragUtil = sterilKg > 0 ? Math.round(fragKg / sterilKg * 100) : 0;
+  const bottle = fragKg < sterilKg ? '파쇄 병목' : '자숙 한계';
+  const bCls = fragKg < 2000 ? 'bad' : fragKg < 4000 ? 'warn' : 'ok';
+  const fragPerLine = fragM === 2 ? `(라인당 ${Math.round(fragW/2)}명)` : '';
+
+  document.getElementById('sim-res').innerHTML = `
+    <div class="res-card"><div class="rv" style="color:var(--mid)">${preHr.toFixed(1)} hr</div><div class="rl">전처리 소요시간${nightW>0?' (야간)':''}</div></div>
+    <div class="res-card"><div class="rv" style="color:var(--p)">${sterilKg.toLocaleString('ko-KR')}</div><div class="rl">자숙 이론 CAPA (kg/일)</div></div>
+    <div class="res-card"><div class="rv" style="color:var(--${bCls})">${fragKg.toLocaleString('ko-KR')}</div><div class="rl">파쇄 CAPA (kg/일) ${fragPerLine}</div></div>
+    <div class="res-card"><div class="rv" style="color:var(--ok)">${realKg.toLocaleString('ko-KR')}</div><div class="rl">실질 CAPA (kg/일)</div></div>
+    <div class="res-card"><div class="rv">${ea130.toLocaleString('ko-KR')}</div><div class="rl">130g 환산 (ea/일)</div></div>
+    <div class="res-card"><div class="rv" style="color:var(--${bCls})">${fragUtil}%</div><div class="rl">파쇄/자숙 처리율 · ${bottle}</div></div>
+  `;
+
+  const verdictCls = fragKg < 2000 ? 'bad' : fragKg < 4000 ? 'warn' : 'ok';
+  const verdictMsg = fragKg < 2000
+    ? `파쇄가 심각한 병목입니다. 야간 전처리 도입 또는 파쇄기 증설을 검토하세요.`
+    : fragKg < 4000
+    ? `파쇄 병목이 완화됐으나 여전히 자숙 대비 ${fragUtil}% 처리. 추가 개선 여지 있음.`
+    : `파쇄 CAPA가 충분히 확보됐습니다. 자숙 2사이클 전환을 검토할 시점.`;
+  document.getElementById('sim-verdict-box').innerHTML = `<div class="alert ${verdictCls}" style="margin-top:10px">${verdictMsg}${fragM===2?`<br>파쇄기 2대: 반드시 라인 독립 운영 (각 ${Math.round(fragW/2)}명씩). 한 라인에 집중 배치 시 생산성 역설 발생.`:''}</div>`;
+
+  // 시뮬레이터 타임테이블
+  const fragStart = nightW > 0 ? 9*60 : Math.max(9*60, 6*60 + preHr*60 + 150);
+  const fragEnd = fragStart + fragH * 60;
+  const simLanes = [
+    nightW > 0
+      ? {label:`야간전처리<br>(${nightW}명)`,bars:[{s:22*60,e:(22+preHr)*60,color:'#5B9BD5',label:`야간 전처리 ${preHr.toFixed(1)}hr`}]}
+      : {label:`전처리<br>(${preW}명)`,bars:[{s:6*60,e:(6+preHr)*60,color:'#1F3864',label:`전처리 ${preHr.toFixed(1)}hr`}]},
+    {label:'자숙',bars:[{s:(nightW>0?27:6+preHr)*60,e:(nightW>0?31.5:6+preHr+4.5)*60,color:'#ED7D31',label:`자숙 (${sterilKg.toLocaleString()}kg 이론)`}]},
+    {label:`파쇄${fragM===2?' 1호':''}`,bars:[{s:fragStart,e:fragStart+fragH*60,color:'#8064A2',label:`파쇄 ${fragH}hr`}]},
+    ...(fragM===2?[{label:'파쇄 2호',bars:[{s:fragStart,e:fragStart+fragH*60,color:'#5a3d7a',label:`파쇄 2호 ${fragH}hr`}]}]:[]),
+  ];
+  const simStart = nightW > 0 ? 21 : 5;
+  const simEnd = nightW > 0 ? 38 : Math.max(19, 6 + preHr + 4.5 + fragH + 2);
+  buildTT('sim-tt', simLanes, simStart, simEnd, simLanes.length * 34 + 44);
+}
+
+// ══════════════════════ 혼합생산 ══════════════════════
+function initMixed() {
+  runMixed();
+  buildTT('mixed-tt', TT_SCENES.mixed522.lanes, 4, 18, 7*34+44);
+}
+
+function runMixed() {
+  const jjKg = parseInt(document.getElementById('m-jj').value);
+  const fcKg = parseInt(document.getElementById('m-fc').value);
+  const fw = parseInt(document.getElementById('m-fw').value);
+  document.getElementById('m-jj-out').textContent = jjKg.toLocaleString('ko-KR') + ' kg';
+  document.getElementById('m-fc-out').textContent = fcKg.toLocaleString('ko-KR') + ' kg';
+  document.getElementById('m-fw-out').textContent = fw + ' 명';
+
+  const jjFrag = Math.round(jjKg * 0.579); // 자숙수율
+  const fcFrag = Math.round(fcKg * 0.587);
+  const totalFrag = jjFrag + fcFrag;
+  const fragHr = totalFrag / (fw * 20.8);
+  const jjEa = Math.round(jjFrag * 0.88 / 0.130);
+  const fcBong = Math.round(fcFrag / 3);
+  const jjSteril = Math.ceil(jjKg / 800) * 800;
+  const fcSteril = Math.ceil(fcKg / 800) * 800;
+
+  document.getElementById('mixed-res').innerHTML = `
+    <table class="tbl" style="margin-top:6px">
+      <tbody>
+        <tr><td>장조림 자숙 후 파쇄량</td><td class="r">${jjFrag.toLocaleString('ko-KR')} kg</td></tr>
+        <tr><td>FC 3kg 자숙 후 파쇄량</td><td class="r">${fcFrag.toLocaleString('ko-KR')} kg</td></tr>
+        <tr><td>총 파쇄 필요량</td><td class="r"><strong>${totalFrag.toLocaleString('ko-KR')} kg</strong></td></tr>
+        <tr><td>파쇄 예상 소요시간 (${fw}명×20.8)</td><td class="r ${fragHr>8?'bad':fragHr>6?'warn':'ok'}">${fragHr.toFixed(1)} hr</td></tr>
+        <tr><td>장조림 예상 생산량 (130g)</td><td class="r ok">~${jjEa.toLocaleString('ko-KR')} ea</td></tr>
+        <tr><td>FC 3kg 예상 생산량</td><td class="r ok">~${fcBong.toLocaleString('ko-KR')} 봉</td></tr>
+        <tr><td>필요 가압탱크 (장조림)</td><td class="r">${Math.min(Math.ceil(jjKg/800),2)}대</td></tr>
+        <tr><td>필요 상압탱크 (FC 3kg)</td><td class="r">${Math.min(Math.ceil(fcKg/800),4)}대</td></tr>
+      </tbody>
+    </table>
+    ${fragHr > 8 ? '<div class="alert bad" style="margin-top:6px">파쇄 소요시간이 8hr 초과 → 인원 증원 또는 파쇄기 증설 필요</div>' : ''}
+  `;
+}
+
+// ══════════════════════ 야간 운영 ══════════════════════
+function initNight() {
+  runNightCost();
+  const nightLanes = [
+    {label:'야간전처리<br>(9명)',bars:[{s:22*60,e:27.18*60,color:'#5B9BD5',label:'홍두께 야간 전처리 22:00~03:11'}]},
+    {label:'새벽자숙<br>T3~T6',bars:[
+      {s:27.2*60,e:31.7*60,color:'#ED7D31',label:'자숙① 03:12~07:42'},
+      {s:27.37*60,e:31.87*60,color:'#ED7D31',label:'자숙②'},
+    ]},
+    {label:'자숙<br>T5·T6',bars:[
+      {s:27.53*60,e:32.03*60,color:'#ED7D31',label:'자숙③'},
+      {s:27.7*60,e:32.2*60,color:'#ED7D31',label:'자숙④'},
+    ]},
+    {label:'파쇄·선별<br>(15명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'파쇄 09:00~17:00 (8hr 풀가동 = 2,496 kg)'}]},
+    {label:'내포장<br>(전 라인)',bars:[{s:35*60,e:42*60,color:'#C00000',label:'내포장 11:00~18:00'}]},
+  ];
+  buildTT('night-tt', nightLanes, 21, 42, 5*34+44);
+}
+
+function runNightCost() {
+  const workers = parseInt(document.getElementById('n-workers').value);
+  const wage = parseInt(document.getElementById('n-wage').value);
+  const hrs = parseFloat(document.getElementById('n-hrs').value);
+  const price = parseInt(document.getElementById('n-price').value);
+
+  document.getElementById('n-workers-out').textContent = workers + ' 명';
+  document.getElementById('n-wage-out').textContent = wage.toLocaleString('ko-KR') + '원';
+  document.getElementById('n-hrs-out').textContent = hrs.toFixed(1) + ' hr';
+  document.getElementById('n-price-out').textContent = price.toLocaleString('ko-KR') + '원';
+
+  // 야간 추가 비용 (야간 수당 50% 가산 가정)
+  const nightPremium = 0.5;
+  const dailyCost = Math.round(workers * wage * hrs * (1 + nightPremium));
+  const monthlyCost = dailyCost * 22; // 월 22일 기준
+
+  // CAPA 증가분
+  const currentFragKg = 1506;
+  const nightFragKg = 2496; // 8hr 풀가동
+  const addKg = nightFragKg - currentFragKg;
+  const addEa = Math.round(addKg * 0.88 / 0.130);
+  const addRevenue = Math.round(addEa * price);
+  const monthlyRevenue = addRevenue * 22;
+  const roi = monthlyCost > 0 ? (monthlyRevenue / monthlyCost * 100).toFixed(0) : 0;
+
+  document.getElementById('night-cost-res').innerHTML = `
+    <div class="cost-grid" style="margin-top:10px">
+      <div class="cost-card">
+        <div class="cost-title">💰 야간 추가 비용 (일/월)</div>
+        <div class="cost-row"><span>기본급</span><span>${Math.round(workers*wage*hrs).toLocaleString('ko-KR')}원/일</span></div>
+        <div class="cost-row"><span>야간 가산 (50%)</span><span>${Math.round(workers*wage*hrs*0.5).toLocaleString('ko-KR')}원/일</span></div>
+        <div class="cost-row"><span>일 추가비용</span><span><strong>${dailyCost.toLocaleString('ko-KR')}원</strong></span></div>
+        <div class="cost-row"><span>월 추가비용 (22일)</span><span><strong style="color:var(--bad)">${monthlyCost.toLocaleString('ko-KR')}원</strong></span></div>
+      </div>
+      <div class="cost-card">
+        <div class="cost-title">📈 CAPA 증가 효과 (일/월)</div>
+        <div class="cost-row"><span>파쇄 추가량</span><span>+${addKg.toLocaleString('ko-KR')} kg/일</span></div>
+        <div class="cost-row"><span>130g 추가 생산</span><span>+${addEa.toLocaleString('ko-KR')} ea/일</span></div>
+        <div class="cost-row"><span>추가 매출 (공급단가)</span><span>${addRevenue.toLocaleString('ko-KR')}원/일</span></div>
+        <div class="cost-row"><span>월 추가 매출</span><span><strong style="color:var(--ok)">${monthlyRevenue.toLocaleString('ko-KR')}원</strong></span></div>
+      </div>
+    </div>
+    <div class="alert ${parseInt(roi) > 300 ? 'ok' : parseInt(roi) > 100 ? 'warn' : 'bad'}" style="margin-top:8px">
+      ROI: 월 추가비용 대비 추가매출 <strong>${roi}%</strong>
+      ${parseInt(roi) > 300 ? ' — 야간 운영 경제성 매우 우수. 즉시 도입 권장.' : parseInt(roi) > 100 ? ' — 경제성 있음. 도입 검토 가능.' : ' — 추가 검토 필요.'}
+    </div>
+  `;
+}
+
+// ══════════════════════ 단계별 목표 ══════════════════════
+var currentRoadmapTT = 'current';
+function initRoadmap() {
+  const list = document.getElementById('roadmap-list');
+  list.innerHTML = STEPS.map(s => `
+    <div class="step">
+      <div class="step-dot" style="background:${s.color}">${s.num.slice(0,2)}</div>
+      <div class="step-body">
+        <div class="step-title">${s.num} — ${s.title}</div>
+        <div class="step-desc">${s.desc}</div>
+        <div class="step-tags">${s.tags.map(t => `<span class="badge ${t.c||''}">${t.t}</span>`).join('')}</div>
+      </div>
+    </div>
+  `).join('');
+
+  const bars = STEPS.map(s => ({l:s.num+' '+s.title.slice(0,12), v:s.capa, max:9000, c:s.color}));
+  renderBars('roadmap-bars', bars);
+
+  renderRoadmapTT();
+}
+
+const ROADMAP_TT = {
+  current: {
+    summary:'현재: 전처리 병목 → 파쇄 시작 지연 → 1,506 kg/일',
+    lanes:[
+      {label:'전처리(11명)',bars:[{s:5*60,e:9.5*60,color:'#1F3864',label:'홍두께 전처리 4.5hr'}]},
+      {label:'자숙(4탱크)',bars:[{s:6.4*60,e:13.7*60,color:'#ED7D31',label:'자숙 순차 완료 13:40'}]},
+      {label:'파쇄(11명)',bars:[{s:10.77*60,e:17.4*60,color:'#8064A2',label:'파쇄 6.6hr = 1,506kg'}]},
+      {label:'내포장',bars:[{s:14*60,e:17.9*60,color:'#C00000',label:'포장'}]},
+    ]
+  },
+  step1: {
+    summary:'Step1: 야간 전처리 → 파쇄 8hr = 2,496 kg/일 (+66%)',
+    lanes:[
+      {label:'야간전처리(9명)',bars:[{s:22*60,e:27.18*60,color:'#5B9BD5',label:'야간 22:00~03:11'}]},
+      {label:'새벽자숙',bars:[{s:27.2*60,e:31.7*60,color:'#ED7D31',label:'자숙 03:12~07:42'}]},
+      {label:'파쇄(15명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'파쇄 8hr = 2,496 kg (+66%)'}]},
+      {label:'내포장',bars:[{s:35*60,e:42*60,color:'#C00000',label:'포장'}]},
+    ]
+  },
+  step2: {
+    summary:'Step2: 파쇄기 2대 + 라인 분리 = 3,328 kg/일 (+121%)',
+    lanes:[
+      {label:'야간전처리(9명)',bars:[{s:22*60,e:27.18*60,color:'#5B9BD5',label:'야간 전처리'}]},
+      {label:'새벽자숙',bars:[{s:27.2*60,e:31.7*60,color:'#ED7D31',label:'자숙'}]},
+      {label:'파쇄기1호(10명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'파쇄기 1호 (1,664 kg)'}]},
+      {label:'파쇄기2호(10명)',bars:[{s:33*60,e:41*60,color:'#5a3d7a',label:'파쇄기 2호 (1,664 kg)'}]},
+      {label:'내포장',bars:[{s:35*60,e:42*60,color:'#C00000',label:'포장 (수요 확대)'}]},
+    ]
+  },
+  step3: {
+    summary:'Step3: 숙련 25 kg/인시 × 25명 = 5,000 kg/일 (+232%)',
+    lanes:[
+      {label:'야간전처리(9명)',bars:[{s:22*60,e:26.4*60,color:'#5B9BD5',label:'야간 전처리 (숙련 75 kg/인시)'}]},
+      {label:'새벽자숙',bars:[{s:26.5*60,e:31*60,color:'#ED7D31',label:'자숙'}]},
+      {label:'파쇄1호(13명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'파쇄기 1호 (2,500 kg)'}]},
+      {label:'파쇄2호(12명)',bars:[{s:33*60,e:41*60,color:'#5a3d7a',label:'파쇄기 2호 (2,500 kg)'}]},
+      {label:'내포장',bars:[{s:35*60,e:43*60,color:'#C00000',label:'내포장 대폭 증가'}]},
+    ]
+  }
+};
+
+function setRoadmapTT(scen, btn) {
+  currentRoadmapTT = scen;
+  document.querySelectorAll('#page-roadmap .tnav').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderRoadmapTT();
+}
+
+function renderRoadmapTT() {
+  const scen = ROADMAP_TT[currentRoadmapTT];
+  if (!scen) return;
+  const isNight = currentRoadmapTT !== 'current';
+  buildTT('roadmap-tt', scen.lanes, isNight?21:4, isNight?43:19, scen.lanes.length*34+44);
+  document.getElementById('roadmap-tt-summary').innerHTML = scen.summary;
+}
+
+// ══════════════════════ 실측 데이터 ══════════════════════
+function initRealdata() {
+  const tbody = document.getElementById('realdata-tbody');
+  tbody.innerHTML = REALDATA.map(d => `
+    <tr>
+      <td>${d.date}</td>
+      <td>${d.product}</td>
+      <td>${d.part}</td>
+      <td class="r ${d.preP >= 80 ? 'ok' : d.preP >= 60 ? 'warn' : 'bad'}">${d.preP ? d.preP.toFixed(1) : `홍:${d.preP_h}/설:${d.preP_s}`}</td>
+      <td class="r ${d.fraP >= 28 ? 'ok' : d.fraP >= 20 ? 'warn' : 'bad'}">${d.fraP ? d.fraP.toFixed(1) : `홍:${d.fraP_h}/설:${d.fraP_s}`}</td>
+      <td class="r ok">${d.yld ? d.yld.toFixed(1)+'%' : `홍:${d.yield_h}%/설:${d.yield_s}%`}</td>
+      <td class="r">${d.totalKg.toLocaleString('ko-KR')}</td>
+      <td class="r">${d.fragHr}</td>
+      <td>${d.note}</td>
+    </tr>
+  `).join('');
+}
+
+// ══════════════════════ 초기화 ══════════════════════
+renderTT();
+initBN();
+</script>
+</body>
+</html>
