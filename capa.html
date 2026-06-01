@@ -161,6 +161,7 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
   <button class="tnav" onclick="goPage('roadmap',this)">🗺 단계별 목표</button>
   <button class="tnav" onclick="goPage('realdata',this)">📋 실측 데이터</button>
   <button class="tnav" onclick="goPage('planrev',this)">📅 생산계획 역산</button>
+  <button class="tnav" onclick="goPage('weekly',this)">🗓 주간 운영 패턴</button>
 </div>
 
 <!-- ══════════════════════════════════════
@@ -836,7 +837,8 @@ function goPage(name, btn) {
   btn.classList.add('active');
   const inits = {timetable:initTT, bottleneck:initBN, simulator:initSim,
     mixed:initMixed, nightshift:initNight, roadmap:initRoadmap, realdata:initRealdata,
-    planrev: function(){ /* 입력 대기 */ }
+    planrev: function(){ /* 입력 대기 */ },
+    weekly: function(){ if(typeof runWeekly==='function') runWeekly(); }
   };
   if (inits[name]) inits[name]();
 }
@@ -1956,5 +1958,217 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
 </div>
+
+<!-- ══════════════════════════════════════
+     9. 주간 운영 패턴
+══════════════════════════════════════ -->
+<div id="page-weekly" class="page">
+  <div class="section">
+    <div class="sec-hdr">🗓 주간 생산 패턴 설계 (2일 FC단독 + 3일 혼합)</div>
+    <div class="sec-body">
+      <div class="alert info" style="margin-bottom:12px">
+        FC 3kg 월 32,141봉 고정 납품 · 주 단위 분산 생산 (생산 후 20일 이내 출고 조건 충족) · 파쇄기 2대 기준
+      </div>
+      <div class="grid3" style="margin-bottom:12px">
+        <div class="ctrl-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+          <label style="width:auto;font-size:11px;color:var(--sub);font-weight:600">FC 단독일 수 / 주</label>
+          <input type="range" min="0" max="5" value="2" step="1" oninput="runWeekly()" id="wk-solo" style="width:100%">
+          <span id="wk-solo-out" style="font-weight:600;color:var(--p);font-size:11px">2일</span>
+        </div>
+        <div class="ctrl-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+          <label style="width:auto;font-size:11px;color:var(--sub);font-weight:600">혼합일 보조제품</label>
+          <select id="wk-mixprod" onchange="runWeekly()" style="width:100%;padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
+            <option value="130g 낱개">130g 낱개</option>
+            <option value="코코 170g">코코 170g</option>
+            <option value="미니 70g">미니 70g</option>
+          </select>
+        </div>
+        <div class="ctrl-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+          <label style="width:auto;font-size:11px;color:var(--sub);font-weight:600">혼합일 FC 투입량</label>
+          <select id="wk-fcmix" onchange="runWeekly()" style="width:100%;padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
+            <option value="4000">4.0 ton</option>
+            <option value="3200">3.2 ton</option>
+            <option value="2400">2.4 ton</option>
+          </select>
+        </div>
+      </div>
+      <div id="wk-result"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-hdr">📅 주간 캘린더 (월~금)</div>
+    <div class="sec-body" id="wk-calendar"></div>
+  </div>
+
+  <div class="section">
+    <div class="sec-hdr">⏱ 일자 유형별 타임테이블</div>
+    <div class="sec-body" style="padding:10px">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button class="tnav active" onclick="setWeeklyTT('solo',this)" style="padding:4px 12px;border:1px solid var(--border);border-radius:16px;font-size:11px">FC 단독일</button>
+        <button class="tnav" onclick="setWeeklyTT('mixed',this)" style="padding:4px 12px;border:1px solid var(--border);border-radius:16px;font-size:11px">혼합일</button>
+      </div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-box" style="background:#5B9BD5"></div>전처리(야간/선행)</div>
+        <div class="leg-item"><div class="leg-box" style="background:#1D9E75"></div>자숙(가압FC)</div>
+        <div class="leg-item"><div class="leg-box" style="background:#ED7D31"></div>자숙(상압FC)</div>
+        <div class="leg-item"><div class="leg-box" style="background:#1F3864"></div>자숙(가압 장조림)</div>
+        <div class="leg-item"><div class="leg-box" style="background:#8064A2"></div>파쇄1호</div>
+        <div class="leg-item"><div class="leg-box" style="background:#5a3d7a"></div>파쇄2호</div>
+        <div class="leg-item"><div class="leg-box" style="background:#C00000"></div>내포장</div>
+        <div class="leg-item"><div class="leg-box" style="background:#0D7377"></div>레토르트</div>
+      </div>
+      <div class="tt-wrap"><div class="tt" id="wk-tt" style="min-height:120px"></div></div>
+      <div class="alert info" id="wk-tt-summary" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════ 주간 운영 패턴 ══════════════════════
+var currentWeeklyTT = 'solo';
+
+function runWeekly() {
+  const soloDays = parseInt(document.getElementById('wk-solo').value);
+  const mixDays = 5 - soloDays;
+  const mixProd = document.getElementById('wk-mixprod').value;
+  const fcMixKg = parseInt(document.getElementById('wk-fcmix').value);
+  document.getElementById('wk-solo-out').textContent = soloDays + '일';
+
+  const fc = PRODUCTS_PRESET['FC 3kg'];
+  const mp = PRODUCTS_PRESET[mixProd];
+
+  // FC 단독일: 7.2ton
+  const fcSoloDaily = 7200 * fc.cook * fc.frag / fc.fill;
+  // 혼합일 FC
+  const fcMixDaily = fcMixKg * fc.cook * fc.frag / fc.fill;
+  // 혼합일 보조제품 (나머지 원육 = 7200 - fcMixKg, 단 파쇄 한계 고려)
+  const mixMeatRemain = 7200 - fcMixKg;
+  const mixProdDaily = mixMeatRemain * mp.cook * mp.frag / mp.fill;
+
+  // 주간 FC
+  const fcWeekly = fcSoloDaily * soloDays + fcMixDaily * mixDays;
+  const fcMonthly = fcWeekly * 4.3;
+  const fcNeed = 32141;
+  const fcPct = fcMonthly / fcNeed * 100;
+
+  // 주간 보조제품
+  const mixWeekly = mixProdDaily * mixDays;
+  const mixMonthly = mixWeekly * 4.3;
+
+  // 파쇄 부하 체크 (2대 5760kg/일 기준)
+  const fragCap2 = 25 * 20 * 8 * 1.44; // 파쇄기 2대 = 약 5,760kg (20명 기준 환산)
+  const fcSoloFrag = 7200 * fc.cook;
+  const mixFrag = fcMixKg * fc.cook + mixMeatRemain * mp.cook;
+
+  const fcStatus = fcPct >= 100 ? 'ok' : fcPct >= 90 ? 'warn' : 'bad';
+
+  document.getElementById('wk-result').innerHTML = `
+    <div class="grid3" style="margin-bottom:10px">
+      <div class="res-card"><div class="rv" style="color:var(--p)">${soloDays}+${mixDays}일</div><div class="rl">FC단독 + 혼합</div></div>
+      <div class="res-card"><div class="rv" style="color:var(--${fcStatus})">${fcMonthly.toLocaleString('ko-KR',{maximumFractionDigits:0})}</div><div class="rl">월 FC 생산 (목표 32,141)</div></div>
+      <div class="res-card"><div class="rv" style="color:var(--${fcStatus})">${fcPct.toFixed(0)}%</div><div class="rl">FC 목표 달성률</div></div>
+    </div>
+    <table class="tbl">
+      <thead><tr><th>구분</th><th class="r">일 생산</th><th class="r">주간</th><th class="r">월간(4.3주)</th><th>비고</th></tr></thead>
+      <tbody>
+        <tr><td>FC 단독일 (7.2ton)</td><td class="r">${fcSoloDaily.toFixed(0)}봉</td><td class="r">${(fcSoloDaily*soloDays).toFixed(0)}봉</td><td class="r">-</td><td>${soloDays}일/주</td></tr>
+        <tr><td>혼합일 FC (${(fcMixKg/1000).toFixed(1)}ton)</td><td class="r">${fcMixDaily.toFixed(0)}봉</td><td class="r">${(fcMixDaily*mixDays).toFixed(0)}봉</td><td class="r">-</td><td>${mixDays}일/주</td></tr>
+        <tr style="background:var(--light);font-weight:600"><td>FC 합계</td><td class="r">-</td><td class="r">${fcWeekly.toFixed(0)}봉</td><td class="r ${fcStatus}">${fcMonthly.toFixed(0)}봉</td><td>목표 ${fcNeed.toLocaleString('ko-KR')}봉</td></tr>
+        <tr><td>${mixProd} (혼합일)</td><td class="r">${mixProdDaily.toFixed(0)}봉</td><td class="r">${mixWeekly.toFixed(0)}봉</td><td class="r ok">${mixMonthly.toFixed(0)}봉</td><td>${mixDays}일 × ${(mixMeatRemain/1000).toFixed(1)}ton</td></tr>
+      </tbody>
+    </table>
+    <div class="alert ${fcStatus}" style="margin-top:10px">
+      ${fcPct >= 100
+        ? `FC 월 목표 ${fcPct.toFixed(0)}% 달성 (여유 ${(fcMonthly-fcNeed).toFixed(0)}봉). 혼합일 FC 비중을 줄이고 ${mixProd} 생산을 늘릴 여지 있음.`
+        : `FC 월 목표 ${fcPct.toFixed(0)}%로 부족. FC 단독일을 늘리거나 혼합일 FC 투입량을 높여야 함.`}
+    </div>
+    <div class="alert info" style="margin-top:6px">
+      파쇄 부하: 단독일 ${(fcSoloFrag/1000).toFixed(1)}ton / 혼합일 ${(mixFrag/1000).toFixed(1)}ton (파쇄기 2대 기준 약 4.2ton/8hr 처리) ·
+      레토르트 혼합일 배분: FC 2대 + ${mixProd} 1대
+    </div>
+  `;
+
+  renderWeeklyCalendar(soloDays, mixDays, mixProd);
+  renderWeeklyTT();
+}
+
+function renderWeeklyCalendar(soloDays, mixDays, mixProd) {
+  const days = ['월','화','수','목','금'];
+  // 단독일 먼저, 혼합일 뒤 배치
+  let html = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">';
+  days.forEach((d, i) => {
+    const isSolo = i < soloDays;
+    const bg = isSolo ? '#0D7377' : '#2F5496';
+    const label = isSolo ? 'FC 단독<br>7.2ton' : `FC+${mixProd.split(' ')[0]}`;
+    html += `<div style="background:${bg};color:#fff;border-radius:8px;padding:12px 8px;text-align:center">
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px">${d}</div>
+      <div style="font-size:10px;line-height:1.4">${label}</div>
+    </div>`;
+  });
+  html += '</div>';
+  html += `<div style="display:flex;gap:14px;margin-top:10px;font-size:10px">
+    <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#0D7377;border-radius:3px;display:inline-block"></span>FC 단독일 (${soloDays}일)</span>
+    <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#2F5496;border-radius:3px;display:inline-block"></span>혼합일 (${mixDays}일)</span>
+  </div>`;
+  document.getElementById('wk-calendar').innerHTML = html;
+}
+
+function setWeeklyTT(type, btn) {
+  currentWeeklyTT = type;
+  document.querySelectorAll('#page-weekly .tnav').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderWeeklyTT();
+}
+
+function renderWeeklyTT() {
+  const mixProd = document.getElementById('wk-mixprod')?.value || '130g 낱개';
+  const fcMixKg = parseInt(document.getElementById('wk-fcmix')?.value || 4000);
+  let lanes = [], summary = '';
+
+  if (currentWeeklyTT === 'solo') {
+    // FC 단독일: 야간/선행 전처리 → 자숙(상압6대 or 가압2+상압4) → 파쇄2대 → 포장 → 레토르트
+    lanes = [
+      {label:'야간전처리<br>(선행)', bars:[{s:22*60, e:28*60, color:'#5B9BD5', label:'FC 7.2ton 전처리 (전일 야간~새벽)'}]},
+      {label:'자숙<br>(상압6대 순환)', bars:[{s:23*60, e:32*60, color:'#ED7D31', label:'자숙 9탱크 순차 (전처리분 즉시 투입)'}]},
+      {label:'파쇄1호<br>(10명)', bars:[{s:33*60, e:41*60, color:'#8064A2', label:'파쇄 09:00~17:00'}]},
+      {label:'파쇄2호<br>(10명)', bars:[{s:33*60, e:41*60, color:'#5a3d7a', label:'파쇄 09:00~17:00'}]},
+      {label:'내포장<br>(2호기)', bars:[{s:35*60, e:41*60, color:'#C00000', label:'FC 3kg 포장'}]},
+      {label:'레토르트<br>(3대·2.5hr)', bars:[
+        {s:35.5*60, e:38*60, color:'#0D7377', label:'1회전 (1,152봉)'},
+        {s:38.1*60, e:40.6*60, color:'#0D7377', label:'2회전'},
+        {s:40.7*60, e:43.2*60, color:'#0D7377', label:'3회전 → 2,849봉'},
+      ]},
+    ];
+    summary = '<strong>FC 단독일 (7.2ton)</strong> — 전일 야간 전처리+자숙으로 새벽 완료 → 파쇄기 2대 09:00 풀가동 → 2,849봉. 레토르트 3대 3회전으로 당일 소화.';
+  } else {
+    const mpShort = mixProd.split(' ')[0];
+    lanes = [
+      {label:'야간전처리<br>(선행)', bars:[{s:22*60, e:27.5*60, color:'#5B9BD5', label:`FC ${(fcMixKg/1000).toFixed(1)}ton + ${mpShort} 전처리`}]},
+      {label:'자숙 가압<br>T1·T2(FC)', bars:[{s:23*60, e:30*60, color:'#1D9E75', label:`FC 가압자숙`}]},
+      {label:'자숙 상압<br>T3~T6', bars:[{s:23.5*60, e:32*60, color:'#ED7D31', label:`${mpShort} 자숙 (상압)`}]},
+      {label:'파쇄1호<br>(FC)', bars:[{s:33*60, e:39*60, color:'#8064A2', label:`FC 파쇄`}]},
+      {label:'파쇄2호<br>('+mpShort+')', bars:[{s:33*60, e:40*60, color:'#5a3d7a', label:`${mpShort} 파쇄`}]},
+      {label:'내포장<br>(병행)', bars:[
+        {s:35*60, e:38*60, color:'#C00000', label:`FC 포장 (2호기)`},
+        {s:35*60, e:41*60, color:'#8B0000', label:`${mpShort} 포장 (3·4호기)`},
+      ]},
+      {label:'레토르트<br>FC 2대', bars:[
+        {s:36*60, e:38.5*60, color:'#0D7377', label:'FC 1회전'},
+        {s:38.6*60, e:41.1*60, color:'#0D7377', label:'FC 2회전'},
+      ]},
+      {label:'레토르트<br>'+mpShort+' 1대', bars:[
+        {s:36*60, e:37.5*60, color:'#14b8a6', label:`${mpShort} 1회전`},
+        {s:37.6*60, e:39.1*60, color:'#14b8a6', label:'2회전'},
+        {s:39.2*60, e:40.7*60, color:'#14b8a6', label:'3회전'},
+      ]},
+    ];
+    summary = `<strong>혼합일 (FC ${(fcMixKg/1000).toFixed(1)}ton + ${mixProd})</strong> — 가압 T1·T2는 FC, 상압 T3~T6은 ${mixProd}. 파쇄기 2대 제품별 분담. 레토르트 FC 2대 + ${mixProd} 1대 병렬 운영.`;
+  }
+
+  buildTT('wk-tt', lanes, currentWeeklyTT === 'solo' ? 21 : 21, currentWeeklyTT === 'solo' ? 44 : 42, lanes.length * 34 + 44);
+  document.getElementById('wk-tt-summary').innerHTML = summary;
+}
+</script>
 </body>
 </html>
