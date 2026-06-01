@@ -228,6 +228,34 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
   </div>
 
   <div class="section">
+    <div class="sec-hdr">🫙 레토르트 공정 스펙 및 CAPA</div>
+    <div class="sec-body">
+      <div class="grid2" style="margin-bottom:12px">
+        <div>
+          <table class="tbl">
+            <thead><tr><th>항목</th><th class="c">현재</th><th class="c">6월 증설 후</th></tr></thead>
+            <tbody>
+              <tr><td>레토르트 대수</td><td class="c ok">3대</td><td class="c ok">3대</td></tr>
+              <tr><td>대당 대차 수</td><td class="c">4대차</td><td class="c">4대차</td></tr>
+              <tr><td>FC 3kg 트레이</td><td class="c warn">96개 (2대 동시)</td><td class="c ok">192개 (3대 동시)</td></tr>
+              <tr><td>FC 3kg 공정시간</td><td class="c" colspan="2">2.5hr (105℃5분+115℃60분+냉각60분)</td></tr>
+              <tr><td>기타 제품 공정시간</td><td class="c" colspan="2">1.5hr</td></tr>
+              <tr><td>최대 회전수/일</td><td class="c ok" colspan="2">FC 3회전 / 기타 6회전</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <table class="tbl">
+            <thead><tr><th>제품</th><th class="c">대차당 EA</th><th class="c">1대 1사이클</th><th class="r">현재 최대/일</th><th class="r">6월 최대/일</th></tr></thead>
+            <tbody id="retort-overview-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="alert info">💡 레토르트 3대를 서로 다른 제품으로 동시 운영 가능. 예: 1대=FC 3kg, 2대=미니 70g</div>
+    </div>
+  </div>
+
+  <div class="section">
     <div class="sec-hdr">📋 운영 모드별 CAPA 요약</div>
     <div class="sec-body">
       <table class="tbl">
@@ -265,6 +293,7 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
     <div class="leg-item"><div class="leg-box" style="background:#8064A2"></div>파쇄·선별</div>
     <div class="leg-item"><div class="leg-box" style="background:#C00000"></div>내포장</div>
     <div class="leg-item"><div class="leg-box" style="background:#888;opacity:.5"></div>대기</div>
+    <div class="leg-item"><div class="leg-box" style="background:#0D7377"></div>레토르트</div>
   </div>
 
   <div class="section">
@@ -426,6 +455,41 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
   </div>
 
   <div class="res-grid" id="sim-res"></div>
+
+  <div class="section" style="margin-top:14px">
+    <div class="sec-hdr">🫙 레토르트 CAPA 계산기</div>
+    <div class="sec-body">
+      <div class="grid2">
+        <div>
+          <div class="ctrl-row">
+            <label>제품</label>
+            <select id="sim-retort-product" onchange="calcRetortSim()" style="flex:1;padding:4px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
+              <option value="FC 3kg">FC 어머니쇠고기장조림 3KG</option>
+              <option value="트레이더스460">트레이더스 460g</option>
+              <option value="시그니처130">시그니처 장조림 130g</option>
+              <option value="코코170">코스트코 쇠고기장조림 170g</option>
+              <option value="미니70">미니쇠고기장조림 70g</option>
+            </select>
+            <span class="ctrl-out"></span>
+          </div>
+          <div class="ctrl-row">
+            <label>가동 레토르트 대수</label>
+            <input type="range" min="1" max="3" value="2" step="1" oninput="calcRetortSim()" id="sim-retort-machines">
+            <span class="ctrl-out" id="sim-retort-machines-out">2 대</span>
+          </div>
+          <div class="ctrl-row">
+            <label>보유 트레이 수</label>
+            <select id="sim-retort-trays" onchange="calcRetortSim()" style="flex:1;padding:4px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
+              <option value="96">96개 (현재)</option>
+              <option value="192">192개 (6월 증설)</option>
+            </select>
+            <span class="ctrl-out"></span>
+          </div>
+        </div>
+        <div id="sim-retort-result"></div>
+      </div>
+    </div>
+  </div>
 
   <div class="section" style="margin-top:14px">
     <div class="sec-hdr">⏱ 시뮬레이션 타임테이블</div>
@@ -643,6 +707,34 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
 
 <script>
 // ══════════════════════ 데이터 ══════════════════════
+// ── 레토르트 스펙
+const RETORT = {
+  machines: 3,          // 레토르트 총 대수
+  cartsPerMachine: 4,   // 1대당 대차 수
+  traysCurrent: 96,     // 현재 트레이 수 (FC 3kg 기준)
+  traysUpgrade: 192,    // 6월 증설 후
+  products: {
+    'FC 3kg':      { traysPerCart:12, eaPerTray:8,  cycleMins:150, label:'FC 어머니쇠고기장조림 3KG' },
+    '트레이더스460': { traysPerCart:19, eaPerTray:20, cycleMins:90,  label:'트레이더스 460g' },
+    '시그니처130':  { traysPerCart:32, eaPerTray:32, cycleMins:90,  label:'시그니처 장조림 130g' },
+    '코코170':     { traysPerCart:32, eaPerTray:32, cycleMins:90,  label:'코스트코 쇠고기장조림 170g' },
+    '미니70':      { traysPerCart:32, eaPerTray:40, cycleMins:90,  label:'미니쇠고기장조림 70g' },
+  }
+};
+
+function calcRetortCapa(productKey, machines, trays) {
+  const p = RETORT.products[productKey];
+  if (!p) return {};
+  // 트레이 수로 최대 동시 가동 대수 계산
+  const traysPerMachine = p.traysPerCart * RETORT.cartsPerMachine;
+  const maxMachines = Math.min(machines, Math.floor(trays / traysPerMachine));
+  const eaPerMachine = p.traysPerCart * RETORT.cartsPerMachine * p.eaPerTray;
+  const cycleHr = p.cycleMins / 60;
+  const maxCycles = Math.floor(9 / cycleHr); // 9hr 기준 (포장팀 09~18시)
+  const eaPerDay = eaPerMachine * maxMachines * maxCycles;
+  return { maxMachines, eaPerMachine, cycleHr, maxCycles, eaPerDay, traysPerMachine };
+}
+
 const REALDATA = [
   {date:'5/22(금)',product:'미니70g+FC3kg',part:'홍두께+설도',preP_h:61.2,preP_s:80.9,fraP_h:20.6,fraP_s:23.0,yield_h:57.2,yield_s:50.7,totalKg:1700,fragHr:3.6,note:'혼합생산 실측. 설도 수율 50.7% 이상'},
   {date:'5/27(수)',product:'시그니처130g',part:'설도',preP:87.3,fraP:31.0,yld:57.9,totalKg:662,fragHr:1.1,note:'소량 단독 생산'},
@@ -798,6 +890,10 @@ const TT_SCENES = {
       {label:'자숙T6<br>(상압 4.5h)',bars:[{s:9.58*60,e:13.67*60,color:'#ED7D31',label:'자숙④',note:'724kg'}]},
       {label:'파쇄·선별<br>(11명)',bars:[{s:10.77*60,e:17.37*60,color:'#8064A2',label:'파쇄·선별 6.6hr (1,496 kg)',note:'14배치'}]},
       {label:'내포장<br>(2호기)',bars:[{s:14.08*60,e:17.92*60,color:'#C00000',label:'FC 3kg 포장 1,133봉'}]},
+      {label:'레토르트①<br>(2.5hr×2대)',bars:[
+        {s:14.5*60,e:17*60,color:'#0D7377',label:'레토르트 1회전 (384봉)'},
+        {s:17.1*60,e:19.6*60,color:'#0D7377',label:'2회전'},
+      ]},
     ]
   },
   seodo: {
@@ -814,6 +910,12 @@ const TT_SCENES = {
         {s:10.5*60,e:17*60,color:'#8064A2',label:'추가 물량 파쇄 (8hr 풀가동 가정)',opacity:'0.5'}
       ]},
       {label:'내포장<br>(1호기)',bars:[{s:10.67*60,e:15.75*60,color:'#C00000',label:'미니 70g 14,983ea (5.1hr)'}]},
+      {label:'레토르트<br>(1.5hr)',bars:[
+        {s:11*60,e:12.5*60,color:'#0D7377',label:'1회전'},
+        {s:12.6*60,e:14.1*60,color:'#0D7377',label:'2회전'},
+        {s:14.2*60,e:15.7*60,color:'#0D7377',label:'3회전'},
+        {s:15.8*60,e:17.3*60,color:'#0D7377',label:'4회전'},
+      ]},
     ]
   },
   night_pre: {
@@ -826,7 +928,12 @@ const TT_SCENES = {
       {label:'자숙T5',bars:[{s:27.53*60,e:32.03*60,color:'#ED7D31',label:'상압 자숙 ③ 4.5hr'}]},
       {label:'자숙T6',bars:[{s:27.7*60,e:32.2*60,color:'#ED7D31',label:'상압 자숙 ④ 4.5hr'}]},
       {label:'파쇄·선별<br>(15명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'파쇄 8hr 풀가동 (2,496 kg)',note:'자숙 완료 후 4~5hr 안정'}]},
-      {label:'내포장',bars:[{s:35*60,e:41.5*60,color:'#C00000',label:'내포장'}]},
+      {label:'내포장<br>(2호기)',bars:[{s:35*60,e:41.5*60,color:'#C00000',label:'FC 3kg 내포장'}]},
+      {label:'레토르트①<br>(2.5hr×2대)',bars:[
+        {s:36*60,e:38.5*60,color:'#0D7377',label:'FC 1회전 (768봉·2대)'},
+        {s:38.6*60,e:41.1*60,color:'#0D7377',label:'FC 2회전 (768봉)'},
+        {s:41.2*60,e:43.7*60,color:'#0D7377',label:'FC 3회전 → 총 2,304봉/일'},
+      ]},
     ]
   },
   night_late: {
@@ -844,7 +951,7 @@ const TT_SCENES = {
     ]
   },
   double_frag: {
-    title:'파쇄기 2대 + 야간 전처리', tStart:21, tEnd:38,
+    title:'파쇄기 2대 + 야간 전처리', tStart:21, tEnd:44,
     summary:'야간 전처리 완료 → 파쇄기 2대 각 10명씩 독립 운영 (인원 역설 방지)<br><strong style="color:var(--ok)">20명 × 20.8 × 8hr = 3,328 kg/일. 숙련 25 kg/hr 달성 시 4,000 kg/일</strong>',
     lanes: [
       {label:'야간전처리<br>(9명)',bars:[{s:22*60,e:27.18*60,color:'#5B9BD5',label:'야간 전처리 22:00~03:11'}]},
@@ -853,12 +960,19 @@ const TT_SCENES = {
         {s:27.37*60,e:31.87*60,color:'#ED7D31',label:''},
       ]},
       {label:'파쇄기 1호<br>(10명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'파쇄기 1호 10명 × 8hr (1,664 kg)'}]},
-      {label:'파쇄기 2호<br>(10명)',bars:[{s:33*60,e:41*60,color:'#pur',label:'파쇄기 2호 10명 × 8hr (1,664 kg)'}]},
+      {label:'파쇄기 2호<br>(10명)',bars:[{s:33*60,e:41*60,color:'#5a3d7a',label:'파쇄기 2호 10명 × 8hr (1,664 kg)'}]},
       {label:'내포장<br>(전 라인)',bars:[{s:35*60,e:42*60,color:'#C00000',label:'내포장 3·4호기 병행'}]},
+      {label:'레토르트<br>(1.5hr)',bars:[
+        {s:36*60,e:37.5*60,color:'#0D7377',label:'1회전'},
+        {s:37.6*60,e:39.1*60,color:'#0D7377',label:'2회전'},
+        {s:39.2*60,e:40.7*60,color:'#0D7377',label:'3회전'},
+        {s:40.8*60,e:42.3*60,color:'#0D7377',label:'4회전'},
+        {s:42.4*60,e:43.9*60,color:'#0D7377',label:'5회전'},
+      ]},
     ]
   },
   mixed522: {
-    title:'5/22 혼합생산 실측 (홍두께 FC + 설도 미니)', tStart:4, tEnd:18,
+    title:'5/22 혼합생산 실측 (홍두께 FC + 설도 미니)', tStart:4, tEnd:19,
     summary:'<strong>5/22 실측:</strong> 전처리 05:00~08:50 (홍두께 3.3hr + 설도 0.5hr) → 자숙 06:40~12:40 (3건 6hr) → 파쇄 11:29~16:29 (3.6hr)<br>혼합생산 시 파쇄 시간 3.6hr (홍두께 단독 6.6hr vs 혼합 3.6hr) · 총 6,256ea 생산',
     lanes: [
       {label:'전처리<br>홍두께(7명)',bars:[{s:5*60,e:8.83*60,color:'#1F3864',label:'홍두께 1,400kg 전처리 3.3hr (61.2 kg/인시)'}]},
@@ -871,6 +985,14 @@ const TT_SCENES = {
       ]},
       {label:'포장①<br>미니70g(7명)',bars:[{s:13.58*60,e:15.58*60,color:'#C00000',label:'미니 70g 5,737ea (2hr)'}]},
       {label:'포장②<br>FC3kg(6명)',bars:[{s:13.58*60,e:15.75*60,color:'#8B0000',label:'FC 3kg 519봉 (2.2hr)'}]},
+      {label:'레토르트①<br>미니(1.5hr)',bars:[
+        {s:14*60,e:15.5*60,color:'#0D7377',label:'미니 1회전'},
+        {s:15.6*60,e:17.1*60,color:'#0D7377',label:'2회전'},
+        {s:17.2*60,e:18.7*60,color:'#0D7377',label:'3회전'},
+      ]},
+      {label:'레토르트②<br>FC(2.5hr)',bars:[
+        {s:14.5*60,e:17*60,color:'#14b8a6',label:'FC 1회전 (384봉)'},
+      ]},
     ]
   }
 };
@@ -1217,6 +1339,59 @@ function initRealdata() {
 }
 
 // ══════════════════════ 초기화 ══════════════════════
+// ── 개요 레토르트 표 초기화
+(function initRetortOverview(){
+  const tbody = document.getElementById('retort-overview-tbody');
+  if(!tbody) return;
+  let html = '';
+  Object.entries(RETORT.products).forEach(([key, p]) => {
+    const eaPerMachine = p.traysPerCart * RETORT.cartsPerMachine * p.eaPerTray;
+    const cycleHr = p.cycleMins / 60;
+    const maxCycles = Math.floor(9 / cycleHr);
+    // 현재 트레이로 동시 가동 가능 대수
+    const traysPerMachine = p.traysPerCart * RETORT.cartsPerMachine;
+    const curMachines = Math.min(3, Math.floor(RETORT.traysCurrent / traysPerMachine));
+    const upgMachines = Math.min(3, Math.floor(RETORT.traysUpgrade / traysPerMachine));
+    const curMax = eaPerMachine * curMachines * maxCycles;
+    const upgMax = eaPerMachine * upgMachines * maxCycles;
+    const cls = key === 'FC 3kg' ? 'warn' : 'ok';
+    html += `<tr>
+      <td>${p.label}</td>
+      <td class="c">${eaPerMachine.toLocaleString('ko-KR')} EA</td>
+      <td class="c">${eaPerMachine.toLocaleString('ko-KR')} EA<br><small>(${cycleHr}hr·${maxCycles}회전)</small></td>
+      <td class="r ${cls}">${curMax.toLocaleString('ko-KR')} EA<br><small>${curMachines}대 동시</small></td>
+      <td class="r ok">${upgMax.toLocaleString('ko-KR')} EA<br><small>${upgMachines}대 동시</small></td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+})();
+
+// ── 시뮬레이터 레토르트 계산
+function calcRetortSim() {
+  const product = document.getElementById('sim-retort-product')?.value || 'FC 3kg';
+  const machines = parseInt(document.getElementById('sim-retort-machines')?.value || 2);
+  const trays = parseInt(document.getElementById('sim-retort-trays')?.value || 96);
+  const p = RETORT.products[product];
+  if(!p) return;
+  const traysPerMachine = p.traysPerCart * RETORT.cartsPerMachine;
+  const effectiveMachines = Math.min(machines, Math.floor(trays / traysPerMachine));
+  const eaPerMachine = p.traysPerCart * RETORT.cartsPerMachine * p.eaPerTray;
+  const cycleHr = p.cycleMins / 60;
+  const maxCycles = Math.floor(9 / cycleHr);
+  const dailyEa = eaPerMachine * effectiveMachines * maxCycles;
+  const el = document.getElementById('sim-retort-result');
+  if(el) el.innerHTML = `
+    <table class="tbl" style="margin-top:8px">
+      <tr><td>트레이 기준 최대 동시 가동</td><td class="r ok">${effectiveMachines}대</td></tr>
+      <tr><td>1대당 1사이클 생산량</td><td class="r">${eaPerMachine.toLocaleString('ko-KR')} EA</td></tr>
+      <tr><td>사이클 시간</td><td class="r">${cycleHr}hr</td></tr>
+      <tr><td>9hr 기준 최대 회전수</td><td class="r">${maxCycles}회전</td></tr>
+      <tr><td><strong>일 최대 생산량</strong></td><td class="r ok"><strong>${dailyEa.toLocaleString('ko-KR')} EA</strong></td></tr>
+      ${trays < traysPerMachine ? `<tr><td colspan="2"><div class="alert bad" style="margin:4px 0">트레이 부족: ${traysPerMachine}개 필요, 현재 ${trays}개 → 1대도 풀가동 불가</div></td></tr>` : ''}
+      ${effectiveMachines < machines ? `<tr><td colspan="2"><div class="alert warn" style="margin:4px 0">트레이 ${trays}개로는 ${effectiveMachines}대만 동시 가동 가능</div></td></tr>` : ''}
+    </table>`;
+}
+
 renderTT();
 initBN();
 </script>
