@@ -160,6 +160,7 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
   <button class="tnav" onclick="goPage('nightshift',this)">🌙 야간 운영</button>
   <button class="tnav" onclick="goPage('roadmap',this)">🗺 단계별 목표</button>
   <button class="tnav" onclick="goPage('realdata',this)">📋 실측 데이터</button>
+  <button class="tnav" onclick="goPage('planrev',this)">📅 생산계획 역산</button>
 </div>
 
 <!-- ══════════════════════════════════════
@@ -772,7 +773,9 @@ function goPage(name, btn) {
   document.getElementById('page-' + name).classList.add('active');
   btn.classList.add('active');
   const inits = {timetable:initTT, bottleneck:initBN, simulator:initSim,
-    mixed:initMixed, nightshift:initNight, roadmap:initRoadmap, realdata:initRealdata};
+    mixed:initMixed, nightshift:initNight, roadmap:initRoadmap, realdata:initRealdata,
+    planrev: function(){ /* 입력 대기 */ }
+  };
   if (inits[name]) inits[name]();
 }
 
@@ -1394,6 +1397,493 @@ function calcRetortSim() {
 
 renderTT();
 initBN();
+
+// ══════════════════════════════════════
+// 생산계획 역산 시뮬레이터
+// ══════════════════════════════════════
+
+// 수율 상수 (실측 기반)
+const YIELD = {
+  cook_fc:   0.587,  // 홍두께 자숙수율
+  cook_seodo:0.576,  // 설도 자숙수율
+  frag_fc:   0.910,  // 홍두께 파쇄수율
+  frag_seodo:0.880,  // 설도 파쇄수율
+  pre_fc:    59.9,   // 홍두께 전처리 kg/인시
+  pre_seodo: 84.1,   // 설도 전처리 kg/인시
+  frag_prod_fc:   20.8, // 홍두께 파쇄 kg/인시
+  frag_prod_seodo:28.2, // 설도 파쇄 kg/인시
+};
+
+// 제품 프리셋
+const PRODUCTS_PRESET = {
+  'FC 3kg':    { fill:1.350, cook:YIELD.cook_fc,    frag:YIELD.frag_fc,    pre_prod:YIELD.pre_fc,    frag_prod:YIELD.frag_prod_fc,    retort_cycle:2.5, pack_line:'2호기', pack_speed:15,  retort_tray:12, retort_ea:8,  part:'홍두께' },
+  '130g 낱개': { fill:0.130, cook:YIELD.cook_seodo, frag:YIELD.frag_seodo, pre_prod:YIELD.pre_seodo, frag_prod:YIELD.frag_prod_seodo, retort_cycle:1.5, pack_line:'3·4호기', pack_speed:45, retort_tray:32, retort_ea:32, part:'설도' },
+  '코코 170g': { fill:0.170, cook:YIELD.cook_seodo, frag:YIELD.frag_seodo, pre_prod:YIELD.pre_seodo, frag_prod:YIELD.frag_prod_seodo, retort_cycle:1.5, pack_line:'3·4호기', pack_speed:45, retort_tray:32, retort_ea:32, part:'설도' },
+  '미니 70g':  { fill:0.070, cook:YIELD.cook_seodo, frag:YIELD.frag_seodo, pre_prod:YIELD.pre_seodo, frag_prod:YIELD.frag_prod_seodo, retort_cycle:1.5, pack_line:'1호기', pack_speed:60,  retort_tray:32, retort_ea:40, part:'설도' },
+  '트레이더스 460g': { fill:0.460, cook:YIELD.cook_seodo, frag:YIELD.frag_seodo, pre_prod:YIELD.pre_seodo, frag_prod:YIELD.frag_prod_seodo, retort_cycle:1.5, pack_line:'3·4호기', pack_speed:45, retort_tray:19, retort_ea:20, part:'설도' },
+};
+
+function reverseCalc(productKey, monthlyEa, productionDays, cookMode) {
+  const p = PRODUCTS_PRESET[productKey];
+  if (!p) return null;
+
+  // ── 자숙 방식 설정
+  // cookMode: 'atm6' (상압6대), 'mixed' (가압2+상압4), 'pressure2' (가압2대만FC)
+  const isFc = productKey === 'FC 3kg';
+  const mode = cookMode || 'atm6';
+
+  // 자숙 방식별 탱크 스펙
+  const COOK_MODES = {
+    atm6:      { label:'상압 6대 (현재)', tanks:6, cycleHr:4.5, maxCyclePerDay:2, maxKgPerCycle:6*800 },
+    mixed:     { label:'가압T1·T2 + 상압T3~T6 (혼합)', pressure_tanks:2, atm_tanks:4,
+                 pressure_cycleHr:2.5, atm_cycleHr:4.5,
+                 // 06~17:30 기준: 가압 4사이클(2대), 상압 2사이클(4대)
+                 maxKgPerDay: 2*800*4 + 4*800*2 },
+    pressure2: { label:'가압 T1·T2만 FC (미래)', tanks:2, cycleHr:2.5,
+                 // 06~17:30 기준: 2.5hr × 4사이클 + 여유
+                 maxCyclePerDay:4, maxKgPerCycle:2*800 },
+  };
+  const cm = COOK_MODES[mode] || COOK_MODES.atm6;
+
+  const eaPerDay = Math.ceil(monthlyEa / productionDays);
+  const meatPerEa = p.fill / p.cook / p.frag;
+  const meatPerDay = eaPerDay * meatPerEa;
+  const tanksNeeded = meatPerDay / 800;
+  const cookInput = meatPerDay * p.cook;
+  const fragNeeded8hr = cookInput / (p.frag_prod * 8);
+  const preNeeded8hr = meatPerDay / (p.pre_prod * 8);
+  const preHr_11 = meatPerDay / (p.pre_prod * 11);
+  const eaPerMachine = p.retort_tray * 4 * p.retort_ea;
+  const retortCycles1 = eaPerDay / eaPerMachine;
+  const retortCycles2 = eaPerDay / (eaPerMachine * 2);
+  const retortCycles3 = eaPerDay / (eaPerMachine * 3);
+  const packHr = eaPerDay / (p.pack_speed * 60);
+
+  // ── 자숙 방식별 탱크 운영 판단
+  let tankOp = '', tankBadge = 'ok', tankMaxKg = 0;
+
+  if (mode === 'atm6') {
+    tankMaxKg = 6 * 800 * 2; // 2사이클 최대
+    if (meatPerDay <= 6*800) {
+      tankOp = `상압 ${Math.ceil(meatPerDay/800)}대 × 1사이클 (주간 충분)`;
+      tankBadge = 'ok';
+    } else if (meatPerDay <= 6*800*2) {
+      tankOp = `상압 6대 × 2사이클 필요 → <strong>야간자숙 필수</strong>`;
+      tankBadge = 'warn';
+    } else {
+      tankOp = `⚠️ 상압 6대 2사이클(9,600kg) 초과 → 일정 분산 또는 가압 전환 검토`;
+      tankBadge = 'bad';
+    }
+  } else if (mode === 'mixed') {
+    // 가압 T1·T2: 06~17:30 기준 4사이클 = 2×800×4 = 6,400kg
+    // 상압 T3~T6: 06~17:30 기준 2사이클 = 4×800×2 = 6,400kg
+    // 단, FC는 가압T1·T2만, 장조림 비중에 따라 달라짐
+    const maxKg_pressure = 2*800*4;  // 6,400kg
+    const maxKg_atm = 4*800*2;       // 6,400kg
+    tankMaxKg = maxKg_pressure + maxKg_atm;
+    if (meatPerDay <= maxKg_pressure) {
+      const cycles = Math.ceil(meatPerDay / (2*800));
+      tankOp = `가압 T1·T2 × ${cycles}사이클 (${(cycles*2.5).toFixed(1)}hr) — 상압 4대 여유`;
+      tankBadge = 'ok';
+    } else if (meatPerDay <= tankMaxKg) {
+      tankOp = `가압 T1·T2 × 4사이클 + 상압 T3~T6 × 2사이클 (연장 포함)`;
+      tankBadge = 'warn';
+    } else {
+      tankOp = `⚠️ 혼합 최대(12,800kg) 초과 → 일정 분산 필요`;
+      tankBadge = 'bad';
+    }
+  } else if (mode === 'pressure2') {
+    // 가압 T1·T2만 FC용: 2.5hr/사이클, 06~17:30 = 4사이클 = 2×800×4 = 6,400kg
+    const maxKg = 2*800*4;
+    tankMaxKg = maxKg;
+    if (meatPerDay <= 2*800) {
+      const cycles = Math.ceil(meatPerDay / (2*800));
+      tankOp = `가압 T1·T2 × ${cycles}사이클 (${(cycles*2.5).toFixed(1)}hr) ✅`;
+      tankBadge = 'ok';
+    } else if (meatPerDay <= maxKg) {
+      const cycles = Math.ceil(meatPerDay / (2*800));
+      tankOp = `가압 T1·T2 × ${cycles}사이클 = ${(cycles*2.5).toFixed(1)}hr (연장 포함)`;
+      tankBadge = 'warn';
+    } else {
+      tankOp = `⚠️ 가압 2대 최대(6,400kg) 초과 → 상압 탱크 추가 투입 필요`;
+      tankBadge = 'bad';
+    }
+  }
+
+  // ── 가압 전환 시 절감 효과 계산 (FC만)
+  let pressureGain = null;
+  if (isFc && mode !== 'atm6') {
+    const atm_cycles_needed = Math.ceil(meatPerDay / (6*800));
+    const pressure_cycles_needed = Math.ceil(meatPerDay / (2*800));
+    const atm_time = atm_cycles_needed * 4.5;
+    const pressure_time = pressure_cycles_needed * 2.5;
+    pressureGain = {
+      timeSaved: atm_time - pressure_time,
+      cyclesAtm: atm_cycles_needed,
+      cyclesPressure: pressure_cycles_needed,
+      note: `자숙시간 ${(atm_time).toFixed(1)}hr → ${pressure_time.toFixed(1)}hr (${(atm_time-pressure_time).toFixed(1)}hr 단축)`
+    };
+  }
+
+  // ── 경고
+  const warnings = [];
+  if (meatPerDay > tankMaxKg) warnings.push({ type:'bad', msg:`일 필요 원육 ${(meatPerDay/1000).toFixed(1)}ton이 ${cm.label} 최대(${(tankMaxKg/1000).toFixed(1)}ton) 초과 → 일정 분산 필요` });
+  else if (meatPerDay > tankMaxKg * 0.8) warnings.push({ type:'warn', msg:`자숙 설비 가동률 ${(meatPerDay/tankMaxKg*100).toFixed(0)}% — 연장 또는 야간 운영 필요` });
+  if (fragNeeded8hr > 25) warnings.push({ type:'bad', msg:`파쇄 필요 인원 ${fragNeeded8hr.toFixed(0)}명 — 파쇄기 2대 증설 필수` });
+  else if (fragNeeded8hr > 15) warnings.push({ type:'warn', msg:`파쇄 필요 인원 ${fragNeeded8hr.toFixed(0)}명 — 증원 필요` });
+  if (preHr_11 > 9) warnings.push({ type:'warn', msg:`11명 전처리 시 ${preHr_11.toFixed(1)}hr 소요 — 야간 전처리 필요` });
+  if (retortCycles2 > 3.5) warnings.push({ type:'warn', msg:`레토르트 2대 기준 ${retortCycles2.toFixed(1)}회전 필요 — 트레이 192개 또는 3대 풀가동 필요` });
+  if (pressureGain) warnings.push({ type:'ok', msg:`⚡ 가압 전환 효과: ${pressureGain.note}` });
+
+  return { eaPerDay, meatPerDay, meatPerEa, tanksNeeded, tankOp, tankBadge,
+    tankMaxKg, cookInput, fragNeeded8hr, preNeeded8hr, preHr_11,
+    eaPerMachine, retortCycles1, retortCycles2, retortCycles3,
+    packHr, warnings, p, mode, cm, pressureGain };
+}
+
+function runPlanRev() {
+  // 입력값 읽기
+  const year  = parseInt(document.getElementById('pr-year').value);
+  const month = parseInt(document.getElementById('pr-month').value);
+  const prod1 = document.getElementById('pr-prod1').value;
+  const ea1   = parseInt(document.getElementById('pr-ea1').value.replace(/,/g,'')) || 0;
+  const days1 = parseInt(document.getElementById('pr-days1').value);
+  const cookMode1 = document.querySelector('input[name="cookmode1"]:checked')?.value || 'atm6';
+  const prod2 = document.getElementById('pr-prod2').value;
+  const ea2   = parseInt(document.getElementById('pr-ea2').value.replace(/,/g,'')) || 0;
+  const days2 = parseInt(document.getElementById('pr-days2').value);
+  const cookMode2 = document.querySelector('input[name="cookmode2"]:checked')?.value || 'atm6';
+  const workDays = parseInt(document.getElementById('pr-workdays').value);
+
+  const r1 = ea1 > 0 ? reverseCalc(prod1, ea1, days1, cookMode1) : null;
+  const r2 = ea2 > 0 ? reverseCalc(prod2, ea2, days2, cookMode2) : null;
+
+  // 달력 생성
+  renderPlanCalendar(year, month, prod1, days1, prod2, days2, workDays);
+
+  // 역산 결과
+  renderPlanResult(r1, prod1, ea1, days1, 1);
+  renderPlanResult(r2, prod2, ea2, days2, 2);
+
+  // 타임테이블
+  renderPlanTT(r1, prod1, r2, prod2);
+}
+
+function renderPlanCalendar(year, month, prod1, days1, prod2, days2, workDays) {
+  const el = document.getElementById('pr-calendar');
+  const firstDay = new Date(year, month-1, 1).getDay();
+  const totalDays = new Date(year, month, 0).getDate();
+
+  // 날짜 배분 (단순: 앞에서부터 제품1, 이후 제품2, 휴일 포함)
+  const schedule = {};
+  let d1count = 0, d2count = 0, dayIdx = 0;
+  for (let d = 1; d <= totalDays; d++) {
+    const dow = (firstDay + d - 1) % 7;
+    if (dow === 0 || dow === 6) { schedule[d] = 'off'; continue; }
+    dayIdx++;
+    if (dayIdx <= days1) { schedule[d] = 'prod1'; d1count++; }
+    else if (dayIdx <= days1 + days2) { schedule[d] = 'prod2'; d2count++; }
+    else schedule[d] = 'off2';
+  }
+
+  const color1 = '#0D7377', color2 = '#2F5496';
+  const dow_labels = ['일','월','화','수','목','금','토'];
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:10px">`;
+  dow_labels.forEach(d => { html += `<div style="text-align:center;font-weight:600;padding:4px;color:var(--sub)">${d}</div>`; });
+
+  // 첫 주 빈칸
+  for (let i = 0; i < firstDay; i++) html += `<div></div>`;
+
+  for (let d = 1; d <= totalDays; d++) {
+    const s = schedule[d];
+    const dow = (firstDay + d - 1) % 7;
+    const isWeekend = dow === 0 || dow === 6;
+    let bg = 'var(--light)', color = 'var(--sub)', border = '1px solid var(--border)', label = '';
+    if (s === 'prod1') { bg = color1; color = '#fff'; label = `<br><span style="font-size:8px">${prod1.split(' ')[0]}</span>`; }
+    else if (s === 'prod2') { bg = color2; color = '#fff'; label = `<br><span style="font-size:8px">${prod2.split(' ')[0]}</span>`; }
+    else if (isWeekend) { bg = '#f9f9f9'; color = '#bbb'; }
+    html += `<div style="background:${bg};color:${color};border:${border};border-radius:5px;padding:4px;text-align:center;min-height:44px;font-size:11px;font-weight:500">${d}${label}</div>`;
+  }
+  html += `</div>`;
+  html += `<div style="display:flex;gap:12px;margin-top:8px;font-size:10px">
+    <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:${color1};border-radius:3px;display:inline-block"></span>${prod1} (${d1count}일)</span>
+    ${ea2>0?`<span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:${color2};border-radius:3px;display:inline-block"></span>${prod2} (${d2count}일)</span>`:''}
+    <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:var(--light);border:1px solid var(--border);border-radius:3px;display:inline-block"></span>휴일·여유</span>
+  </div>`;
+  el.innerHTML = html;
+}
+
+function renderPlanResult(r, prodName, ea, days, idx) {
+  const el = document.getElementById('pr-result'+idx);
+  if (!r || ea === 0) { el.innerHTML = ''; return; }
+
+  const warnHtml = r.warnings.map(w =>
+    `<div class="alert ${w.type}" style="margin:4px 0;padding:6px 10px">${w.msg}</div>`
+  ).join('');
+
+  const retortMachines = r.retortCycles3 <= 3 ? 3 : r.retortCycles2 <= 3.5 ? 2 : '2대 부족';
+  const retortNote = r.retortCycles2 <= 3 ? `2대 × ${r.retortCycles2.toFixed(1)}회전 ✅`
+    : r.retortCycles3 <= 3 ? `3대 × ${r.retortCycles3.toFixed(1)}회전 (트레이 192개 필요)`
+    : `⚠️ 3대 풀가동으로도 부족 (${r.retortCycles3.toFixed(1)}회전)`;
+
+  el.innerHTML = `
+    <div class="sec-hdr" style="background:${idx===1?'#0D7377':'#2F5496'};color:#fff">
+      ${prodName} — 월 ${ea.toLocaleString('ko-KR')}EA / ${days}일 생산 역산 결과
+    </div>
+    <div class="sec-body">
+      ${warnHtml}
+      <div class="grid3" style="margin-bottom:10px">
+        <div class="res-card"><div class="rv" style="color:${idx===1?'#0D7377':'#2F5496'}">${r.eaPerDay.toLocaleString('ko-KR')}</div><div class="rl">EA/일 (목표)</div></div>
+        <div class="res-card"><div class="rv">${(r.meatPerDay/1000).toFixed(2)}</div><div class="rl">ton/일 (필요 원육)</div></div>
+        <div class="res-card"><div class="rv">${(r.meatPerEa*1000).toFixed(0)}g</div><div class="rl">봉당 원육 (계산값)</div></div>
+      </div>
+
+      <table class="tbl">
+        <thead><tr><th>공정</th><th>필요 조건</th><th class="c">판정</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>전처리</strong></td>
+            <td>11명 기준 <strong>${r.preHr_11.toFixed(1)}hr</strong> 소요<br>8hr 이내 처리: <strong>${Math.ceil(r.preNeeded8hr)}명</strong> 필요</td>
+            <td class="c"><span class="badge ${r.preHr_11 > 9 ? 'bad' : r.preHr_11 > 6 ? 'warn' : 'ok'}">${r.preHr_11 > 9 ? '야간필수' : r.preHr_11 > 6 ? '빠듯' : '가능'}</span></td>
+            <td>${r.p.part} ${r.p.pre_prod} kg/인시 기준</td>
+          </tr>
+          <tr>
+            <td><strong>자숙</strong></td>
+            <td>${r.tankOp}</td>
+            <td class="c"><span class="badge ${r.tankBadge}">${r.tankBadge==='ok'?'가능':r.tankBadge==='warn'?'야간필수':'설비부족'}</span></td>
+            <td>${(r.meatPerDay/1000).toFixed(1)}ton / 800kg = 이론 ${r.tanksNeeded.toFixed(1)}탱크${r.pressureGain?`<br><span style="color:#0D7377;font-size:10px">⚡ ${r.pressureGain.note}</span>`:''}</td>
+          </tr>
+          <tr>
+            <td><strong>파쇄·선별</strong></td>
+            <td>8hr 기준 <strong>${Math.ceil(r.fragNeeded8hr)}명</strong> 필요<br>${r.p.frag_prod} kg/인시 × 8hr</td>
+            <td class="c"><span class="badge ${r.fragNeeded8hr > 25 ? 'bad' : r.fragNeeded8hr > 15 ? 'warn' : 'ok'}">${r.fragNeeded8hr > 25 ? '파쇄기2대필수' : r.fragNeeded8hr > 15 ? '증원필요' : '가능'}</span></td>
+            <td>파쇄기 2대 시: 라인당 ${Math.ceil(r.fragNeeded8hr/2)}명 배치</td>
+          </tr>
+          <tr>
+            <td><strong>내포장</strong></td>
+            <td>${r.p.pack_line} / ${r.eaPerDay.toLocaleString('ko-KR')} EA → <strong>${r.packHr.toFixed(1)}hr</strong></td>
+            <td class="c"><span class="badge ${r.packHr > 8 ? 'bad' : r.packHr > 5 ? 'warn' : 'ok'}">${r.packHr > 8 ? '초과' : r.packHr > 5 ? '빠듯' : '가능'}</span></td>
+            <td>${r.p.pack_speed} ea/min 기준</td>
+          </tr>
+          <tr>
+            <td><strong>레토르트</strong></td>
+            <td>${retortNote}</td>
+            <td class="c"><span class="badge ${r.retortCycles2 > 4 ? 'bad' : r.retortCycles2 > 3 ? 'warn' : 'ok'}">${r.retortCycles2 > 4 ? '부족' : r.retortCycles2 > 3 ? '주의' : '가능'}</span></td>
+            <td>1대 1사이클 ${r.eaPerMachine.toLocaleString('ko-KR')} EA · ${r.p.retort_cycle}hr</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top:10px;padding:10px;background:var(--light);border-radius:8px;font-size:11px;line-height:1.8;border:1px solid var(--border)">
+        <strong>권장 운영 구성</strong><br>
+        전처리: ${r.preHr_11 > 7 ? '야간 투입 권장 (22:00~, 외국인 인원)' : '주간 가능 (11명 기준)'}<br>
+        자숙: ${r.tankOp}<br>
+        파쇄: ${Math.ceil(r.fragNeeded8hr)}명 × ${r.p.frag_prod} kg/인시 × 8hr${r.fragNeeded8hr > 15 ? ` — 파쇄기 2대 시 라인당 ${Math.ceil(r.fragNeeded8hr/2)}명` : ''}<br>
+        레토르트: ${retortNote}
+      </div>
+    </div>`;
+}
+
+function renderPlanTT(r1, prod1, r2, prod2) {
+  if (!r1) return;
+  const el = document.getElementById('pr-tt');
+  const lanes = [];
+  const isNight1 = r1 && r1.preHr_11 > 7;
+
+  if (r1) {
+    if (isNight1) {
+      lanes.push({label:`야간전처리<br>(${Math.ceil(r1.preNeeded8hr)}명)`, bars:[{s:22*60,e:(22+r1.preHr_11)*60,color:'#5B9BD5',label:`${prod1} 야간 전처리 ${r1.preHr_11.toFixed(1)}hr`}]});
+      const cookEnd = (22 + r1.preHr_11 + 4.5);
+      lanes.push({label:'자숙 (야간+새벽)', bars:[{s:(22+r1.preHr_11)*60, e:cookEnd*60, color:'#ED7D31', label:`자숙 6대 순차 (${(r1.meatPerDay/1000).toFixed(1)}ton)`}]});
+      lanes.push({label:`파쇄·선별<br>(${Math.ceil(r1.fragNeeded8hr)}명)`, bars:[{s:33*60, e:41*60, color:'#8064A2', label:`파쇄 09:00~17:00 (${(r1.cookInput/1000).toFixed(1)}ton)`}]});
+    } else {
+      lanes.push({label:`전처리<br>(${Math.ceil(r1.preNeeded8hr)}명)`, bars:[{s:6*60, e:(6+r1.preHr_11)*60, color:'#1F3864', label:`${prod1} 전처리 ${r1.preHr_11.toFixed(1)}hr`}]});
+      lanes.push({label:'자숙', bars:[{s:(6+r1.preHr_11)*60, e:(6+r1.preHr_11+4.5)*60, color:'#ED7D31', label:`자숙 (${(r1.meatPerDay/1000).toFixed(1)}ton)`}]});
+      const fragStart = Math.max(9, 6 + r1.preHr_11 + 4.5) * 60;
+      lanes.push({label:`파쇄·선별<br>(${Math.ceil(r1.fragNeeded8hr)}명)`, bars:[{s:fragStart, e:fragStart+8*60, color:'#8064A2', label:`파쇄 8hr (${(r1.cookInput/1000).toFixed(1)}ton)`}]});
+    }
+    const fragStart2 = isNight1 ? 33*60 : Math.max(9*60, (6+r1.preHr_11+4.5)*60);
+    lanes.push({label:`내포장<br>(${r1.p.pack_line})`, bars:[{s:fragStart2+60, e:fragStart2+60+r1.packHr*60, color:'#C00000', label:`${prod1} 포장 ${r1.packHr.toFixed(1)}hr`}]});
+    const retStart = fragStart2 + 90;
+    const retCycles = Math.ceil(r1.retortCycles2);
+    for (let i = 0; i < Math.min(retCycles, 4); i++) {
+      const s = retStart + i * r1.p.retort_cycle * 60;
+      lanes.push({label: i===0?`레토르트×2대<br>(${r1.p.retort_cycle}hr)`:'', bars:[{s, e:s+r1.p.retort_cycle*60, color:'#0D7377', label:`${i+1}회전 (${r1.eaPerMachine*2}EA)`}]});
+    }
+  }
+
+  if (r2 && r2.eaPerDay > 0) {
+    lanes.push({label:'─ 다음제품 ─', bars:[]});
+    const isNight2 = r2.preHr_11 > 7;
+    const tOffset = isNight1 ? 0 : 0;
+    lanes.push({label:`전처리<br>(${Math.ceil(r2.preNeeded8hr)}명)`, bars:[{s:6*60+tOffset, e:(6+r2.preHr_11)*60+tOffset, color:'#2F5496', label:`${prod2} 전처리 ${r2.preHr_11.toFixed(1)}hr`}]});
+    const fStart2 = Math.max(9*60, (6+r2.preHr_11+4.5)*60) + tOffset;
+    lanes.push({label:`파쇄<br>(${Math.ceil(r2.fragNeeded8hr)}명)`, bars:[{s:fStart2, e:fStart2+8*60, color:'#5a3d7a', label:`파쇄 8hr`}]});
+    lanes.push({label:`내포장<br>(${r2.p.pack_line})`, bars:[{s:fStart2+60, e:fStart2+60+r2.packHr*60, color:'#8B0000', label:`${prod2} 포장`}]});
+  }
+
+  const tStart = isNight1 ? 21 : 4;
+  const tEnd = isNight1 ? 44 : 22;
+  buildTT('pr-tt', lanes, tStart, tEnd, lanes.length*34+44);
+}
+
+// 입력값 포맷팅 (콤마)
+document.addEventListener('DOMContentLoaded', function() {
+  ['pr-ea1','pr-ea2'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('input', function() {
+      const v = this.value.replace(/[^0-9]/g,'');
+      this.value = v ? parseInt(v).toLocaleString('ko-KR') : '';
+    });
+  });
+  calcRetortSim();
+});
 </script>
+
+<!-- 생산계획 역산 페이지 HTML -->
+<div id="page-planrev" class="page" style="display:none">
+  <!-- 입력 패널 -->
+  <div class="section">
+    <div class="sec-hdr">📅 생산계획 입력</div>
+    <div class="sec-body">
+      <div class="grid3" style="margin-bottom:12px">
+        <div class="ctrl-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+          <label style="width:auto;font-weight:600;font-size:11px;color:var(--sub)">기준 연월</label>
+          <div style="display:flex;gap:6px">
+            <select id="pr-year" style="padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
+              <option value="2026">2026년</option><option value="2027">2027년</option>
+            </select>
+            <select id="pr-month" style="padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
+              <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
+              <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+              <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
+              <option value="10">10월</option><option value="11">11월</option><option value="12" selected>12월</option>
+            </select>
+          </div>
+        </div>
+        <div class="ctrl-row" style="flex-direction:column;align-items:flex-start;gap:4px">
+          <label style="width:auto;font-weight:600;font-size:11px;color:var(--sub)">월 가동일수</label>
+          <input type="number" id="pr-workdays" value="22" min="10" max="26" style="width:80px;padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px">
+        </div>
+      </div>
+
+      <!-- 제품 1 -->
+      <div style="background:rgba(13,115,119,.08);border:1px solid rgba(13,115,119,.3);border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:600;color:#0D7377;margin-bottom:8px">제품 A (주력)</div>
+        <div style="display:grid;grid-template-columns:1fr 140px 100px;gap:10px;align-items:end">
+          <div>
+            <div style="font-size:10px;color:var(--sub);margin-bottom:4px">제품 선택</div>
+            <select id="pr-prod1" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
+              <option value="FC 3kg">FC 어머니쇠고기장조림 3KG</option>
+              <option value="130g 낱개">130g 낱개 (설도/우둔)</option>
+              <option value="코코 170g">코스트코 쇠고기장조림 170g</option>
+              <option value="미니 70g">미니쇠고기장조림 70g</option>
+              <option value="트레이더스 460g">트레이더스 460g</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--sub);margin-bottom:4px">월 목표 생산량 (EA/봉)</div>
+            <input type="text" id="pr-ea1" value="36,400" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:5px;font-size:11px;text-align:right">
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--sub);margin-bottom:4px">생산 일수</div>
+            <input type="number" id="pr-days1" value="14" min="1" max="26" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:5px;font-size:11px;text-align:right">
+          </div>
+        </div>
+        <div style="margin-top:8px">
+          <div style="font-size:10px;color:var(--sub);margin-bottom:4px">🫙 자숙 방식 선택</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;padding:5px 10px;border:1px solid var(--border);border-radius:16px;background:var(--card)">
+              <input type="radio" name="cookmode1" id="pr-cookmode1" value="atm6" checked> 상압 6대 <span style="font-size:9px;color:var(--sub)">(현재·95℃·4.5hr)</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;padding:5px 10px;border:1px solid var(--border);border-radius:16px;background:var(--card)">
+              <input type="radio" name="cookmode1" value="mixed"> 가압T1·T2 + 상압T3~T6 <span style="font-size:9px;color:var(--sub)">(혼합)</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;padding:5px 10px;border:1px solid rgba(13,115,119,.4);border-radius:16px;background:rgba(13,115,119,.06)">
+              <input type="radio" name="cookmode1" value="pressure2"> 가압 T1·T2만 FC <span style="badge" style="font-size:9px;color:#0D7377">(미래·115℃·2.5hr)</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 제품 2 -->
+      <div style="background:rgba(47,84,150,.08);border:1px solid rgba(47,84,150,.3);border-radius:8px;padding:12px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:600;color:#2F5496;margin-bottom:8px">제품 B (보조, 선택)</div>
+        <div style="display:grid;grid-template-columns:1fr 140px 100px;gap:10px;align-items:end">
+          <div>
+            <div style="font-size:10px;color:var(--sub);margin-bottom:4px">제품 선택</div>
+            <select id="pr-prod2" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
+              <option value="">— 없음 —</option>
+              <option value="130g 낱개" selected>130g 낱개 (설도/우둔)</option>
+              <option value="FC 3kg">FC 어머니쇠고기장조림 3KG</option>
+              <option value="코코 170g">코스트코 쇠고기장조림 170g</option>
+              <option value="미니 70g">미니쇠고기장조림 70g</option>
+              <option value="트레이더스 460g">트레이더스 460g</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--sub);margin-bottom:4px">월 목표 생산량 (EA)</div>
+            <input type="text" id="pr-ea2" value="" placeholder="비워두면 최대 계산" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:5px;font-size:11px;text-align:right">
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--sub);margin-bottom:4px">생산 일수</div>
+            <input type="number" id="pr-days2" value="10" min="1" max="20" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:5px;font-size:11px;text-align:right">
+          </div>
+        </div>
+        <div style="margin-top:8px">
+          <div style="font-size:10px;color:var(--sub);margin-bottom:4px">🫙 자숙 방식</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:16px;background:var(--card)">
+              <input type="radio" name="cookmode2" id="pr-cookmode2" value="atm6" checked> 상압 (기본)
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:16px;background:var(--card)">
+              <input type="radio" name="cookmode2" value="mixed"> 가압+상압 혼합
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;padding:4px 8px;border:1px solid rgba(13,115,119,.4);border-radius:16px;background:rgba(13,115,119,.06)">
+              <input type="radio" name="cookmode2" value="pressure2"> 가압 T1·T2 <span style="font-size:9px;color:#0D7377">(미래)</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="runPlanRev()" style="background:var(--p);color:#fff;border:none;padding:10px 28px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;width:100%">
+        🔍 생산계획 역산 실행
+      </button>
+    </div>
+  </div>
+
+  <!-- 달력 -->
+  <div class="section">
+    <div class="sec-hdr">📆 월간 생산 일정 (달력)</div>
+    <div class="sec-body" id="pr-calendar">
+      <div style="text-align:center;color:var(--sub);padding:20px">역산 실행 후 표시됩니다</div>
+    </div>
+  </div>
+
+  <!-- 역산 결과 제품1 -->
+  <div class="section" id="pr-result1"></div>
+
+  <!-- 역산 결과 제품2 -->
+  <div class="section" id="pr-result2"></div>
+
+  <!-- 타임테이블 -->
+  <div class="section">
+    <div class="sec-hdr">⏱ 하루 운영 타임테이블 (역산 기준)</div>
+    <div class="sec-body" style="padding:10px">
+      <div class="legend">
+        <div class="leg-item"><div class="leg-box" style="background:#1F3864"></div>전처리</div>
+        <div class="leg-item"><div class="leg-box" style="background:#5B9BD5"></div>전처리(야간)</div>
+        <div class="leg-item"><div class="leg-box" style="background:#ED7D31"></div>자숙</div>
+        <div class="leg-item"><div class="leg-box" style="background:#8064A2"></div>파쇄A</div>
+        <div class="leg-item"><div class="leg-box" style="background:#5a3d7a"></div>파쇄B</div>
+        <div class="leg-item"><div class="leg-box" style="background:#C00000"></div>내포장A</div>
+        <div class="leg-item"><div class="leg-box" style="background:#8B0000"></div>내포장B</div>
+        <div class="leg-item"><div class="leg-box" style="background:#0D7377"></div>레토르트</div>
+      </div>
+      <div class="tt-wrap"><div class="tt" id="pr-tt" style="min-height:120px"></div></div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
