@@ -156,6 +156,7 @@ tr.total td{background:var(--light);font-weight:700}
   <button onclick="goTab('history',this)">📅 월별 이력</button>
   <button onclick="goTab('settings',this)">⚙️ 설정</button>
   <button onclick="goTab('report',this)">📄 보고서</button>
+  <button onclick="goTab('capa',this)">🏭 CAPA 분석</button>
 </nav>
 <main>
 
@@ -618,6 +619,17 @@ tr.total td{background:var(--light);font-weight:700}
   </div>
 </div>
 
+<!-- ══ CAPA 분석 ══ -->
+<div id="tab-capa" class="tab">
+  <iframe
+    id="capa-frame"
+    src=""
+    style="width:100%;height:calc(100vh - 120px);border:none;border-radius:10px;background:#f5f6fa"
+    loading="lazy"
+    title="CAPA 분석기"
+  ></iframe>
+</div>
+
 </main>
 <div id="toast"></div>
 
@@ -684,6 +696,12 @@ window.goTab = (name,btn) => {
   if(name==='settings')  { loadMaster(); loadBomProductList(); loadTargetCostList(); }
   if(name==='input')     loadExistingData();
   if(name==='report')    { document.getElementById('reportMonth').value = document.getElementById('dashMonth').value || thisMonth(); }
+  if(name==='capa') {
+    const frame = document.getElementById('capa-frame');
+    if(!frame.src || frame.src === window.location.href) {
+      frame.src = 'capa.html';
+    }
+  }
 };
 
 // ════════════════════════════════════
