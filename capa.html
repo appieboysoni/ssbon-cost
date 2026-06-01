@@ -645,6 +645,68 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
       <div class="alert info" id="roadmap-tt-summary" style="margin-top:8px"></div>
     </div>
   </div>
+
+  <!-- 마스터플랜 비교 참고 섹션 -->
+  <div class="section" style="margin-top:14px">
+    <div class="sec-hdr">📋 [참고] 자작 마스터플랜 대비 비교 (FC 7,200kg 기준)</div>
+    <div class="sec-body">
+      <div class="alert info" style="margin-bottom:12px">
+        병현님이 직접 구성한 타임테이블(총 51명)과 실측 기반 시뮬레이터를 7,200kg(800kg×9탱크) 기준으로 비교한 참고 자료입니다.
+      </div>
+
+      <table class="tbl" style="margin-bottom:14px">
+        <thead><tr><th>항목</th><th>자작 마스터플랜</th><th>실측 시뮬레이터</th><th class="c">일치도</th></tr></thead>
+        <tbody>
+          <tr><td><strong>파쇄</strong></td><td>20명 × 25 kg/인시</td><td>20명 × 25 kg/인시 (Step3 목표)</td><td class="c"><span class="badge ok">완전일치</span></td></tr>
+          <tr><td><strong>레토르트</strong></td><td>9회전 (3대 × 3)</td><td>9회전 (3대 × 3)</td><td class="c"><span class="badge ok">완전일치</span></td></tr>
+          <tr><td><strong>자숙</strong></td><td>4명 · 9배치 가압/상압 혼합</td><td>소수인원 · 혼합</td><td class="c"><span class="badge ok">개념일치</span></td></tr>
+          <tr><td><strong>생산량</strong></td><td>~2,850봉</td><td>2,849봉</td><td class="c"><span class="badge ok">일치</span></td></tr>
+          <tr><td><strong>전처리</strong></td><td>10명 · 30분/탱크<br>(시간당 1,600kg 가정)</td><td>10명 · 59.9 kg/인시 실측<br>(시간당 599kg)</td><td class="c"><span class="badge bad">2.7배 차이</span></td></tr>
+          <tr><td><strong>총원</strong></td><td>51명</td><td>공정별 독립계산 (유동배치 미반영)</td><td class="c"><span class="badge warn">동일 수준</span></td></tr>
+        </tbody>
+      </table>
+
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">🔑 핵심 차이: 전처리 속도</div>
+      <div class="alert warn" style="margin-bottom:12px">
+        마스터플랜은 "30분에 탱크 1대분(800kg)" = 시간당 1,600kg을 전제하나, 실측 홍두께 생산성(59.9 kg/인시)으로는 시간당 599kg에 그쳐 탱크 1대분에 80분 소요. 7,200kg 전체 전처리에 <strong>10명 기준 12시간</strong> 필요 → 주간 한 타임에 불가능.
+      </div>
+
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">💡 설비투자 없는 현실적 대안 3안</div>
+      <table class="tbl">
+        <thead><tr><th>안</th><th>방식</th><th class="r">일 생산량</th><th class="r">월 36,400봉<br>필요일수</th><th class="c">추가비용</th><th class="c">권장도</th></tr></thead>
+        <tbody>
+          <tr style="background:#f0fdf4">
+            <td><strong>안1</strong></td>
+            <td>전일 오후 선행 전처리<br><small>(전날 13~17시 4hr, 탱크 3대분 확보)</small></td>
+            <td class="r ok">2,850봉</td><td class="r">12.8일</td>
+            <td class="c ok">없음</td><td class="c"><span class="badge ok">★ 권장</span></td>
+          </tr>
+          <tr>
+            <td><strong>안2</strong></td>
+            <td>야간 전처리<br><small>(외국인 9명 22:00~)</small></td>
+            <td class="r ok">2,850봉</td><td class="r">12.8일</td>
+            <td class="c warn">야간수당</td><td class="c"><span class="badge warn">예비안</span></td>
+          </tr>
+          <tr>
+            <td><strong>안3</strong></td>
+            <td>전처리 능력에 생산량 맞춤<br><small>(주간 10명 8hr만)</small></td>
+            <td class="r warn">1,896봉<br><small>(목표 67%)</small></td><td class="r bad">19.2일</td>
+            <td class="c ok">없음</td><td class="c"><span class="badge bad">비효율</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="alert ok" style="margin-top:12px">
+        <strong>권장: 안1 (전일 오후 선행 전처리)</strong><br>
+        마스터플랜에도 이미 오후에 '청소 및 명일 원료육 해동'이 있어 자연스럽게 흡수 가능. 전날 오후 전처리로 탱크 3대분(2,396kg)을 미리 확보하면 당일 05:30 첫 자숙을 바로 시작할 수 있어 병현님이 의도한 흐름이 실제로 작동. 야간수당·설비투자 없이 가장 타당.<br>
+        <small style="color:var(--sub)">※ 전제: 전처리 완료한 원료육을 다음날 아침까지 방혈실 보관 시 품질 영향 없는지 확인 필요 (현재도 12~16hr 자연해동 중이라 보관 자체는 무리 없음)</small>
+      </div>
+
+      <div class="alert info" style="margin-top:8px">
+        전처리는 향후 <strong>설비투자(자동 정형기 등)로 개선 가능한 영역</strong>. 시간당 1.6ton은 공격적이나, 설비 도입 시 도달 가능한 목표가 될 수 있음.
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════════════════════════════════
@@ -922,15 +984,13 @@ const TT_SCENES = {
     ]
   },
   night_pre: {
-    title:'시나리오 X: 야간 전처리 + 새벽 자숙', tStart:21, tEnd:38,
-    summary:'야간 9명 22:00 출근 → 03:11 전처리 완료 (5.18hr) → 새벽 자숙 03:11~07:41 → 파쇄팀 09:00 출근 즉시 시작<br><strong style="color:var(--ok)">파쇄 8hr 풀가동 = 15명 × 20.8 × 8hr = 2,496 kg/일 (+66%)</strong>',
+    title:'시나리오 X: 야간 전처리+자숙 동시 진행 (핵심 권장안)', tStart:21, tEnd:42,
+    summary:'야간 9명 22:00 출근 → 전처리하며 <strong>800kg씩 나오는 족족 즉시 자숙 투입</strong> (자숙 2~3명·냉각 불필요) → 새벽에 자숙 완료, 파쇄 대기 상태로 보관 → <strong style="color:var(--ok)">09:00 파쇄팀 출근 즉시 8hr 풀가동 = 2,496 kg/일 (+66%)</strong><br>※ 자숙은 인원이 적고 냉각이 필요 없어 전처리에 바로 붙이는 게 핵심. 07시 자숙 시작은 파쇄 풀가동을 막아 비효율.',
     lanes: [
-      {label:'야간전처리<br>(9명)',bars:[{s:22*60,e:27.18*60,color:'#5B9BD5',label:'홍두께 야간 전처리 (9명 × 5.18hr)',note:'59.9 kg/인시'}]},
-      {label:'자숙T3<br>새벽투입',bars:[{s:27.2*60,e:31.7*60,color:'#ED7D31',label:'상압 자숙 ① 4.5hr'}]},
-      {label:'자숙T4',bars:[{s:27.37*60,e:31.87*60,color:'#ED7D31',label:'상압 자숙 ② 4.5hr'}]},
-      {label:'자숙T5',bars:[{s:27.53*60,e:32.03*60,color:'#ED7D31',label:'상압 자숙 ③ 4.5hr'}]},
-      {label:'자숙T6',bars:[{s:27.7*60,e:32.2*60,color:'#ED7D31',label:'상압 자숙 ④ 4.5hr'}]},
-      {label:'파쇄·선별<br>(15명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'파쇄 8hr 풀가동 (2,496 kg)',note:'자숙 완료 후 4~5hr 안정'}]},
+      {label:'야간전처리<br>(9명)',bars:[{s:22*60,e:27.18*60,color:'#5B9BD5',label:'홍두께 전처리 5.18hr (800kg씩 순차 완료)',note:'59.9 kg/인시'}]},
+      {label:'자숙<br>(2~3명·맞물림)',bars:[{s:22.7*60,e:28.18*60,color:'#ED7D31',label:'전처리분 즉시 자숙 (10분내 투입·6대 순환)',note:'전처리 종료+10분+4.5hr 완료'}]},
+      {label:'자숙완료분<br>파쇄 대기',bars:[{s:28.18*60,e:33*60,color:'#888',opacity:'0.4',label:'파쇄 대기 (병목이라 자숙분 누적)'}]},
+      {label:'파쇄·선별<br>(15명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'09:00 출근 즉시 파쇄 8hr 풀가동 (2,496 kg)'}]},
       {label:'내포장<br>(2호기)',bars:[{s:35*60,e:41.5*60,color:'#C00000',label:'FC 3kg 내포장'}]},
       {label:'레토르트①<br>(2.5hr×2대)',bars:[
         {s:36*60,e:38.5*60,color:'#0D7377',label:'FC 1회전 (768봉·2대)'},
@@ -957,11 +1017,11 @@ const TT_SCENES = {
     title:'파쇄기 2대 + 야간 전처리', tStart:21, tEnd:44,
     summary:'야간 전처리 완료 → 파쇄기 2대 각 10명씩 독립 운영 (인원 역설 방지)<br><strong style="color:var(--ok)">20명 × 20.8 × 8hr = 3,328 kg/일. 숙련 25 kg/hr 달성 시 4,000 kg/일</strong>',
     lanes: [
-      {label:'야간전처리<br>(9명)',bars:[{s:22*60,e:27.18*60,color:'#5B9BD5',label:'야간 전처리 22:00~03:11'}]},
-      {label:'자숙 ①~④',bars:[
-        {s:27.2*60,e:31.7*60,color:'#ED7D31',label:'자숙 4탱크 순차'},
-        {s:27.37*60,e:31.87*60,color:'#ED7D31',label:''},
+      {label:'야간전처리<br>(9명)',bars:[{s:22*60,e:27.18*60,color:'#5B9BD5',label:'야간 전처리 22:00~03:11 (800kg씩 순차)'}]},
+      {label:'자숙<br>(2~3명·맞물림)',bars:[
+        {s:22.7*60,e:28.18*60,color:'#ED7D31',label:'전처리분 즉시 자숙 (6대 순환)'},
       ]},
+      {label:'자숙완료분<br>파쇄 대기',bars:[{s:28.18*60,e:33*60,color:'#888',opacity:'0.4',label:'파쇄 대기'}]},
       {label:'파쇄기 1호<br>(10명)',bars:[{s:33*60,e:41*60,color:'#8064A2',label:'파쇄기 1호 10명 × 8hr (1,664 kg)'}]},
       {label:'파쇄기 2호<br>(10명)',bars:[{s:33*60,e:41*60,color:'#5a3d7a',label:'파쇄기 2호 10명 × 8hr (1,664 kg)'}]},
       {label:'내포장<br>(전 라인)',bars:[{s:35*60,e:42*60,color:'#C00000',label:'내포장 3·4호기 병행'}]},
@@ -1688,14 +1748,24 @@ function renderPlanTT(r1, prod1, r2, prod2) {
 
   if (r1) {
     if (isNight1) {
-      lanes.push({label:`야간전처리<br>(${Math.ceil(r1.preNeeded8hr)}명)`, bars:[{s:22*60,e:(22+r1.preHr_11)*60,color:'#5B9BD5',label:`${prod1} 야간 전처리 ${r1.preHr_11.toFixed(1)}hr`}]});
-      const cookEnd = (22 + r1.preHr_11 + 4.5);
-      lanes.push({label:'자숙 (야간+새벽)', bars:[{s:(22+r1.preHr_11)*60, e:cookEnd*60, color:'#ED7D31', label:`자숙 6대 순차 (${(r1.meatPerDay/1000).toFixed(1)}ton)`}]});
-      lanes.push({label:`파쇄·선별<br>(${Math.ceil(r1.fragNeeded8hr)}명)`, bars:[{s:33*60, e:41*60, color:'#8064A2', label:`파쇄 09:00~17:00 (${(r1.cookInput/1000).toFixed(1)}ton)`}]});
+      // 야간: 전처리하면서 800kg씩 나오는 족족 자숙 투입 (맞물려 진행)
+      const preStart = 22;
+      const preEnd = 22 + r1.preHr_11;
+      // 자숙은 전처리 시작 직후(첫 800kg 완료 시점)부터 시작, 마지막 자숙은 전처리 종료+10분+4.5hr
+      const firstCookStart = preStart + (r1.preHr_11 / Math.max(r1.tanksNeeded,1)); // 첫 탱크분 전처리 완료 시점
+      const lastCookEnd = preEnd + (10/60) + 4.5;
+      lanes.push({label:`야간전처리<br>(${Math.ceil(r1.preNeeded8hr)}명)`, bars:[{s:preStart*60, e:preEnd*60, color:'#5B9BD5', label:`${prod1} 전처리 ${r1.preHr_11.toFixed(1)}hr (800kg씩 순차)`}]});
+      lanes.push({label:'자숙<br>(2~3명·맞물림)', bars:[{s:firstCookStart*60, e:lastCookEnd*60, color:'#ED7D31', label:`전처리분 즉시 자숙 (${(r1.meatPerDay/1000).toFixed(1)}ton·${Math.ceil(r1.tanksNeeded)}탱크)`}]});
+      // 새벽에 자숙 완료 → 파쇄까지 대기 (병목이라 쌓임)
+      const cookDoneHr = lastCookEnd > 9 ? lastCookEnd : 9;
+      if (lastCookEnd < 9) {
+        lanes.push({label:'자숙완료분<br>파쇄 대기', bars:[{s:lastCookEnd*60, e:9*60, color:'#888', opacity:'0.4', label:`파쇄 대기 (병목)`}]});
+      }
+      lanes.push({label:`파쇄·선별<br>(${Math.ceil(r1.fragNeeded8hr)}명)`, bars:[{s:33*60, e:41*60, color:'#8064A2', label:`09:00 출근 즉시 파쇄 8hr (${(r1.cookInput/1000).toFixed(1)}ton)`}]});
     } else {
       lanes.push({label:`전처리<br>(${Math.ceil(r1.preNeeded8hr)}명)`, bars:[{s:6*60, e:(6+r1.preHr_11)*60, color:'#1F3864', label:`${prod1} 전처리 ${r1.preHr_11.toFixed(1)}hr`}]});
-      lanes.push({label:'자숙', bars:[{s:(6+r1.preHr_11)*60, e:(6+r1.preHr_11+4.5)*60, color:'#ED7D31', label:`자숙 (${(r1.meatPerDay/1000).toFixed(1)}ton)`}]});
-      const fragStart = Math.max(9, 6 + r1.preHr_11 + 4.5) * 60;
+      lanes.push({label:'자숙<br>(맞물림)', bars:[{s:(6+r1.preHr_11/Math.max(r1.tanksNeeded,1))*60, e:(6+r1.preHr_11+10/60+4.5)*60, color:'#ED7D31', label:`자숙 (${(r1.meatPerDay/1000).toFixed(1)}ton)`}]});
+      const fragStart = Math.max(9, 6 + r1.preHr_11 + 10/60 + 4.5) * 60;
       lanes.push({label:`파쇄·선별<br>(${Math.ceil(r1.fragNeeded8hr)}명)`, bars:[{s:fragStart, e:fragStart+8*60, color:'#8064A2', label:`파쇄 8hr (${(r1.cookInput/1000).toFixed(1)}ton)`}]});
     }
     const fragStart2 = isNight1 ? 33*60 : Math.max(9*60, (6+r1.preHr_11+4.5)*60);
