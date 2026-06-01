@@ -1342,8 +1342,8 @@ function initRealdata() {
 }
 
 // ══════════════════════ 초기화 ══════════════════════
-// ── 개요 레토르트 표 초기화
-(function initRetortOverview(){
+// ── 레토르트 개요 표 초기화 (DOM 로드 후 실행)
+function initRetortOverview(){
   const tbody = document.getElementById('retort-overview-tbody');
   if(!tbody) return;
   let html = '';
@@ -1351,7 +1351,6 @@ function initRealdata() {
     const eaPerMachine = p.traysPerCart * RETORT.cartsPerMachine * p.eaPerTray;
     const cycleHr = p.cycleMins / 60;
     const maxCycles = Math.floor(9 / cycleHr);
-    // 현재 트레이로 동시 가동 가능 대수
     const traysPerMachine = p.traysPerCart * RETORT.cartsPerMachine;
     const curMachines = Math.min(3, Math.floor(RETORT.traysCurrent / traysPerMachine));
     const upgMachines = Math.min(3, Math.floor(RETORT.traysUpgrade / traysPerMachine));
@@ -1367,7 +1366,7 @@ function initRealdata() {
     </tr>`;
   });
   tbody.innerHTML = html;
-})();
+}
 
 // ── 시뮬레이터 레토르트 계산
 function calcRetortSim() {
@@ -1394,9 +1393,6 @@ function calcRetortSim() {
       ${effectiveMachines < machines ? `<tr><td colspan="2"><div class="alert warn" style="margin:4px 0">트레이 ${trays}개로는 ${effectiveMachines}대만 동시 가동 가능</div></td></tr>` : ''}
     </table>`;
 }
-
-renderTT();
-initBN();
 
 // ══════════════════════════════════════
 // 생산계획 역산 시뮬레이터
@@ -1559,7 +1555,7 @@ function runPlanRev() {
   const r2 = ea2 > 0 ? reverseCalc(prod2, ea2, days2, cookMode2) : null;
 
   // 달력 생성
-  renderPlanCalendar(year, month, prod1, days1, prod2, days2, workDays);
+  renderPlanCalendar(year, month, prod1, days1, prod2, days2, workDays, ea2);
 
   // 역산 결과
   renderPlanResult(r1, prod1, ea1, days1, 1);
@@ -1569,7 +1565,7 @@ function runPlanRev() {
   renderPlanTT(r1, prod1, r2, prod2);
 }
 
-function renderPlanCalendar(year, month, prod1, days1, prod2, days2, workDays) {
+function renderPlanCalendar(year, month, prod1, days1, prod2, days2, workDays, ea2) {
   const el = document.getElementById('pr-calendar');
   const firstDay = new Date(year, month-1, 1).getDay();
   const totalDays = new Date(year, month, 0).getDate();
@@ -1727,8 +1723,9 @@ function renderPlanTT(r1, prod1, r2, prod2) {
   buildTT('pr-tt', lanes, tStart, tEnd, lanes.length*34+44);
 }
 
-// 입력값 포맷팅 (콤마)
+// 입력값 포맷팅 + 전체 초기화
 document.addEventListener('DOMContentLoaded', function() {
+  // 콤마 포맷팅
   ['pr-ea1','pr-ea2'].forEach(id => {
     const el = document.getElementById(id);
     if(!el) return;
@@ -1737,7 +1734,11 @@ document.addEventListener('DOMContentLoaded', function() {
       this.value = v ? parseInt(v).toLocaleString('ko-KR') : '';
     });
   });
+  // 초기화
+  initRetortOverview();
   calcRetortSim();
+  renderTT();
+  initBN();
 });
 </script>
 
