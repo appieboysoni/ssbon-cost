@@ -415,68 +415,96 @@ const PACK_DELAY = 0.5;   // 파쇄 시작 후 첫 포장분 공급까지 지연
 
 function simulateFlow(product, part, meatKg, o){
   const p = PRODUCTS[product], b = BASELINE.part[part];
-  // 포장 라인 수·속도 (대체라인이면 altSpeed)
   const useAlt = o.useAlt && p.altSpeed;
   const lineSpeed = useAlt ? p.altSpeed : p.lineSpeed;
   const maxLines = useAlt ? (p.altMaxLines||1) : p.maxLines;
   const packLines = Math.min(o.packLines || 1, maxLines);
   const lineName = useAlt ? p.altLine : p.line;
+  const cookHr = p.fixedPart ? 4.5 : 2.5;
 
-  // 1) 전처리 → 자숙 (새벽조출로 09시 전 완료 가정)
-  const cookOutput = meatKg * b.preY * b.cook;          // 자숙 후(파쇄 투입 대상) kg
-  // 2) 파쇄: 09시 시작, 처리속도 = 인원×속도×라인
-  const fragInputRate = o.fragW * b.frag * o.fragLines; // kg/h (자숙후 처리)
-  const fragOutRate = fragInputRate * b.fragY;          // kg/h (파쇄 후 고기)
-  const fragDuration = fragInputRate>0 ? cookOutput / fragInputRate : 0;
-  const fragEnd = FRAG_START + fragDuration;
-  const totalMeatOut = cookOutput * b.fragY;            // 총 파쇄 후 고기
+  // ── 공정별 처리율 (kg/h) ──
+  const preRate = o.preW * b.pre;                 // 전처리: 원육 kg/h
+  const cookOutRate = preRate * b.cook;           // 자숙 산출(전처리에 율속): 자숙후 kg/h
+  const fragRate = o.fragW * b.frag * o.fragLines;// 파쇄 처리: 자숙후 kg/h
+  const packBongRate = lineSpeed * packLines * 60;// 포장: 봉/h
+  const packMeatRate = packBongRate * p.meat / 1000; // 포장 소비: 고기 kg/h
+
+  // ── 총량 ──
+  const cookOutput = meatKg * b.preY * b.cook;    // 자숙후 총량(파쇄 투입대상)
+  const totalMeatOut = cookOutput * b.fragY;      // 파쇄후 고기 총량
   const totalBong = Math.floor(totalMeatOut * 1000 / p.meat);
 
-  // 3) 포장: 시작 = 09시+지연, 처리속도 = 라인속도×라인수
-  const packStart = FRAG_START + PACK_DELAY;
-  const packBongRate = lineSpeed * packLines * 60;      // 봉/h
-  const packMeatRate = packBongRate * p.meat / 1000;    // kg/h (포장이 소비하는 고기)
+  // ── 시간축 ──
+  const preHr = meatKg / preRate;
+  const firstPreHr = Math.min(800, meatKg) / preRate;
+  const fragStart = 9;
+  const cookStart = fragStart - cookHr;            // 첫 자숙 투입(=첫 전처리분 완료)
+  const preStart = cookStart - firstPreHr;
+  const preEnd = preStart + preHr;
+  const cookLastDone = preEnd + cookHr;            // 마지막 자숙 완료
 
-  // 4) 포장 진행: 파쇄 공급에 묶임. 매 시점 포장량 ≤ 파쇄 누적공급
-  //    간이 모델: 파쇄 공급률 < 포장 처리율이면 파쇄가 율속 → 포장은 파쇄 속도로
-  const effPackMeatRate = Math.min(packMeatRate, fragOutRate); // 실효 포장 고기 처리율
-  const effPackBongRate = Math.floor(effPackMeatRate * 1000 / p.meat); // 실효 봉/h
+  // ── 율속 체인 ──
+  // 파쇄 실효율 = min(자기 처리율, 자숙 공급률)
+  const fragEffRate = Math.min(fragRate, cookOutRate);
+  const fragMeatOutRate = fragEffRate * b.fragY;   // 파쇄가 내놓는 고기 kg/h
+  // 포장 실효율 = min(포장 소비, 파쇄 산출)
+  const packEffMeatRate = Math.min(packMeatRate, fragMeatOutRate);
+  const packEffBongRate = Math.floor(packEffMeatRate * 1000 / p.meat);
 
-  // 5) 마감 제약: 포장은 endHour까지. 레토르트도 마지막 배치가 마감 전 들어가야 함
-  const packEndLimit = o.endHour;
-  const availPackHours = Math.max(0, packEndLimit - packStart);
+  // ── 파쇄 종료: 자숙 공급 끝까지 받아야 ──
+  const fragProcessHr = cookOutput / fragEffRate;
+  const fragEnd = Math.max(cookLastDone, fragStart + fragProcessHr);
 
-  // 실제 생산 = min(총봉수, 실효처리율 × 가용시간)
-  const flowBong = Math.floor(effPackBongRate * availPackHours);
-  const packActualBong = Math.min(totalBong, flowBong);
-  const packActualHours = effPackBongRate>0 ? Math.min(availPackHours, totalBong/effPackBongRate) : 0;
+  // ── 포장: 09:30 시작, 마감 제약 ──
+  const packStart = fragStart + 0.5;
+  const packDeadline = o.endHour;
+  const availPackHours = Math.max(0, packDeadline - packStart);
+  const packByTime = Math.floor(packEffBongRate * availPackHours);
+  const packActualBong = Math.min(totalBong, packByTime);
+  const packActualHours = packEffBongRate>0 ? Math.min(availPackHours, totalBong/packEffBongRate) : 0;
+  const packEnd = packStart + packActualHours;
 
-  // 레토르트
+  // ── 레토르트 (투입 마감 = 정규+1h) ──
+  const retortDeadline = Math.min(o.endHour + 1, 24);
   const rM = RETORT_MACHINES[p.tray][o.retortPeriod];
-  const rCyc = Math.floor((o.endHour - packStart) / p.rCycleHr);
-  const retortBong = p.rPerCycle * rM * Math.max(1,rCyc);
+  const rCyc = Math.floor((retortDeadline - packStart) / p.rCycleHr);
+  const retortBong = p.rPerCycle * rM * Math.max(1, rCyc);
 
-  // 공정별 일 처리능력(봉) — 병목 비교용
+  // ── 공정별 "하루 처리 가능 봉수" (동일 기준) ──
+  const preAvailHr = packDeadline - preStart;      // 전처리 가용(새벽~마감)
+  const opHours = packDeadline - fragStart;        // 파쇄/포장 가용(09~마감)
   const stages = {
-    전처리: totalBong,                                   // 투입 원료육 기준 최종 가능봉수
-    파쇄: Math.floor(fragOutRate * availPackHours * 1000 / p.meat), // 파쇄가 가용시간 내 산출 가능봉수
-    내포장: Math.floor(packBongRate * availPackHours),   // 포장 라인 자체 최대
+    전처리: Math.floor(preRate * preAvailHr * b.preY * b.cook * b.fragY * 1000 / p.meat),
+    파쇄: Math.floor(fragEffRate * opHours * b.fragY * 1000 / p.meat),
+    내포장: Math.floor(packBongRate * availPackHours),
     레토르트: retortBong,
   };
 
-  // 제한 요인
-  let limited;
-  if (totalBong <= flowBong && totalBong <= stages.레토르트) limited='원료육(투입량)';
-  else if (fragOutRate < packMeatRate) limited='파쇄 공급';
-  else if (availPackHours * packBongRate < totalBong) limited='포장 시간(마감)';
-  else limited='레토르트';
+  // 실 생산 = min(공정능력들, 투입량)
+  const realOutput = Math.min(stages.전처리, stages.파쇄, stages.내포장, stages.레토르트, totalBong);
+
+  // ── 율속 판정 (여러 개 가능) ──
+  const limiters=[];
+  const near = (v,r)=> v <= r*1.03;
+  if(near(totalBong, realOutput)) limiters.push('투입 원료육');
+  if(cookOutRate < fragRate*0.98 && near(stages.파쇄, realOutput))
+    limiters.push('전처리 (자숙 공급 부족)');
+  else if(near(stages.파쇄, realOutput) && fragRate <= cookOutRate)
+    limiters.push('파쇄 처리속도');
+  if(near(stages.내포장, realOutput)) limiters.push('포장 시간·속도');
+  if(near(stages.레토르트, realOutput)) limiters.push('레토르트');
+  if(limiters.length===0) limiters.push('투입 원료육');
 
   return {
-    stages, totalBong, packActualBong, packActualHours,
-    fragInputRate, fragOutRate, packMeatRate, effPackBongRate,
-    fragDuration, fragEnd, packStart, availPackHours,
-    lineName, lineSpeed, packLines, maxLines, rM, rCyc:Math.max(1,rCyc),
-    limited, cookOutput, totalMeatOut
+    stages, totalBong, realOutput, packActualBong:realOutput, packActualHours,
+    preRate, cookOutRate, fragRate, fragEffRate, packMeatRate, packEffBongRate,
+    preHr, preStart, preEnd, cookStart, cookLastDone, fragStart, fragEnd,
+    packStart, packEnd, availPackHours, lineName, lineSpeed, packLines, maxLines,
+    rM, rCyc:Math.max(1,rCyc), retortDeadline, limiters, opHours,
+    cookOutput, totalMeatOut, cookHr,
+    // 하위호환 (기존 렌더 코드용)
+    limited: limiters[0],
+    fragInputRate: fragRate, fragOutRate: fragMeatOutRate, fragDuration: fragEnd-fragStart,
   };
 }
 
@@ -670,31 +698,57 @@ function runSimulator(){
 
   const f=simulateFlow(prod,part,meatKg,o);
   const result=bottleneckOf(f.stages);
-  const realOutput=f.packActualBong;
+  const realOutput=f.realOutput;
+  const b=BASELINE.part[part];
 
-  const bnColor={전처리:'var(--mid)',파쇄:'var(--bad)',내포장:'var(--warn)',레토르트:'var(--teal)'}[result.bottleneck];
+  const limiterStr=f.limiters.join(' + ');
+  const limColor=limiterStr.includes('전처리')||limiterStr.includes('파쇄')?'var(--bad)':limiterStr.includes('포장')||limiterStr.includes('레토르트')?'var(--warn)':'var(--ok)';
   let html='';
   if(mode==='reverse'){
     html+=`<div class="res-grid">
       <div class="res-card"><div class="rv" style="color:var(--p)">${packBongCap.toLocaleString()}</div><div class="rl">포장 가능 봉수</div></div>
       <div class="res-card"><div class="rv" style="color:var(--ok)">${Math.round(optMeat).toLocaleString()}</div><div class="rl">적정 원료육 (kg)</div></div>
-      <div class="res-card"><div class="rv" style="color:${bnColor}">${realOutput.toLocaleString()}</div><div class="rl">실 생산량 (봉)</div></div>
+      <div class="res-card"><div class="rv" style="color:${limColor}">${realOutput.toLocaleString()}</div><div class="rl">실 생산량 (봉)</div></div>
     </div>`;
   } else {
     html+=`<div class="res-grid">
       <div class="res-card"><div class="rv" style="color:var(--p)">${meatKg.toLocaleString()}</div><div class="rl">투입 원료육 (kg)</div></div>
-      <div class="res-card"><div class="rv" style="color:${bnColor}">${realOutput.toLocaleString()}</div><div class="rl">실 생산량 (봉)</div></div>
-      <div class="res-card"><div class="rv" style="color:${bnColor};font-size:14px">${f.limited}</div><div class="rl">제한 요인</div></div>
+      <div class="res-card"><div class="rv" style="color:${limColor}">${realOutput.toLocaleString()}</div><div class="rl">실 생산량 (봉)</div></div>
+      <div class="res-card"><div class="rv" style="color:${limColor};font-size:13px;line-height:1.3">${limiterStr}</div><div class="rl">율속(제한) 요인</div></div>
     </div>`;
   }
   const fillKg=Math.round(realOutput*p.fill).toLocaleString();
-  html+=`<div class="alert ${f.limited.includes('파쇄')?'bad':f.limited.includes('포장')?'warn':'info'}" style="margin-top:10px">
-    제한 요인: <strong>${f.limited}</strong> · 하루 <strong>${realOutput.toLocaleString()}봉</strong>(완제품 ${fillKg}kg).<br>
-    파쇄 09시 시작(${f.fragInputRate}kg/h) → ${f.fragDuration.toFixed(1)}h 소요(${f.fragEnd.toFixed(1)}시 종료) · 포장 ${f.packStart.toFixed(1)}시~ 가용 ${f.availPackHours.toFixed(1)}h · 포장공급 ${Math.round(f.fragOutRate)}kg/h vs 포장소비 ${f.packMeatRate.toFixed(0)}kg/h
-    ${mode==='reverse'?`<br>포장 라인 CAPA에 맞춰 원료육 <strong>${Math.round(optMeat).toLocaleString()}kg</strong> 투입이 균형입니다.`:''}</div>`;
+
+  // 공정별 처리율 흐름 표
+  html+=`<table class="tbl" style="margin-top:10px">
+    <thead><tr><th>공정</th><th class="r">처리율</th><th class="r">실효율(공급제약 후)</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td>전처리</td><td class="r">${Math.round(f.preRate)} kg/h</td><td class="r">→ 자숙공급 ${Math.round(f.cookOutRate)} kg/h</td><td>${o.preW}명 · ${f.preHr.toFixed(1)}h 소요</td></tr>
+      <tr><td>파쇄</td><td class="r">${Math.round(f.fragRate)} kg/h</td><td class="r ${f.fragEffRate<f.fragRate*0.98?'warn':''}">${Math.round(f.fragEffRate)} kg/h</td><td>${f.fragEffRate<f.fragRate*0.98?'⚠ 자숙 공급에 묶임':'여유'}</td></tr>
+      <tr><td>내포장</td><td class="r">${Math.round(f.packMeatRate)} kg/h</td><td class="r ${f.packEffBongRate*p.meat/1000<f.packMeatRate*0.98?'warn':''}">${Math.round(f.packEffBongRate*p.meat/1000)} kg/h</td><td>${f.lineName} ${f.packLines}라인 · 파쇄 산출에 묶임</td></tr>
+      <tr><td>레토르트</td><td class="r">${f.stages.레토르트.toLocaleString()} 봉</td><td class="r">${f.rM}대 ${f.rCyc}회전</td><td>투입 마감 ${fmtH(f.retortDeadline)}</td></tr>
+    </tbody></table>`;
+
+  // 진단·개선 방향
+  let advice='';
+  if(limiterStr.includes('전처리')){
+    const need=Math.ceil(meatKg/((o.endHour-f.preStart)*b.pre));
+    advice=`전처리가 ${f.preHr.toFixed(1)}시간 걸려 자숙 공급이 ${Math.round(f.cookOutRate)}kg/h로 묶입니다. 뒤 공정(파쇄 ${Math.round(f.fragRate)}kg/h)이 놀고 있어요. <strong>전처리 인원을 늘리거나(현재 ${o.preW}명)</strong> 새벽조출을 더 당겨야 합니다.`;
+  } else if(limiterStr.includes('파쇄')){
+    advice=`파쇄(${Math.round(f.fragRate)}kg/h)가 병목입니다. 자숙은 ${Math.round(f.cookOutRate)}kg/h 공급 가능한데 파쇄가 못 받아요. <strong>파쇄 인원/라인을 늘리면</strong> 생산량이 증가합니다.`;
+  } else if(limiterStr.includes('포장')){
+    advice=`포장 시간·속도가 병목입니다. ${f.lineName} ${f.packLines}라인으로 ${f.availPackHours.toFixed(1)}h 안에 다 못 만듭니다. <strong>포장 라인 추가(3·4호기 2라인)나 마감 연장</strong>을 검토하세요.`;
+  } else if(limiterStr.includes('레토르트')){
+    advice=`레토르트가 병목입니다. ${f.rM}대 ${f.rCyc}회전으로는 부족합니다. <strong>트레이 증설(6월 192개→3대)</strong>이 필요합니다.`;
+  } else {
+    advice=`투입한 원료육 ${meatKg.toLocaleString()}kg이 ${realOutput.toLocaleString()}봉으로 다 소화됩니다. 모든 공정에 여유가 있어요. 원료육을 더 넣으면 다음 병목이 드러납니다.`;
+  }
+  html+=`<div class="alert ${(limiterStr.includes('전처리')||limiterStr.includes('파쇄'))?'bad':limiterStr.includes('투입')?'ok':'warn'}" style="margin-top:10px">
+    하루 <strong>${realOutput.toLocaleString()}봉</strong>(완제품 ${fillKg}kg) · ${advice}
+    ${mode==='reverse'?`<br>포장 라인 기준 원료육 <strong>${Math.round(optMeat).toLocaleString()}kg</strong> 투입이 균형점입니다.`:''}</div>`;
   document.getElementById('sm-result').innerHTML=html;
 
-  renderBottleneckBars(f.stages, result.bottleneck);
+  renderBottleneckBars(f.stages, result.bottleneck, f);
   renderSimTT(prod,part,meatKg,o,f,result.bottleneck);
 }
 
