@@ -470,29 +470,34 @@ function simulateFlow(product, part, meatKg, o){
   const rCyc = Math.floor((retortDeadline - packStart) / p.rCycleHr);
   const retortBong = p.rPerCycle * rM * Math.max(1, rCyc);
 
-  // ── 공정별 "하루 처리 가능 봉수" (동일 기준) ──
+  // ── 공정별 "순수 자체 능력" (다른 공정이 충분히 받쳐준다 가정한 자기 최대) ──
   const preAvailHr = packDeadline - preStart;      // 전처리 가용(새벽~마감)
   const opHours = packDeadline - fragStart;        // 파쇄/포장 가용(09~마감)
   const stages = {
     전처리: Math.floor(preRate * preAvailHr * b.preY * b.cook * b.fragY * 1000 / p.meat),
-    파쇄: Math.floor(fragEffRate * opHours * b.fragY * 1000 / p.meat),
+    파쇄: Math.floor(fragRate * opHours * b.fragY * 1000 / p.meat),   // 자체 능력(공급 충분 가정)
     내포장: Math.floor(packBongRate * availPackHours),
     레토르트: retortBong,
   };
 
-  // 실 생산 = min(공정능력들, 투입량)
-  const realOutput = Math.min(stages.전처리, stages.파쇄, stages.내포장, stages.레토르트, totalBong);
+  // 실 생산 = min(공정 자체능력들, 투입량) — 단 연쇄 공급 제약도 반영
+  // 자숙 공급(전처리 율속)이 파쇄보다 낮으면 실제론 전처리가 진짜 병목
+  const supplyChainCap = Math.floor(Math.min(preRate*b.cook, fragRate) * opHours * b.fragY * 1000 / p.meat);
+  const realOutput = Math.min(stages.전처리, stages.파쇄, stages.내포장, stages.레토르트, totalBong, supplyChainCap);
 
-  // ── 율속 판정 (여러 개 가능) ──
+  // ── 율속 판정 ──
+  // 각 공정 자체능력 중 최저 + 연쇄 공급 제약을 함께 본다
+  const near = (v)=> v <= realOutput*1.04;
   const limiters=[];
-  const near = (v,r)=> v <= r*1.03;
-  if(near(totalBong, realOutput)) limiters.push('투입 원료육');
-  if(cookOutRate < fragRate*0.98 && near(stages.파쇄, realOutput))
+  // 자체능력 병목
+  if(near(stages.전처리)) limiters.push('전처리');
+  if(near(stages.파쇄) && fragRate <= preRate*b.cook) limiters.push('파쇄 처리속도');
+  if(near(stages.내포장)) limiters.push('포장 시간·속도');
+  if(near(stages.레토르트)) limiters.push('레토르트');
+  // 연쇄 공급 제약: 전처리가 느려서 파쇄가 못 받는 경우
+  if(preRate*b.cook < fragRate*0.98 && near(supplyChainCap) && !limiters.includes('전처리'))
     limiters.push('전처리 (자숙 공급 부족)');
-  else if(near(stages.파쇄, realOutput) && fragRate <= cookOutRate)
-    limiters.push('파쇄 처리속도');
-  if(near(stages.내포장, realOutput)) limiters.push('포장 시간·속도');
-  if(near(stages.레토르트, realOutput)) limiters.push('레토르트');
+  if(near(totalBong) && totalBong < stages.레토르트) limiters.push('투입 원료육');
   if(limiters.length===0) limiters.push('투입 원료육');
 
   return {
@@ -752,20 +757,28 @@ function runSimulator(){
   renderSimTT(prod,part,meatKg,o,f,result.bottleneck);
 }
 
-function renderBottleneckBars(stages, bn){
+function renderBottleneckBars(stages, bn, f){
   const order=['전처리','파쇄','내포장','레토르트'];
   const max=Math.max(...order.map(k=>stages[k]));
   const colors={전처리:'#2F5496',파쇄:'#C00000',내포장:'#ED7D31',레토르트:'#0D7377'};
+  // 실효 공급(연쇄 제약 후) — 전처리/파쇄에 적용
+  const realOut = f ? f.realOutput : null;
   let html='';
   order.forEach(k=>{
     const v=stages[k], pct=Math.min(Math.round(v/max*100),100);
-    const isBn=k===bn;
+    // 이 공정이 실생산을 결정하는 진짜 병목인지 (자체능력이 실생산과 근접)
+    const isBn = realOut!=null ? (v<=realOut*1.04) : (k===bn);
+    // 실효 공급선 (전처리가 자숙공급으로 묶이는 경우 표시)
+    let effPct=null, effVal=null;
+    if(f && k==='전처리' && f.cookOutRate < f.fragRate*0.98){
+      effVal=realOut; effPct=Math.min(Math.round(effVal/max*100),100);
+    }
     html+=`<div class="bn-item">
-      <div class="bn-hd"><span class="lbl">${k}${isBn?' <span class="badge bad">병목</span>':''}</span><span class="val">${v.toLocaleString()} 봉/일</span></div>
-      <div class="bn-track"><div class="bn-fill" style="width:${pct}%;background:${colors[k]};${isBn?'box-shadow:0 0 0 2px var(--bad) inset':''}">${pct}%</div></div>
+      <div class="bn-hd"><span class="lbl">${k}${isBn?' <span class="badge bad">병목</span>':''}</span><span class="val">${v.toLocaleString()} 봉/일${effVal?` <span style="color:var(--bad)">(실공급 ${effVal.toLocaleString()})</span>`:''}</span></div>
+      <div class="bn-track"><div class="bn-fill" style="width:${pct}%;background:${colors[k]};opacity:${effVal?0.4:1};${isBn&&!effVal?'box-shadow:0 0 0 2px var(--bad) inset':''}">${pct}%</div>${effVal?`<div class="bn-fill" style="width:${effPct}%;background:${colors[k]};margin-top:-24px;box-shadow:0 0 0 2px var(--bad) inset">실${effPct}%</div>`:''}</div>
     </div>`;
   });
-  html+=`<div style="font-size:10px;color:var(--sub);margin-top:6px">가장 낮은 공정이 그날 생산량을 결정합니다. 막대가 짧을수록 병목.</div>`;
+  html+=`<div style="font-size:10px;color:var(--sub);margin-top:6px">막대 = 각 공정 <b>자체 최대능력</b>. 전처리가 느리면 진한 테두리 = <b>실제 공급량</b>(뒤 공정이 그만큼만 받음). 가장 낮은 실선이 그날 생산량.</div>`;
   document.getElementById('sm-bottleneck').innerHTML=html;
 }
 
