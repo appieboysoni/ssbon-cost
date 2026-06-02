@@ -2475,36 +2475,37 @@ function renderWeeklyTT() {
       {label:'파쇄1호<br>(10명)', bars:[{s:33*60, e:41*60, color:'#8064A2', label:'파쇄 09:00~17:00'}]},
       {label:'파쇄2호<br>(10명)', bars:[{s:33*60, e:41*60, color:'#5a3d7a', label:'파쇄 09:00~17:00'}]},
       {label:'내포장<br>(2호기)', bars:[{s:35*60, e:41*60, color:'#C00000', label:'FC 3kg 포장'}]},
-      {label:'레토르트<br>(3대·2.5hr)', bars:[
-        {s:35.5*60, e:38*60, color:'#0D7377', label:'1회전 (1,152봉)'},
-        {s:38.1*60, e:40.6*60, color:'#0D7377', label:'2회전'},
-        {s:40.7*60, e:43.2*60, color:'#0D7377', label:'3회전 → 2,849봉'},
+      {label:'레토르트<br>(80mm·현재2대)', bars:[
+        {s:35.5*60, e:38*60, color:'#0D7377', label:'1회전 768봉 (384×2대)'},
+        {s:38.1*60, e:40.6*60, color:'#0D7377', label:'2회전 768봉'},
+        {s:40.7*60, e:43.2*60, color:'#0D7377', label:'3회전 768봉'},
+        {s:43.3*60, e:45.8*60, color:'#14b8a6', label:'4회전 545봉 → 2,849봉'},
       ]},
     ];
-    summary = '<strong>FC 단독일 (7.2ton)</strong> — 전일 야간 전처리+자숙으로 새벽 완료 → 파쇄기 2대 09:00 풀가동 → 2,849봉. 레토르트 3대 3회전으로 당일 소화.';
+    summary = '<strong>FC 단독일 (7.2ton)</strong> — 전일 야간 전처리+자숙 새벽 완료 → 파쇄기 2대 09:00 풀가동 → 2,849봉. <strong>레토르트는 80mm 트레이 현재 96개라 2대 동시(1회전 768봉)</strong>, 2,849봉 소화에 4회전 필요(~19시). 6월 트레이 증설(192개·3대)이면 1회전 1,152봉으로 2.5회전(~15:30) 단축.';
   } else {
     const mpShort = mixProd.split(' ')[0];
     lanes = [
       {label:'야간전처리<br>(선행)', bars:[{s:22*60, e:27.5*60, color:'#5B9BD5', label:`FC ${(fcMixKg/1000).toFixed(1)}ton + ${mpShort} 전처리`}]},
-      {label:'자숙 가압<br>T1·T2(FC)', bars:[{s:23*60, e:30*60, color:'#1D9E75', label:`FC 가압자숙`}]},
-      {label:'자숙 상압<br>T3~T6', bars:[{s:23.5*60, e:32*60, color:'#ED7D31', label:`${mpShort} 자숙 (상압)`}]},
-      {label:'파쇄1호<br>(FC)', bars:[{s:33*60, e:39*60, color:'#8064A2', label:`FC 파쇄`}]},
-      {label:'파쇄2호<br>('+mpShort+')', bars:[{s:33*60, e:40*60, color:'#5a3d7a', label:`${mpShort} 파쇄`}]},
+      {label:'자숙 가압<br>T1·T2(FP)', bars:[{s:23*60, e:28*60, color:'#1D9E75', label:`${mpShort} 가압자숙 2.5h (먼저 완료)`}]},
+      {label:'자숙 상압<br>T3~T6(FC)', bars:[{s:23.5*60, e:32*60, color:'#ED7D31', label:`FC 3kg 상압자숙 4.5h (나중)`}]},
+      {label:'파쇄1호<br>('+mpShort+')', bars:[{s:33*60, e:39*60, color:'#8064A2', label:`${mpShort} 먼저 파쇄`}]},
+      {label:'파쇄2호<br>(FC)', bars:[{s:34*60, e:41*60, color:'#5a3d7a', label:`FC 파쇄 (자숙 늦게 완료)`}]},
       {label:'내포장<br>(병행)', bars:[
-        {s:35*60, e:38*60, color:'#C00000', label:`FC 포장 (2호기)`},
         {s:35*60, e:41*60, color:'#8B0000', label:`${mpShort} 포장 (3·4호기)`},
+        {s:36*60, e:40*60, color:'#C00000', label:`FC 포장 (2호기)`},
       ]},
-      {label:'레토르트<br>FC 2대', bars:[
-        {s:36*60, e:38.5*60, color:'#0D7377', label:'FC 1회전'},
-        {s:38.6*60, e:41.1*60, color:'#0D7377', label:'FC 2회전'},
+      {label:'레토르트<br>FP(30/50mm)', bars:[
+        {s:35.5*60, e:37*60, color:'#14b8a6', label:`${mpShort} 1회전`},
+        {s:37.1*60, e:38.6*60, color:'#14b8a6', label:'2회전'},
+        {s:38.7*60, e:40.2*60, color:'#14b8a6', label:'3회전'},
       ]},
-      {label:'레토르트<br>'+mpShort+' 1대', bars:[
-        {s:36*60, e:37.5*60, color:'#14b8a6', label:`${mpShort} 1회전`},
-        {s:37.6*60, e:39.1*60, color:'#14b8a6', label:'2회전'},
-        {s:39.2*60, e:40.7*60, color:'#14b8a6', label:'3회전'},
+      {label:'레토르트<br>FC(80mm·2대)', bars:[
+        {s:37*60, e:39.5*60, color:'#0D7377', label:'FC 1회전 768봉'},
+        {s:39.6*60, e:42.1*60, color:'#0D7377', label:'FC 2회전 768봉'},
       ]},
     ];
-    summary = `<strong>혼합일 (FC ${(fcMixKg/1000).toFixed(1)}ton + ${mixProd})</strong> — 가압 T1·T2는 FC, 상압 T3~T6은 ${mixProd}. 파쇄기 2대 제품별 분담. 레토르트 FC 2대 + ${mixProd} 1대 병렬 운영.`;
+    summary = `<strong>혼합일 (FC ${(fcMixKg/1000).toFixed(1)}ton + ${mixProd})</strong> — 가압 T1·T2는 ${mixProd}(2.5h, 먼저 자숙완료→먼저 파쇄), 상압 T3~T6은 FC 3kg(4.5h, 나중). 파쇄기 2대로 제품별 분담. 레토르트: FP는 30/50mm 트레이로 3대 여유, FC는 80mm 현재 2대(1회전 768봉).`;
   }
 
   buildTT('wk-tt', lanes, currentWeeklyTT === 'solo' ? 21 : 21, currentWeeklyTT === 'solo' ? 44 : 42, lanes.length * 34 + 44);
