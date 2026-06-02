@@ -722,40 +722,69 @@ function renderSimTT(prod,part,meatKg,o,f,bn,fallbackBn,fallback){
     <div class="leg-item"><div class="leg-box" style="background:#ED7D31"></div>자숙</div>
     <div class="leg-item"><div class="leg-box" style="background:#8064A2"></div>파쇄</div>
     <div class="leg-item"><div class="leg-box" style="background:#C00000"></div>내포장</div>
-    <div class="leg-item"><div class="leg-box" style="background:#0D7377"></div>레토르트</div>`;
+    <div class="leg-item"><div class="leg-box" style="background:#0D7377"></div>레토르트(투입)</div>
+    <div class="leg-item"><div class="leg-box" style="background:#0D7377;opacity:.4"></div>레토르트(멸균·익일)</div>`;
+
+  const retortDeadline = Math.min(o.endHour + 1, 24); // 투입 마감 = 정규+연장1h
+
   if(p.noProcess){
     const fb=fallback||{packStart:9.5,availPackHours:8};
-    const lanes=[{label:'내포장<br>(3·4호기)',bars:[{s:fb.packStart*60,e:(fb.packStart+fb.availPackHours)*60,color:'#C00000',label:'메추리알 충진·포장'}]},
-      {label:'레토르트',bars:[{s:(fb.packStart+0.3)*60,e:(fb.packStart+1.8)*60,color:'#0D7377',label:'레토르트'}]}];
-    buildTT('sm-tt',lanes,8,Math.ceil(o.endHour||18),lanes.length*34+44);
-    document.getElementById('sm-tt-note').textContent='무공정 제품 — 09:30 포장 직행';
+    const pe=Math.min(fb.packStart+fb.availPackHours, o.endHour);
+    const lanes=[
+      {label:'내포장<br>(3·4호기)',bars:[{s:fb.packStart*60,e:pe*60,color:'#C00000',label:'메추리알 충진·포장'}]},
+      {label:'레토르트<br>(투입~익일멸균)',bars:[
+        {s:(fb.packStart+0.3)*60,e:(retortDeadline)*60,color:'#0D7377',label:'레토르트 투입'},
+        {s:retortDeadline*60,e:24*60,color:'#0D7377',opacity:'0.4',label:'멸균(당직)'}
+      ]}];
+    buildTT('sm-tt',lanes,0,24,lanes.length*34+44);
+    document.getElementById('sm-tt-note').textContent='무공정 제품 — 09:30 포장 직행. 레토르트는 투입만 마감 내 완료하면 멸균·냉각은 당직자 처리.';
     return;
   }
+
   const b=BASELINE.part[part];
-  const preHr=meatKg/(o.preW*b.pre);
-  const cookHr=p.fixedPart?4.5:2.5;
-  // 새벽조출: 09시 파쇄 시작 위해 역산 (전처리+자숙이 09시 전 완료)
-  const cookEnd=9; const cookStart=cookEnd-cookHr; const preStart=cookStart-preHr;
-  const fragStart=9, fragEnd=Math.min(f.fragEnd, o.endHour);
-  const packStart=f.packStart, packEnd=Math.min(packStart+f.packActualHours, o.endHour);
+  // ── 전처리·자숙 겹침 모델 ──
+  // 전처리 새벽 시작 → 800kg 차는 대로 자숙 탱크 투입 (전처리와 병행)
+  // 파쇄 09시 시작을 위해 자숙 첫 배치가 09시 전 완료되어야 함
+  const fragStart = 9;
+  const cookHr = p.fixedPart ? 4.5 : 2.5;
+  const preRate = o.preW * b.pre;            // kg/h 전처리 속도
+  const preHr = meatKg / preRate;            // 전체 전처리 소요
+  // 첫 자숙 배치(800kg 또는 전체 중 적은쪽) 전처리 시간
+  const firstBatch = Math.min(800, meatKg);
+  const firstPreHr = firstBatch / preRate;
+  // 자숙 첫 배치 완료 = 09시(파쇄 시작) → 역산: 전처리 첫배치 시작 + firstPreHr + cookHr = 9
+  // 자숙 시작 = 전처리 첫배치 완료 시점
+  let cookStart = fragStart - cookHr;        // 자숙 첫 배치가 09시 완료되려면
+  let preStart = cookStart - firstPreHr;     // 그 전에 첫 전처리분
+  // 전처리 종료 = preStart + 전체 preHr
+  const preEnd = preStart + preHr;
+  // 자숙 종료 = 마지막 전처리분 + cookHr (단 09시 이후로 이어질 수 있음)
+  const cookEnd = preEnd + cookHr;
+
+  // 파쇄: 09시 시작, f.fragEnd까지
+  const fragEnd = f.fragEnd;
+  // 포장
+  const packStart=f.packStart, packEnd=packStart+f.packActualHours;
+
   const lanes=[
-    {label:`전처리(새벽)<br>(${o.preW}명)`,bars:[{s:preStart*60,e:cookStart*60,color:'#5B9BD5',label:`전처리 ${preHr.toFixed(1)}h`}]},
-    {label:`자숙<br>(${p.fixedPart?'상압4.5h':'가압2.5h'})`,bars:[{s:cookStart*60,e:cookEnd*60,color:'#ED7D31',label:`자숙`}]},
+    {label:`전처리(새벽)<br>(${o.preW}명)`,bars:[{s:preStart*60,e:preEnd*60,color:'#5B9BD5',label:`전처리 ${preHr.toFixed(1)}h`}]},
+    {label:`자숙<br>(${p.fixedPart?'상압4.5h':'가압2.5h'})`,bars:[{s:cookStart*60,e:cookEnd*60,color:'#ED7D31',label:`자숙(순차투입)`}]},
     {label:`파쇄<br>(${o.fragW}명·${o.fragLines}대)`,bars:[{s:fragStart*60,e:fragEnd*60,color:'#8064A2',label:`파쇄 ${(fragEnd-fragStart).toFixed(1)}h`}]},
     {label:`내포장<br>(${f.lineName}·${f.packLines}라인)`,bars:[{s:packStart*60,e:packEnd*60,color:'#C00000',label:`포장 ${(packEnd-packStart).toFixed(1)}h`}]},
   ];
-  // 레토르트 회전
-  const rBars=[];
-  let rs=packStart+0.3;
-  for(let i=0;i<Math.min(f.rCyc,4) && rs+p.rCycleHr<=o.endHour+0.1;i++){
-    rBars.push({s:rs*60,e:(rs+p.rCycleHr)*60,color:'#0D7377',label:`${i+1}회전`});
-    rs+=p.rCycleHr+0.1;
-  }
-  lanes.push({label:`레토르트<br>(${f.rM}대)`,bars:rBars});
-  const tStart=Math.floor(Math.min(preStart,5)), tEnd=Math.ceil(Math.max(o.endHour, packEnd+0.5));
-  buildTT('sm-tt',lanes,tStart,tEnd,lanes.length*34+44);
-  document.getElementById('sm-tt-note').innerHTML=`전처리 ${preStart.toFixed(1)}시(새벽조출)→자숙→파쇄 09시(${(fragEnd-9).toFixed(1)}h)→포장 ${packStart.toFixed(1)}시(${(packEnd-packStart).toFixed(1)}h)→레토르트. 제한: <strong>${f.limited}</strong>`;
+  // 레토르트: 포장 시작~ 투입, 마감(정규+1h)까지 투입. 그 후는 멸균(흐리게)
+  const retortInStart = packStart + 0.3;
+  const retortInEnd = Math.min(retortDeadline, Math.max(retortInStart+p.rCycleHr, packEnd+0.3));
+  const lanes_retort = {label:`레토르트<br>(${f.rM}대·투입${f.rCyc}회)`, bars:[
+    {s:retortInStart*60, e:retortInEnd*60, color:'#0D7377', label:`투입 (${f.rCyc}회전분)`},
+    {s:retortInEnd*60, e:Math.min(retortInEnd+p.rCycleHr,24)*60, color:'#0D7377', opacity:'0.4', label:`멸균·냉각(당직)`}
+  ]};
+  lanes.push(lanes_retort);
+
+  buildTT('sm-tt',lanes,0,24,lanes.length*34+44);
+  document.getElementById('sm-tt-note').innerHTML=`전처리 ${fmtH(preStart)} 시작(새벽조출) → 800kg 차는 대로 자숙 순차투입 → 파쇄 09시(${(fragEnd-9).toFixed(1)}h) → 포장 ${fmtH(packStart)}(${(packEnd-packStart).toFixed(1)}h) → 레토르트 투입 마감 ${fmtH(retortDeadline)}. 멸균·냉각은 당직자 처리(익일 외포장). 제한: <strong>${f.limited}</strong>`;
 }
+function fmtH(h){ const hh=Math.floor(h), mm=Math.round((h%1)*60); return `${(hh%24+24)%24}:${mm<10?'0'+mm:mm}`; }
 </script>
 <script>
 // ════════ 월 생산계획 ════════
