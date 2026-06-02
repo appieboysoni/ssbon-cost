@@ -240,7 +240,8 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
             <tbody>
               <tr><td>레토르트 대수</td><td class="c ok">3대</td><td class="c ok">3대</td></tr>
               <tr><td>대당 대차 수</td><td class="c">4대차</td><td class="c">4대차</td></tr>
-              <tr><td>FC 3kg 트레이</td><td class="c warn">96개 (2대 동시)</td><td class="c ok">192개 (3대 동시)</td></tr>
+              <tr><td>80mm 트레이 (FC 전용)</td><td class="c warn">96개 (2대 동시)</td><td class="c ok">192개 (3대 동시)</td></tr>
+              <tr><td>30·50mm 트레이 (FP)</td><td class="c ok" colspan="2">3대 동시 가동 충분 (제약 없음)</td></tr>
               <tr><td>FC 3kg 공정시간</td><td class="c" colspan="2">2.5hr (105℃5분+115℃60분+냉각60분)</td></tr>
               <tr><td>기타 제품 공정시간</td><td class="c" colspan="2">1.5hr</td></tr>
               <tr><td>최대 회전수/일</td><td class="c ok" colspan="2">FC 3회전 / 기타 6회전</td></tr>
@@ -476,15 +477,10 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
             <span class="ctrl-out"></span>
           </div>
           <div class="ctrl-row">
-            <label>가동 레토르트 대수</label>
-            <input type="range" min="1" max="3" value="2" step="1" oninput="calcRetortSim()" id="sim-retort-machines">
-            <span class="ctrl-out" id="sim-retort-machines-out">2 대</span>
-          </div>
-          <div class="ctrl-row">
-            <label>보유 트레이 수</label>
-            <select id="sim-retort-trays" onchange="calcRetortSim()" style="flex:1;padding:4px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
-              <option value="96">96개 (현재)</option>
-              <option value="192">192개 (6월 증설)</option>
+            <label>트레이 보유 시점</label>
+            <select id="sim-retort-period" onchange="calcRetortSim()" style="flex:1;padding:4px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
+              <option value="cur" selected>현재 (80mm 96개)</option>
+              <option value="upg">6월 증설 후 (80mm 192개)</option>
             </select>
             <span class="ctrl-out"></span>
           </div>
@@ -871,28 +867,31 @@ window.addEventListener('load', async () => {
 const RETORT = {
   machines: 3,          // 레토르트 총 대수
   cartsPerMachine: 4,   // 1대당 대차 수
-  traysCurrent: 96,     // 현재 트레이 수 (FC 3kg 기준)
-  traysUpgrade: 192,    // 6월 증설 후
+  // 트레이 두께별 가동 가능 대수 (80mm만 제약, 30/50mm는 3대 여유)
+  trayStock: {
+    '30mm': { curMachines:3, upgMachines:3, note:'소용량 제품용 (3대 여유)' },
+    '50mm': { curMachines:3, upgMachines:3, note:'트레이더스용 (3대 여유)' },
+    '80mm': { curMachines:2, upgMachines:3, note:'FC 3kg 전용 (현재 96개=2대분, 6월 192개=3대분)' },
+  },
   products: {
-    'FC 3kg':      { traysPerCart:12, eaPerTray:8,  cycleMins:150, label:'FC 어머니쇠고기장조림 3KG' },
-    '트레이더스460': { traysPerCart:19, eaPerTray:20, cycleMins:90,  label:'트레이더스 460g' },
-    '시그니처130':  { traysPerCart:32, eaPerTray:32, cycleMins:90,  label:'시그니처 장조림 130g' },
-    '코코170':     { traysPerCart:32, eaPerTray:32, cycleMins:90,  label:'코스트코 쇠고기장조림 170g' },
-    '미니70':      { traysPerCart:32, eaPerTray:40, cycleMins:90,  label:'미니쇠고기장조림 70g' },
+    'FC 3kg':      { traysPerCart:12, eaPerTray:8,  cycleMins:150, tray:'80mm', label:'FC 어머니쇠고기장조림 3KG' },
+    '트레이더스460': { traysPerCart:19, eaPerTray:20, cycleMins:90,  tray:'50mm', label:'트레이더스 460g' },
+    '시그니처130':  { traysPerCart:32, eaPerTray:32, cycleMins:90,  tray:'30mm', label:'시그니처 장조림 130g' },
+    '코코170':     { traysPerCart:32, eaPerTray:32, cycleMins:90,  tray:'30mm', label:'코스트코 쇠고기장조림 170g' },
+    '미니70':      { traysPerCart:32, eaPerTray:40, cycleMins:90,  tray:'30mm', label:'미니쇠고기장조림 70g' },
   }
 };
 
-function calcRetortCapa(productKey, machines, trays) {
+function calcRetortCapa(productKey, useUpgrade) {
   const p = RETORT.products[productKey];
   if (!p) return {};
-  // 트레이 수로 최대 동시 가동 대수 계산
-  const traysPerMachine = p.traysPerCart * RETORT.cartsPerMachine;
-  const maxMachines = Math.min(machines, Math.floor(trays / traysPerMachine));
+  const stock = RETORT.trayStock[p.tray];
+  const maxMachines = useUpgrade ? stock.upgMachines : stock.curMachines;
   const eaPerMachine = p.traysPerCart * RETORT.cartsPerMachine * p.eaPerTray;
   const cycleHr = p.cycleMins / 60;
   const maxCycles = Math.floor(9 / cycleHr); // 9hr 기준 (포장팀 09~18시)
   const eaPerDay = eaPerMachine * maxMachines * maxCycles;
-  return { maxMachines, eaPerMachine, cycleHr, maxCycles, eaPerDay, traysPerMachine };
+  return { maxMachines, eaPerMachine, cycleHr, maxCycles, eaPerDay, tray:p.tray, trayNote:stock.note };
 }
 
 const REALDATA = [
@@ -1643,21 +1642,15 @@ function initRetortOverview(){
   if(!tbody) return;
   let html = '';
   Object.entries(RETORT.products).forEach(([key, p]) => {
-    const eaPerMachine = p.traysPerCart * RETORT.cartsPerMachine * p.eaPerTray;
-    const cycleHr = p.cycleMins / 60;
-    const maxCycles = Math.floor(9 / cycleHr);
-    const traysPerMachine = p.traysPerCart * RETORT.cartsPerMachine;
-    const curMachines = Math.min(3, Math.floor(RETORT.traysCurrent / traysPerMachine));
-    const upgMachines = Math.min(3, Math.floor(RETORT.traysUpgrade / traysPerMachine));
-    const curMax = eaPerMachine * curMachines * maxCycles;
-    const upgMax = eaPerMachine * upgMachines * maxCycles;
-    const cls = key === 'FC 3kg' ? 'warn' : 'ok';
+    const cur = calcRetortCapa(key, false);
+    const upg = calcRetortCapa(key, true);
+    const cls = p.tray === '80mm' ? 'warn' : 'ok';
     html += `<tr>
-      <td>${p.label}</td>
-      <td class="c">${eaPerMachine.toLocaleString('ko-KR')} EA</td>
-      <td class="c">${eaPerMachine.toLocaleString('ko-KR')} EA<br><small>(${cycleHr}hr·${maxCycles}회전)</small></td>
-      <td class="r ${cls}">${curMax.toLocaleString('ko-KR')} EA<br><small>${curMachines}대 동시</small></td>
-      <td class="r ok">${upgMax.toLocaleString('ko-KR')} EA<br><small>${upgMachines}대 동시</small></td>
+      <td>${p.label}<br><small style="color:var(--sub)">${p.tray} 트레이</small></td>
+      <td class="c">${cur.eaPerMachine.toLocaleString('ko-KR')} EA</td>
+      <td class="c">${cur.eaPerMachine.toLocaleString('ko-KR')} EA<br><small>(${cur.cycleHr}hr·${cur.maxCycles}회전)</small></td>
+      <td class="r ${cls}">${cur.eaPerDay.toLocaleString('ko-KR')} EA<br><small>${cur.maxMachines}대 동시</small></td>
+      <td class="r ok">${upg.eaPerDay.toLocaleString('ko-KR')} EA<br><small>${upg.maxMachines}대 동시</small></td>
     </tr>`;
   });
   tbody.innerHTML = html;
@@ -1666,27 +1659,26 @@ function initRetortOverview(){
 // ── 시뮬레이터 레토르트 계산
 function calcRetortSim() {
   const product = document.getElementById('sim-retort-product')?.value || 'FC 3kg';
-  const machines = parseInt(document.getElementById('sim-retort-machines')?.value || 2);
-  const trays = parseInt(document.getElementById('sim-retort-trays')?.value || 96);
+  const period = document.getElementById('sim-retort-period')?.value || 'cur';
+  const useUpgrade = period === 'upg';
   const p = RETORT.products[product];
   if(!p) return;
-  const traysPerMachine = p.traysPerCart * RETORT.cartsPerMachine;
-  const effectiveMachines = Math.min(machines, Math.floor(trays / traysPerMachine));
-  const eaPerMachine = p.traysPerCart * RETORT.cartsPerMachine * p.eaPerTray;
-  const cycleHr = p.cycleMins / 60;
-  const maxCycles = Math.floor(9 / cycleHr);
-  const dailyEa = eaPerMachine * effectiveMachines * maxCycles;
+  const r = calcRetortCapa(product, useUpgrade);
   const el = document.getElementById('sim-retort-result');
-  if(el) el.innerHTML = `
+  if(!el) return;
+  el.innerHTML = `
     <table class="tbl" style="margin-top:8px">
-      <tr><td>트레이 기준 최대 동시 가동</td><td class="r ok">${effectiveMachines}대</td></tr>
-      <tr><td>1대당 1사이클 생산량</td><td class="r">${eaPerMachine.toLocaleString('ko-KR')} EA</td></tr>
-      <tr><td>사이클 시간</td><td class="r">${cycleHr}hr</td></tr>
-      <tr><td>9hr 기준 최대 회전수</td><td class="r">${maxCycles}회전</td></tr>
-      <tr><td><strong>일 최대 생산량</strong></td><td class="r ok"><strong>${dailyEa.toLocaleString('ko-KR')} EA</strong></td></tr>
-      ${trays < traysPerMachine ? `<tr><td colspan="2"><div class="alert bad" style="margin:4px 0">트레이 부족: ${traysPerMachine}개 필요, 현재 ${trays}개 → 1대도 풀가동 불가</div></td></tr>` : ''}
-      ${effectiveMachines < machines ? `<tr><td colspan="2"><div class="alert warn" style="margin:4px 0">트레이 ${trays}개로는 ${effectiveMachines}대만 동시 가동 가능</div></td></tr>` : ''}
-    </table>`;
+      <tr><td>사용 트레이 두께</td><td class="r"><strong>${r.tray}</strong></td></tr>
+      <tr><td>가동 가능 레토르트</td><td class="r ok">${r.maxMachines}대</td></tr>
+      <tr><td>1대당 1사이클 생산량</td><td class="r">${r.eaPerMachine.toLocaleString('ko-KR')} EA</td></tr>
+      <tr><td>사이클 시간</td><td class="r">${r.cycleHr}hr</td></tr>
+      <tr><td>9hr 기준 최대 회전수</td><td class="r">${r.maxCycles}회전</td></tr>
+      <tr><td><strong>일 최대 생산량</strong></td><td class="r ok"><strong>${r.eaPerDay.toLocaleString('ko-KR')} EA</strong></td></tr>
+    </table>
+    <div class="alert ${r.tray==='80mm'&&!useUpgrade?'warn':'info'}" style="margin-top:8px">
+      ${r.tray} 트레이: ${r.trayNote}
+      ${r.tray==='80mm'&&!useUpgrade?'<br>→ 6월 중순 트레이 증설 시 3대 동시 가동 가능 (회전수 추가 확보)':''}
+    </div>`;
 }
 
 // ══════════════════════════════════════
