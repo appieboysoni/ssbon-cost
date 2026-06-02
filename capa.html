@@ -213,17 +213,21 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
     </div>
 
     <div class="section">
-      <div class="sec-hdr">📐 실측 생산성 기준치 (4일 실측)</div>
+      <div class="sec-hdr">📐 실측 생산성 기준치 (5월 전체 평균 · n=7~9)</div>
       <div class="sec-body">
         <table class="tbl">
-          <thead><tr><th>공정</th><th class="c">부위</th><th class="r">실측 생산성</th><th class="c">데이터</th><th>비고</th></tr></thead>
+          <thead><tr><th>공정</th><th class="c">부위</th><th class="r">평균</th><th class="r">고점</th><th class="c">데이터</th></tr></thead>
           <tbody>
-            <tr><td rowspan="2">전처리</td><td class="c">설도</td><td class="r ok">84.1 kg/인시</td><td class="c">n=3</td><td>5/22·27·28</td></tr>
-            <tr><td class="c">홍두깨</td><td class="r warn">59.9 kg/인시</td><td class="c">n=2</td><td>5/22·29 · 설도의 71%</td></tr>
-            <tr><td rowspan="2">파쇄·선별</td><td class="c">설도</td><td class="r warn">28.2 kg/인시</td><td class="c">n=3</td><td>소분 공정 포함</td></tr>
-            <tr><td class="c">홍두깨</td><td class="r bad">20.8 kg/인시</td><td class="c">n=2</td><td>덩어리 선별 · 설도의 74%</td></tr>
-            <tr><td>자숙 수율</td><td class="c">전 부위</td><td class="r ok">57~59%</td><td class="c">n=4</td><td>부위 무관 안정적</td></tr>
-            <tr><td colspan="5"><div class="alert info" style="margin:4px 0 0">⚠️ 5/29 파쇄 인원 역설: 16명→14~16 kg/인시, 9명→20~27 kg/인시. 인원 과다 시 동선 간섭 발생. 파쇄기 2대 증설 시 라인 분리 필수.</div></td></tr>
+            <tr><td rowspan="3">전처리<br>(kg/인시)</td><td class="c">설도</td><td class="r ok">88.1</td><td class="r">97.7</td><td class="c">n=7</td></tr>
+            <tr><td class="c">우둔</td><td class="r ok">92.9</td><td class="r">111.0</td><td class="c">n=9</td></tr>
+            <tr><td class="c">홍두깨</td><td class="r warn">51.5</td><td class="r">58.5</td><td class="c">n=7</td></tr>
+            <tr><td rowspan="3">파쇄·선별<br>(kg/인시)</td><td class="c">설도</td><td class="r ok">30.0</td><td class="r">35.2</td><td class="c">n=7</td></tr>
+            <tr><td class="c">우둔</td><td class="r warn">21.4</td><td class="r">26.1</td><td class="c">n=9</td></tr>
+            <tr><td class="c">홍두깨</td><td class="r bad">19.0</td><td class="r">22.5</td><td class="c">n=7</td></tr>
+            <tr><td rowspan="3">수율</td><td class="c">설도</td><td class="r" colspan="2">전처리 95.2% · 자숙 56.8% · 파쇄 88.4%</td><td class="c">n=7</td></tr>
+            <tr><td class="c">우둔</td><td class="r" colspan="2">전처리 97.0% · 자숙 55.4% · 파쇄 91.3%</td><td class="c">n=9</td></tr>
+            <tr><td class="c">홍두깨</td><td class="r" colspan="2">전처리 89.9% · 자숙 57.3% · 파쇄 95.6%</td><td class="c">n=7</td></tr>
+            <tr><td colspan="5"><div class="alert info" style="margin:4px 0 0">전처리는 우둔>설도≫홍두깨, 파쇄는 설도≫우둔>홍두깨 순. 기준치는 '기준치 설정' 탭에서 매월 갱신 가능. ⚠️ 파쇄 인원 역설(5/29): 인원 과다 시 동선 간섭 → 파쇄기 2대 시 라인 분리 필수.</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -378,12 +382,12 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
         <div class="sec-body">
           <div class="ctrl-row">
             <label>원육 부위</label>
-            <select id="s-part" onchange="runSim()">
-              <option value="84.1">설도 (84.1 kg/인시)</option>
-              <option value="59.9" selected>홍두깨 (59.9 kg/인시)</option>
-              <option value="72.0">우둔 (추정 72.0 kg/인시)</option>
+            <select id="s-part" onchange="onSimPartChange()">
+              <option value="설도">설도</option>
+              <option value="홍두깨" selected>홍두깨</option>
+              <option value="우둔">우둔</option>
             </select>
-            <span class="ctrl-out" id="s-part-out">59.9 kg/인시</span>
+            <span class="ctrl-out" id="s-part-out">51.5 kg/인시</span>
           </div>
           <div class="ctrl-row">
             <label>전처리 인원</label>
@@ -443,8 +447,8 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
           </div>
           <div class="ctrl-row">
             <label>인당 생산성</label>
-            <input type="range" min="15" max="45" value="20.8" step="2.5" oninput="runSim()" id="s-frag-pr">
-            <span class="ctrl-out" id="s-frag-pr-out">20.8 kg/인시</span>
+            <input type="range" min="15" max="45" value="19" step="0.5" oninput="runSim()" id="s-frag-pr">
+            <span class="ctrl-out" id="s-frag-pr-out">19.0 kg/인시</span>
           </div>
           <div class="ctrl-row">
             <label>파쇄 가동시간</label>
@@ -1180,25 +1184,27 @@ function renderTT() {
 
 // ══════════════════════ 병목 분석 ══════════════════════
 function initBN() {
+  const sd = BASELINE.part['설도'], hd = BASELINE.part['홍두깨'];
+  const sdPre = sd.pre, hdPre = hd.pre, sdFrag = sd.frag, hdFrag = hd.frag;
   const indep = [
-    {l:'전처리 설도 (11명×9hr)', v:Math.round(11*84.1*9), max:15000, c:'#2F5496'},
-    {l:'전처리 홍두깨 (11명×4.5hr)', v:Math.round(11*59.9*4.5), max:15000, c:'#ED7D31'},
-    {l:'전처리 홍두깨 야간 (9명×5.2hr)', v:Math.round(9*59.9*5.2), max:15000, c:'#5B9BD5'},
+    {l:`전처리 설도 (11명×9hr·${sdPre})`, v:Math.round(11*sdPre*9), max:15000, c:'#2F5496'},
+    {l:`전처리 홍두깨 (11명×4.5hr·${hdPre})`, v:Math.round(11*hdPre*4.5), max:15000, c:'#ED7D31'},
+    {l:`전처리 홍두깨 야간 (9명×5.2hr)`, v:Math.round(9*hdPre*5.2), max:15000, c:'#5B9BD5'},
     {l:'자숙 모드A 기본 (06~15시)', v:8800, max:15000, c:'#1D9E75'},
     {l:'자숙 모드A 연장 (06~17:30)', v:12800, max:15000, c:'#1D9E75'},
     {l:'자숙 모드B FC (상압6대×1사이클)', v:4800, max:15000, c:'#ED7D31'},
-    {l:'파쇄 현재 (11명×20.8×6.6hr)', v:1506, max:15000, c:'#C00000'},
-    {l:'파쇄 야간전처리 후 (15명×20.8×8hr)', v:2496, max:15000, c:'#C00000'},
-    {l:'파쇄기 2대 (20명×20.8×8hr)', v:3328, max:15000, c:'#8064A2'},
+    {l:`파쇄 현재 (11명×${hdFrag}×6.6hr)`, v:Math.round(11*hdFrag*6.6), max:15000, c:'#C00000'},
+    {l:`파쇄 야간전처리 후 (15명×${hdFrag}×8hr)`, v:Math.round(15*hdFrag*8), max:15000, c:'#C00000'},
+    {l:`파쇄기 2대 (20명×${hdFrag}×8hr)`, v:Math.round(20*hdFrag*8), max:15000, c:'#8064A2'},
     {l:'파쇄기 2대+숙련 (25명×25×8hr)', v:5000, max:15000, c:'#8064A2'},
     {l:'내포장 이론 (4라인 65% 효율)', v:51480, max:100000, c:'#2F5496'},
   ];
   renderBars('indep-bars', indep);
 
   const frags = [
-    {l:'현재 (11명×20.8×6.6hr)', v:1506, max:9000, c:'#C00000'},
-    {l:'8hr 확보 (15명×20.8×8hr)', v:2496, max:9000, c:'#ED7D31'},
-    {l:'파쇄기 2대 (20명×20.8×8hr)', v:3328, max:9000, c:'#ED7D31'},
+    {l:`현재 (11명×${hdFrag}×6.6hr)`, v:Math.round(11*hdFrag*6.6), max:9000, c:'#C00000'},
+    {l:`8hr 확보 (15명×${hdFrag}×8hr)`, v:Math.round(15*hdFrag*8), max:9000, c:'#ED7D31'},
+    {l:`파쇄기 2대 (20명×${hdFrag}×8hr)`, v:Math.round(20*hdFrag*8), max:9000, c:'#ED7D31'},
     {l:'2대+숙련22.5 (20명×22.5×8hr)', v:3600, max:9000, c:'#1D9E75'},
     {l:'2대+숙련25 (25명×25×8hr)', v:5000, max:9000, c:'#1D9E75'},
     {l:'2대+숙련30 (25명×30×8hr)', v:6000, max:9000, c:'#2F5496'},
@@ -1206,9 +1212,9 @@ function initBN() {
   renderBars('frag-scen-bars', frags);
 
   const pres = [
-    {l:'설도 주간 (11명×84.1×9hr)', v:Math.round(11*84.1*9), max:10000, c:'#2F5496'},
-    {l:'홍두깨 주간 (11명×59.9×4.5hr)', v:Math.round(11*59.9*4.5), max:10000, c:'#ED7D31'},
-    {l:'홍두깨 야간 (9명×59.9×5.2hr)', v:Math.round(9*59.9*5.2), max:10000, c:'#5B9BD5'},
+    {l:`설도 주간 (11명×${sdPre}×9hr)`, v:Math.round(11*sdPre*9), max:10000, c:'#2F5496'},
+    {l:`홍두깨 주간 (11명×${hdPre}×4.5hr)`, v:Math.round(11*hdPre*4.5), max:10000, c:'#ED7D31'},
+    {l:`홍두깨 야간 (9명×${hdPre}×5.2hr)`, v:Math.round(9*hdPre*5.2), max:10000, c:'#5B9BD5'},
     {l:'홍두깨 야간 향상 (9명×75×4.4hr)', v:Math.round(9*75*4.4), max:10000, c:'#1D9E75'},
   ];
   renderBars('pretreat-bars', pres);
@@ -1228,9 +1234,24 @@ function renderBars(id, items) {
 }
 
 // ══════════════════════ 시뮬레이터 ══════════════════════
-function initSim() { runSim(); }
+function initSim() { onSimPartChange(true); }
+
+// 부위 변경 시 파쇄 생산성 슬라이더를 BASELINE 값으로 갱신
+function onSimPartChange(skipReset) {
+  const part = document.getElementById('s-part').value;
+  const b = BASELINE.part[part] || BASELINE.part['홍두깨'];
+  document.getElementById('s-part-out').textContent = b.pre.toFixed(1) + ' kg/인시';
+  // 파쇄 생산성 슬라이더를 해당 부위 기본값으로
+  const fragSlider = document.getElementById('s-frag-pr');
+  fragSlider.value = b.frag;
+  document.getElementById('s-frag-pr-out').textContent = b.frag.toFixed(1) + ' kg/인시';
+  runSim();
+}
+
 function runSim() {
-  const partProd = parseFloat(document.getElementById('s-part').value);
+  const part = document.getElementById('s-part').value;
+  const b = BASELINE.part[part] || BASELINE.part['홍두깨'];
+  const partProd = b.pre;          // 전처리 생산성 (BASELINE)
   const preW = parseInt(document.getElementById('s-pre-w').value);
   const meatKg = parseInt(document.getElementById('s-meat').value);
   const nightW = parseInt(document.getElementById('s-night-pre').value);
@@ -1241,7 +1262,7 @@ function runSim() {
   const fragPr = parseFloat(document.getElementById('s-frag-pr').value);
   const fragH = parseFloat(document.getElementById('s-frag-h').value);
 
-  document.getElementById('s-part-out').textContent = partProd + ' kg/인시';
+  document.getElementById('s-part-out').textContent = partProd.toFixed(1) + ' kg/인시';
   document.getElementById('s-pre-w-out').textContent = preW + ' 명';
   document.getElementById('s-meat-out').textContent = meatKg.toLocaleString('ko-KR') + ' kg';
   document.getElementById('s-night-out').textContent = nightW > 0 ? `야간 ${nightW}명` : '없음';
@@ -1253,39 +1274,42 @@ function runSim() {
   document.getElementById('s-frag-h-out').textContent = fragH.toFixed(1) + ' hr';
 
   // 전처리 시간
-  const dayPreW = nightW > 0 ? preW : preW;
   const preHr = nightW > 0
-    ? meatKg / (nightW * partProd)   // 야간 인원으로 처리
+    ? meatKg / (nightW * partProd)
     : meatKg / (preW * partProd);
 
-  // 자숙 CAPA
+  // 자숙 CAPA (투입 원육 기준)
   const sterilKg = (2 * pc + 4 * ac) * 800;
 
-  // 파쇄 CAPA (파쇄기 2대면 라인 분리 → 최대 효율 보정)
-  const efficiencyFactor = fragM === 2 ? 1.0 : (fragW > 12 ? 0.85 : 1.0);
-  const fragKg = Math.round(fragW * fragPr * fragH * efficiencyFactor);
+  // 파쇄 투입량 = 원육 × 전처리수율 × 자숙수율
+  const fragInput = meatKg * b.preY * b.cook;
 
-  // 실질
-  const realKg = Math.min(sterilKg, fragKg, meatKg);
-  const ea130 = Math.round(realKg * 0.88 / 0.130);
-  const fragUtil = sterilKg > 0 ? Math.round(fragKg / sterilKg * 100) : 0;
-  const bottle = fragKg < sterilKg ? '파쇄 병목' : '자숙 한계';
-  const bCls = fragKg < 2000 ? 'bad' : fragKg < 4000 ? 'warn' : 'ok';
+  // 파쇄 처리능력 (파쇄기 2대면 라인 분리 효율)
+  const efficiencyFactor = fragM === 2 ? 1.0 : (fragW > 12 ? 0.85 : 1.0);
+  const fragCapKg = Math.round(fragW * fragPr * fragH * efficiencyFactor);
+
+  // 실질: 파쇄 투입량과 파쇄 처리능력 중 작은 쪽, 자숙 한계도 고려
+  const realFragKg = Math.min(fragInput, fragCapKg);  // 실제 파쇄되는 양
+  const fragOutKg = realFragKg * b.fragY;              // 파쇄 후 산출
+  const ea130 = Math.round(fragOutKg / 0.130);
+  const fragUtil = sterilKg > 0 ? Math.round(fragCapKg / sterilKg * 100) : 0;
+  const bottle = fragCapKg < fragInput ? '파쇄 병목' : '전처리/자숙 한계';
+  const bCls = fragCapKg < 2000 ? 'bad' : fragCapKg < 4000 ? 'warn' : 'ok';
   const fragPerLine = fragM === 2 ? `(라인당 ${Math.round(fragW/2)}명)` : '';
 
   document.getElementById('sim-res').innerHTML = `
     <div class="res-card"><div class="rv" style="color:var(--mid)">${preHr.toFixed(1)} hr</div><div class="rl">전처리 소요시간${nightW>0?' (야간)':''}</div></div>
     <div class="res-card"><div class="rv" style="color:var(--p)">${sterilKg.toLocaleString('ko-KR')}</div><div class="rl">자숙 이론 CAPA (kg/일)</div></div>
-    <div class="res-card"><div class="rv" style="color:var(--${bCls})">${fragKg.toLocaleString('ko-KR')}</div><div class="rl">파쇄 CAPA (kg/일) ${fragPerLine}</div></div>
-    <div class="res-card"><div class="rv" style="color:var(--ok)">${realKg.toLocaleString('ko-KR')}</div><div class="rl">실질 CAPA (kg/일)</div></div>
+    <div class="res-card"><div class="rv" style="color:var(--${bCls})">${fragCapKg.toLocaleString('ko-KR')}</div><div class="rl">파쇄 처리능력 (kg/일) ${fragPerLine}</div></div>
+    <div class="res-card"><div class="rv" style="color:var(--ok)">${Math.round(fragOutKg).toLocaleString('ko-KR')}</div><div class="rl">파쇄 후 산출 (kg/일)</div></div>
     <div class="res-card"><div class="rv">${ea130.toLocaleString('ko-KR')}</div><div class="rl">130g 환산 (ea/일)</div></div>
     <div class="res-card"><div class="rv" style="color:var(--${bCls})">${fragUtil}%</div><div class="rl">파쇄/자숙 처리율 · ${bottle}</div></div>
   `;
 
-  const verdictCls = fragKg < 2000 ? 'bad' : fragKg < 4000 ? 'warn' : 'ok';
-  const verdictMsg = fragKg < 2000
+  const verdictCls = fragCapKg < 2000 ? 'bad' : fragCapKg < 4000 ? 'warn' : 'ok';
+  const verdictMsg = fragCapKg < 2000
     ? `파쇄가 심각한 병목입니다. 야간 전처리 도입 또는 파쇄기 증설을 검토하세요.`
-    : fragKg < 4000
+    : fragCapKg < 4000
     ? `파쇄 병목이 완화됐으나 여전히 자숙 대비 ${fragUtil}% 처리. 추가 개선 여지 있음.`
     : `파쇄 CAPA가 충분히 확보됐습니다. 자숙 2사이클 전환을 검토할 시점.`;
   document.getElementById('sim-verdict-box').innerHTML = `<div class="alert ${verdictCls}" style="margin-top:10px">${verdictMsg}${fragM===2?`<br>파쇄기 2대: 반드시 라인 독립 운영 (각 ${Math.round(fragW/2)}명씩). 한 라인에 집중 배치 시 생산성 역설 발생.`:''}</div>`;
