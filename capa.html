@@ -379,29 +379,46 @@ function runCap(){
   const procs=['전처리','자숙','파쇄'];
   const colors={전처리:'#2F5496',자숙:'#1D9E75',파쇄:'#C00000'};
   const maxV=Math.max(c.need, ...procs.map(p=>c[p]))*1.1;
+  // 공정별 실제 처리량 설명 (원육 환산 근거)
+  const W=c.W;
+  const fragCookKg=o.fragM*c.perLine*W.wFrag*o.fragH; // 자숙육 처리량
+  const sub={
+    전처리:`${o.preW}명 × ${W.wPre.toFixed(0)}kg/인시 × ${o.preH}h (원육 직접 처리)`,
+    자숙:`${o.cookBatch}배치 × 800kg (탱크 투입 원육)`,
+    파쇄:`${o.fragM}대 × ${c.perLine.toFixed(0)}명(라인당) × ${W.wFrag.toFixed(0)}kg/인시 × ${o.fragH}h = 자숙육 ${Math.round(fragCookKg).toLocaleString()}kg 처리${o.fragW>c.perLine*o.fragM?` · 입력 ${o.fragW}명 중 ${Math.round(c.perLine*o.fragM)}명 유효(나머지 포장지원)`:''}`,
+  };
   let html='';
   procs.forEach(p=>{
     const v=c[p], ok=v>=c.need;
     const pct=Math.min(v/maxV*100,100), needPct=c.need/maxV*100;
     const ratio=Math.round(v/c.need*100);
     html+=`<div class="proc-row">
-      <div class="proc-hd"><span class="nm">${p}</span><span class="vv" style="color:${ok?'var(--ok)':'var(--bad)'}">${Math.round(v).toLocaleString()} kg/일 (${ratio}%) ${ok?'✓':'✗ 부족'}</span></div>
+      <div class="proc-hd"><span class="nm">${p}</span><span class="vv" style="color:${ok?'var(--ok)':'var(--bad)'}">${Math.round(v).toLocaleString()} kg원육/일 (${ratio}%) ${ok?'✓':'✗ 부족'}</span></div>
       <div class="cap-bar"><div class="cap-fill" style="width:${pct}%;background:${colors[p]}">${Math.round(v).toLocaleString()}</div><div class="cap-need" style="left:${needPct}%"></div></div>
+      <div style="font-size:9.5px;color:var(--sub);margin-top:2px">${sub[p]}</div>
     </div>`;
   });
-  html+=`<div style="font-size:10px;color:var(--sub);margin-top:8px">검은 선 = 12월 일평균 필요 (<strong>${Math.round(c.need).toLocaleString()} kg/일</strong>). 막대가 선을 넘으면 충족.</div>`;
+  html+=`<div style="font-size:10px;color:var(--sub);margin-top:8px">검은 선 = 12월 일평균 필요 (<strong>${Math.round(c.need).toLocaleString()} kg원육/일</strong>). 모든 막대는 <strong>원육 kg/일</strong>로 환산해 비교. 막대가 선을 넘으면 충족.</div>`;
   document.getElementById('cap-bars').innerHTML=html;
 
-  // 포장 라인별 일수
-  let ph='<table class="tbl"><thead><tr><th>제품</th><th>주력 라인</th><th class="r">하루 능력(개)</th><th class="r">월 물량</th><th class="r">소요일수</th></tr></thead><tbody>';
-  PRODUCTS.forEach(p=>{
+  // 포장 라인별 일수 — 포장이 병목 후보인 FP 제품만. FC는 원육/자숙/파쇄가 한계라 별도.
+  const meatHeavy=PRODUCTS.filter(p=>rawPerEa(p)>=500); // 봉당원육 500g↑ = 원육제약 제품(FC 등)
+  const packBound=PRODUCTS.filter(p=>rawPerEa(p)<500);
+  let ph='<table class="tbl"><thead><tr><th>제품</th><th>가능 라인</th><th class="r">하루 능력(개)</th><th class="r">월 물량</th><th class="r">소요일수</th></tr></thead><tbody>';
+  packBound.forEach(p=>{
     const daily=bestPackEaPerDay(p.name,o.packH);
     const days=daily>0?p.ea/daily:0;
     const opts=PACK_LINES[p.name]||[];
     const lineStr=opts.map(l=>`${l.line}(${l.speed}${l.max>1?'×'+l.max:''})`).join(', ');
     ph+=`<tr><td>${p.name}</td><td style="font-size:10px">${lineStr}</td><td class="r">${daily.toLocaleString()}</td><td class="r">${p.ea.toLocaleString()}</td><td class="r ${days>o.days?'bad':''}">${days.toFixed(1)}일</td></tr>`;
   });
-  ph+='</tbody></table><div style="font-size:10px;color:var(--sub);margin-top:6px">라인 유연화로 미니도 3·4호기 사용 가능. 가장 빠른 라인 기준 일수. 합산 일수가 가동일을 넘지 않으면 포장 소화 가능.</div>';
+  ph+='</tbody></table>';
+  // FC 등 원육제약 제품 별도 안내
+  if(meatHeavy.length){
+    const names=meatHeavy.map(p=>p.name).join(', ');
+    ph+=`<div class="alert info" style="margin-top:8px;margin-bottom:0"><strong>${names}</strong>는 포장 기계는 빠르지만(2호기 등) 봉당 원육이 무거워(예: FC 1,350g) <strong>실제 한계는 전처리·자숙·파쇄</strong>입니다. 포장은 병목이 아니므로 위 표에서 제외했습니다. → 위쪽 '공정별 능력' 막대를 보세요.</div>`;
+  }
+  ph+='<div style="font-size:10px;color:var(--sub);margin-top:6px">포장 기계 속도 기준(앞공정이 충분히 공급한다고 가정). 라인 유연화로 미니도 3·4호기 사용 가능. 합산 일수가 가동일 내면 포장 소화 가능.</div>';
   document.getElementById('pack-lines').innerHTML=ph;
 
   // 진단
