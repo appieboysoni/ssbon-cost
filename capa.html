@@ -194,8 +194,9 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
         <div class="ctrl-row"><label>파쇄기 대수</label><select id="c-fragm" onchange="runCap()"><option value="1">1대 (현재)</option><option value="2">2대 (투자)</option></select></div>
         <div class="ctrl-row"><label>파쇄 인원</label><input type="range" id="c-fragw" min="5" max="30" value="11" oninput="runCap()"><span class="ctrl-out" id="c-fragw-o">11명</span></div>
         <div class="ctrl-row"><label>파쇄 가동시간</label><input type="range" id="c-fragh" min="6" max="12" value="8" step="0.5" oninput="runCap()"><span class="ctrl-out" id="c-fragh-o">8h</span></div>
-        <div style="border-top:1px solid var(--border);margin:8px 0;padding-top:8px;font-size:10px;color:var(--sub);font-weight:600">포장 (설비)</div>
+        <div style="border-top:1px solid var(--border);margin:8px 0;padding-top:8px;font-size:10px;color:var(--sub);font-weight:600">포장·레토르트 (설비)</div>
         <div class="ctrl-row"><label>포장 가동시간</label><input type="range" id="c-packh" min="6" max="12" value="8" step="0.5" oninput="runCap()"><span class="ctrl-out" id="c-packh-o">8h</span></div>
+        <div class="ctrl-row"><label>80mm 트레이(FC)</label><select id="c-retort" onchange="runCap()"><option value="0">현재 2대분(96개)</option><option value="1">증설 3대분(192개)</option></select></div>
       </div>
     </div>
 
@@ -264,11 +265,11 @@ var YIELD={
   '홍두깨':{pre:51.5, frag:23.0, preY:0.899, cook:0.573, fragY:0.956},
 };
 var PRODUCTS=[
-  {name:'FC 3kg',       ea:32141,  meat:1350, units:1, part:'홍두깨', line:'2호기',  speed:15, maxLines:1, grow:false},
-  {name:'미니 70g',      ea:165029, meat:24,   units:1, part:'설도',  line:'1호기',  speed:55, maxLines:1, grow:true},
-  {name:'130g 메추리알',  ea:60950,  meat:25,   units:1, part:'설도',  line:'3·4호기',speed:36, maxLines:2, grow:true},
-  {name:'코스트코 170g',  ea:77864,  meat:54,   units:4, part:'우둔',  line:'3·4호기',speed:36, maxLines:2, grow:true},
-  {name:'트레이더스 460g',ea:14905,  meat:147.2,units:1, part:'설도',  line:'2호기',  speed:15, maxLines:1, grow:false},
+  {name:'FC 3kg',       ea:32141,  meat:1350, units:1, part:'홍두깨', line:'2호기',  speed:15, maxLines:1, grow:false, tray:'80mm', rPerCycle:384,  rHr:2.5},
+  {name:'미니 70g',      ea:165029, meat:24,   units:1, part:'설도',  line:'1호기',  speed:55, maxLines:1, grow:true,  tray:'30mm', rPerCycle:5120, rHr:1.5},
+  {name:'130g 메추리알',  ea:60950,  meat:25,   units:1, part:'설도',  line:'3·4호기',speed:36, maxLines:2, grow:true,  tray:'30mm', rPerCycle:4096, rHr:1.5},
+  {name:'코스트코 170g',  ea:77864,  meat:54,   units:4, part:'우둔',  line:'3·4호기',speed:36, maxLines:2, grow:true,  tray:'30mm', rPerCycle:4096, rHr:1.5},
+  {name:'트레이더스 460g',ea:14905,  meat:147.2,units:1, part:'설도',  line:'2호기',  speed:15, maxLines:1, grow:false, tray:'50mm', rPerCycle:1520, rHr:1.5},
 ];
 function rawPerEa(p){const y=YIELD[p.part];return (p.meat*p.units)/y.fragY/y.cook/y.preY;}
 function totRaw(p){return p.ea*rawPerEa(p)/1000;} // kg
@@ -276,8 +277,8 @@ function totalRaw(){return PRODUCTS.reduce((s,p)=>s+totRaw(p),0);}
 
 // 시나리오 프리셋
 var SCENARIOS={
-  asis:  {days:22, preW:8,  preH:8,  cookBatch:7, fragM:1, fragW:11, fragH:8,  packH:8},
-  tobe:  {days:22, preW:10, preH:7,  cookBatch:9, fragM:2, fragW:20, fragH:8,  packH:8},
+  asis:  {days:22, preW:8,  preH:8,  cookBatch:7, fragM:1, fragW:11, fragH:8,  packH:8, retortUpg:0},
+  tobe:  {days:22, preW:10, preH:7,  cookBatch:9, fragM:2, fragW:20, fragH:8,  packH:8, retortUpg:1},
 };
 var _scn='asis';
 
@@ -289,6 +290,23 @@ function weighted(){
   return {wPre,wFrag,wPreY,wCook,wFragY};
 }
 var PERLINE_MAX=13; // 파쇄 라인당 최대 인원
+function retortCap(o){
+  // 레토르트 3대. 제품별 트레이·회전 달라 믹스 가중 원육 능력 계산.
+  // 하루 가동 = 포장 마감까지(o.packH 가정 사용, 투입 기준). 80mm 트레이 수 제약(현재96=2대분).
+  const H=o.packH;
+  const tot=totalRaw();
+  let wRaw=0; // 믹스 가중 레토르트 원육 능력
+  PRODUCTS.forEach(p=>{
+    const w=totRaw(p)/tot;
+    const cyc=Math.floor(H/p.rHr);
+    // 80mm(FC)는 트레이 제약: 현재 2대분(96개), 증설시 3대분(192개)
+    const machines = (p.tray==='80mm') ? (o.retortUpg?3:2) : 3;
+    const dailyEa=p.rPerCycle*machines*cyc;
+    const dailyRaw=dailyEa*rawPerEa(p)/1000;
+    wRaw+=dailyRaw*w; // 가중평균(이 제품만 종일 돌렸을 때 능력 × 비중)
+  });
+  return wRaw;
+}
 function capacities(o){
   const W=weighted();
   const need=totalRaw()/o.days;
@@ -297,11 +315,12 @@ function capacities(o){
   // 자숙: 설비. 배치 수 직접 입력 (탱크당 800kg, 원육 투입 기준)
   const cook=o.cookBatch*800;
   // 파쇄: 선별작업 — 라인(설비)이 능력 결정. 라인당 인원 상한 적용
-  //  자숙후 처리량 = 대수 × min(인원/대수, 라인당상한) × 생산성 × 시간
   const perLine=Math.min(o.fragW/o.fragM, PERLINE_MAX);
   const fragCookKg=o.fragM*perLine*W.wFrag*o.fragH;
   const frag=fragCookKg/(W.wPreY*W.wCook);
-  return {need, 전처리:pre, 자숙:cook, 파쇄:frag, W, perLine};
+  // 레토르트
+  const retort=retortCap(o);
+  return {need, 전처리:pre, 자숙:cook, 파쇄:frag, 레토르트:retort, W, perLine};
 }
 
 // ════════ 탭 ════════
@@ -330,6 +349,7 @@ function setScenario(s,btn){
     document.getElementById('c-fragw').value=sc.fragW;
     document.getElementById('c-fragh').value=sc.fragH;
     document.getElementById('c-packh').value=sc.packH;
+    document.getElementById('c-retort').value=sc.retortUpg?'1':'0';
   }
   runCap();
 }
@@ -343,6 +363,7 @@ function readOpts(){
     fragW:+document.getElementById('c-fragw').value,
     fragH:+document.getElementById('c-fragh').value,
     packH:+document.getElementById('c-packh').value,
+    retortUpg:document.getElementById('c-retort').value==='1',
   };
 }
 </script>
@@ -375,9 +396,9 @@ function runCap(){
   const c=capacities(o);
   document.getElementById('hdr-tot').textContent=(totalRaw()/1000).toFixed(1)+'t';
 
-  // 막대: 전처리/자숙/파쇄 vs 필요
-  const procs=['전처리','자숙','파쇄'];
-  const colors={전처리:'#2F5496',자숙:'#1D9E75',파쇄:'#C00000'};
+  // 막대: 전처리/자숙/파쇄/레토르트 vs 필요
+  const procs=['전처리','자숙','파쇄','레토르트'];
+  const colors={전처리:'#2F5496',자숙:'#1D9E75',파쇄:'#C00000',레토르트:'#0D7377'};
   const maxV=Math.max(c.need, ...procs.map(p=>c[p]))*1.1;
   // 공정별 실제 처리량 설명 (원육 환산 근거)
   const W=c.W;
@@ -386,6 +407,7 @@ function runCap(){
     전처리:`${o.preW}명 × ${W.wPre.toFixed(0)}kg/인시 × ${o.preH}h (원육 직접 처리)`,
     자숙:`${o.cookBatch}배치 × 800kg (탱크 투입 원육)`,
     파쇄:`${o.fragM}대 × ${c.perLine.toFixed(0)}명(라인당) × ${W.wFrag.toFixed(0)}kg/인시 × ${o.fragH}h = 자숙육 ${Math.round(fragCookKg).toLocaleString()}kg 처리${o.fragW>c.perLine*o.fragM?` · 입력 ${o.fragW}명 중 ${Math.round(c.perLine*o.fragM)}명 유효(나머지 포장지원)`:''}`,
+    레토르트:`3대(80mm FC는 ${o.retortUpg?'증설3대':'현재2대'}) · 제품 믹스 가중 · 회전 ${o.packH}h 기준 (제품마다 트레이·봉수 달라 가중평균)`,
   };
   let html='';
   procs.forEach(p=>{
@@ -437,6 +459,7 @@ function runCap(){
       }
       if(p==='파쇄') vh+=`· 파쇄: ${Math.round(gap).toLocaleString()}kg 부족 → 파쇄기 증설(2대) 필요. 1대는 라인당 인원 상한(13명)에 묶여 인원을 늘려도 한계.<br>`;
       if(p==='자숙') vh+=`· 자숙: ${Math.round(gap).toLocaleString()}kg 부족 → 배치 수 증가(새벽조출로 가압 회전 추가) 필요.<br>`;
+      if(p==='레토르트') vh+=`· 레토르트: ${Math.round(gap).toLocaleString()}kg 부족 → 80mm 트레이 증설(FC용 96→192개) 또는 레토르트 추가 필요.<br>`;
     });
     vh+='</div>';
   }
@@ -460,9 +483,9 @@ function runCap(){
 // ════════ 최대 CAPA·증산여력 ════════
 function runMax(){
   // TO-BE 풀가동: 파쇄2대, 인원 충분, 연장
-  const o={days:22,preW:12,preH:12,cookBatch:11,fragM:2,fragW:26,fragH:10,packH:10};
+  const o={days:22,preW:12,preH:7,cookBatch:11,fragM:2,fragW:26,fragH:8,packH:9,retortUpg:1};
   const c=capacities(o);
-  const procs=['전처리','자숙','파쇄'];
+  const procs=['전처리','자숙','파쇄','레토르트'];
   // 공장 최대 = 가장 약한 공정
   let bottleneck=null,minV=Infinity;
   procs.forEach(p=>{ if(c[p]<minV){minV=c[p];bottleneck=p;} });
@@ -476,7 +499,7 @@ function runMax(){
     <div class="kpi" style="--accent:var(--warn)"><div class="kl">월 최대 생산</div><div class="kv">${(minV*o.days/1000).toFixed(0)}</div><div class="ks">톤/월</div></div>
   </div>`;
   // 공정별 막대
-  const colors={전처리:'#2F5496',자숙:'#1D9E75',파쇄:'#C00000'};
+  const colors={전처리:'#2F5496',자숙:'#1D9E75',파쇄:'#C00000',레토르트:'#0D7377'};
   const maxV=Math.max(...procs.map(p=>c[p]))*1.1;
   procs.forEach(p=>{
     const v=c[p], isBn=p===bottleneck;
