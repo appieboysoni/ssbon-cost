@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>순수본 2공장 CAPA 분석기</title>
+<title>순수본 2공장 월간 생산 스케줄러</title>
 <style>
 :root {
   --p:#1F3864; --mid:#2F5496; --lt:#D6E4F7;
@@ -140,384 +140,401 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
   .cost-grid{grid-template-columns:1fr}
 }
 </style>
+<style>
+/* 스케줄러 전용 */
+.sched-tbl{width:100%;border-collapse:collapse;font-size:11px}
+.sched-tbl th{background:var(--p);color:#fff;padding:6px 4px;text-align:center;font-weight:500;position:sticky;top:0;font-size:10px}
+.sched-tbl td{padding:3px 4px;border:1px solid var(--border);text-align:center;vertical-align:middle}
+.sched-tbl td.day{background:var(--light);font-weight:600;color:var(--p);white-space:nowrap}
+.sched-tbl td.fc{background:#fff4e6}
+.sched-tbl td.fp{background:#e7f3ff}
+.sched-tbl input{width:60px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:10px;text-align:right;font-family:inherit}
+.sched-tbl input:focus{outline:none;border-color:var(--mid);background:#fffbe6}
+.sched-tbl td.tot{font-weight:600;background:var(--light)}
+.sched-tbl tr.weekend td.day{color:var(--bad)}
+.prog-bar{height:18px;background:var(--light);border-radius:4px;overflow:hidden;border:1px solid var(--border);position:relative}
+.prog-fill{height:100%;display:flex;align-items:center;padding-left:6px;font-size:9px;font-weight:600;color:#fff;transition:width .3s}
+.tt-day{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.tt-pick{padding:5px 12px;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;background:var(--card);font-family:inherit}
+.tt-pick.active{background:var(--p);color:#fff;border-color:var(--p)}
+</style>
 </head>
 <body>
 
 <div class="hdr">
   <div>
-    <div class="hdr-logo">🏭 순수본 2공장 CAPA 분석기</div>
-    <div class="hdr-sub">통합 생산 시뮬레이터 · 공정 연동 분석</div>
+    <div class="hdr-logo">📅 순수본 2공장 월간 생산 스케줄러</div>
+    <div class="hdr-sub">12월 물량 기준 · 평준화 스케줄 + 일 타임테이블</div>
   </div>
-  <div class="hdr-badge">v5.0 · 기준 2026-05</div>
+  <div class="hdr-badge">v1.0 · 2026-12</div>
 </div>
 
 <div class="tab-nav">
-  <button class="tnav active" onclick="goPage('sim',this)">🎯 생산 시뮬레이터</button>
-  <button class="tnav" onclick="goPage('plan',this)">📅 월 생산계획</button>
-  <button class="tnav" onclick="goPage('spec',this)">⚙️ 설비·기준 정보</button>
+  <button class="tnav active" onclick="goPage('sched',this)">📅 월간 스케줄</button>
+  <button class="tnav" onclick="goPage('tt',this)">⏱ 일 타임테이블</button>
+  <button class="tnav" onclick="goPage('data',this)">📦 물량·기준 데이터</button>
 </div>
 
-<!-- ═══════ 1. 생산 시뮬레이터 ═══════ -->
-<div id="page-sim" class="page active">
+<!-- ═══ 1. 월간 스케줄 ═══ -->
+<div id="page-sched" class="page active">
   <div class="alert info">
-    <strong>모드 선택</strong> — ① <strong>포장 기준 역산</strong>: 포장 라인이 소화 가능한 양에서 거꾸로 적정 원료육 산출. ② <strong>원료육 기준 정산</strong>: 투입 원료육으로 각 공정 결과·병목 확인. 병목은 전처리·파쇄·내포장·레토르트 전 공정을 비교해 그날 가장 느린 공정으로 자동 판정합니다.
+    12월 물량 <strong>138.5톤</strong>을 가동 22일에 평준화 배분합니다. FC(상압 자숙)와 FP(가압 자숙)는 탱크가 달라 <strong>매일 동시 생산</strong>이 가능합니다. 각 칸을 직접 수정하면 하단 누적 진행률이 자동 갱신됩니다.
   </div>
 
-  <div class="grid2">
-    <!-- 입력 패널 -->
-    <div class="section">
-      <div class="sec-hdr">🎛 시뮬레이션 조건</div>
-      <div class="sec-body">
-        <div class="ctrl-row">
-          <label>분석 모드</label>
-          <select id="sm-mode" onchange="runSimulator()">
-            <option value="reverse">① 포장 기준 역산 (적정 원료육)</option>
-            <option value="forward">② 원료육 기준 정산</option>
-          </select>
-        </div>
-        <div class="ctrl-row">
-          <label>제품</label>
-          <select id="sm-product" onchange="onProductChange()"></select>
-        </div>
-        <div class="ctrl-row" id="sm-part-row">
-          <label>원육 부위</label>
-          <select id="sm-part" onchange="runSimulator()">
-            <option value="설도">설도</option>
-            <option value="우둔">우둔</option>
-            <option value="홍두깨">홍두깨</option>
-          </select>
-        </div>
-        <div class="ctrl-row" id="sm-altline-row" style="display:none">
-          <label>포장 라인 선택</label>
-          <select id="sm-altline" onchange="runSimulator()">
-            <option value="0">2호기 (15개/분, 1라인)</option>
-            <option value="1">3·4호기 (26개/분)</option>
-          </select>
-        </div>
-        <div class="ctrl-row" id="sm-packlines-row">
-          <label>포장 라인 수</label>
-          <select id="sm-packlines" onchange="runSimulator()">
-            <option value="1" selected>1라인</option>
-            <option value="2">2라인 (3·4호기 동시)</option>
-          </select>
-        </div>
-
-        <div id="sm-meat-row" class="ctrl-row" style="display:none">
-          <label>투입 원료육</label>
-          <input type="range" id="sm-meat" min="100" max="8000" value="2000" step="100" oninput="runSimulator()">
-          <span class="ctrl-out" id="sm-meat-out">2,000 kg</span>
-        </div>
-
-        <div style="border-top:1px solid var(--border);margin:10px 0;padding-top:10px;font-size:10px;color:var(--sub);font-weight:600">공정 조건</div>
-
-        <div class="ctrl-row">
-          <label>전처리 인원</label>
-          <input type="range" id="sm-prew" min="5" max="20" value="11" step="1" oninput="runSimulator()">
-          <span class="ctrl-out" id="sm-prew-out">11 명</span>
-        </div>
-        <div class="ctrl-row">
-          <label>파쇄 인원</label>
-          <input type="range" id="sm-fragw" min="5" max="30" value="11" step="1" oninput="runSimulator()">
-          <span class="ctrl-out" id="sm-fragw-out">11 명</span>
-        </div>
-        <div class="ctrl-row">
-          <label>파쇄 라인</label>
-          <select id="sm-fragline" onchange="runSimulator()">
-            <option value="1" selected>1대 (현재)</option>
-            <option value="2">2대 (4분기~)</option>
-          </select>
-        </div>
-        <div class="ctrl-row">
-          <label>레토르트 트레이</label>
-          <select id="sm-retort" onchange="runSimulator()">
-            <option value="cur" selected>현재 (80mm 96개)</option>
-            <option value="upg">6월 증설 후 (192개)</option>
-          </select>
-        </div>
-        <div class="ctrl-row">
-          <label>포장 마감 시각</label>
-          <input type="range" id="sm-endh" min="17" max="20" value="18" step="0.5" oninput="runSimulator()">
-          <span class="ctrl-out" id="sm-endh-out">18:00</span>
-        </div>
-        <div style="font-size:10px;color:var(--sub);padding-left:155px;margin-top:-4px">파쇄 09시 시작 → 0.5h 후 포장 시작 → 마감까지. 포장 시간은 파쇄 공급·마감으로 자동 결정.</div>
+  <div class="section">
+    <div class="sec-hdr">⚙️ 스케줄 설정</div>
+    <div class="sec-body">
+      <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
+        <div><div style="font-size:10px;color:var(--sub);margin-bottom:4px">가동일수</div>
+          <input type="number" id="cfg-days" value="22" min="15" max="26" style="width:70px;padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px" onchange="rebuildSchedule()"></div>
+        <div><div style="font-size:10px;color:var(--sub);margin-bottom:4px">배분 방식</div>
+          <select id="cfg-mode" style="padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit" onchange="rebuildSchedule()">
+            <option value="even">평준화 (매일 균등)</option>
+            <option value="fcfirst">FC 집중 후 FP</option>
+          </select></div>
+        <button onclick="rebuildSchedule()" style="background:var(--mid);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">🔄 기본 배분 재생성</button>
+        <div style="font-size:10px;color:var(--sub);flex:1;text-align:right" id="sched-note"></div>
       </div>
     </div>
+  </div>
 
-    <!-- 결과 패널 -->
-    <div class="section">
-      <div class="sec-hdr">📊 분석 결과</div>
-      <div class="sec-body" id="sm-result"></div>
+  <div class="section">
+    <div class="sec-hdr">📊 누적 진행률</div>
+    <div class="sec-body" id="prog-area"></div>
+  </div>
+
+  <div class="section">
+    <div class="sec-hdr">📅 일별 생산 배분 (수량 EA, 직접 수정 가능)</div>
+    <div class="sec-body" style="overflow-x:auto">
+      <table class="sched-tbl" id="sched-tbl"></table>
     </div>
   </div>
+</div>
 
-  <!-- 공정별 처리능력 비교 (병목) -->
+<!-- ═══ 2. 일 타임테이블 ═══ -->
+<div id="page-tt" class="page">
+  <div class="alert info">월간 스케줄의 특정 날을 골라 하루 공정 흐름을 봅니다. 전처리·자숙·파쇄·포장·레토르트가 어떻게 맞물리는지, 인력 공정은 <strong>시간당 얼마를 처리해야 하는지(목표)</strong>를 보여줍니다.</div>
   <div class="section">
-    <div class="sec-hdr">🔍 공정별 처리능력 비교 (이번 조건의 병목)</div>
-    <div class="sec-body" id="sm-bottleneck"></div>
+    <div class="sec-hdr">📆 날짜 선택</div>
+    <div class="sec-body"><div class="tt-day" id="tt-day-pick"></div></div>
   </div>
-
-  <!-- 타임테이블 -->
   <div class="section">
-    <div class="sec-hdr">⏱ 연동 타임테이블</div>
+    <div class="sec-hdr">📋 그날 생산 내역 + 공정 목표</div>
+    <div class="sec-body" id="tt-detail"></div>
+  </div>
+  <div class="section">
+    <div class="sec-hdr">⏱ 공정 타임테이블</div>
     <div class="sec-body" style="padding:10px">
-      <div class="legend" id="sm-legend"></div>
-      <div class="tt-wrap"><div class="tt" id="sm-tt" style="min-height:140px"></div></div>
-      <div class="alert info" id="sm-tt-note" style="margin-top:8px;margin-bottom:0"></div>
+      <div class="legend" id="tt-legend"></div>
+      <div class="tt-wrap"><div class="tt" id="tt-canvas" style="min-height:160px"></div></div>
+      <div class="alert info" id="tt-note" style="margin-top:8px;margin-bottom:0"></div>
     </div>
   </div>
 </div>
 
-<!-- ═══════ 2. 월 생산계획 ═══════ -->
-<div id="page-plan" class="page">
+<!-- ═══ 3. 물량·기준 데이터 ═══ -->
+<div id="page-data" class="page">
   <div class="section">
-    <div class="sec-hdr">📅 월 생산물량 입력 (다품종)</div>
+    <div class="sec-hdr">📦 12월 생산 물량 (수정 가능)</div>
     <div class="sec-body">
-      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap">
-        <div>
-          <div style="font-size:10px;color:var(--sub);margin-bottom:4px">월 가동일수</div>
-          <input type="number" id="pl-days" value="23" min="10" max="26" style="width:80px;padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px">
-        </div>
-        <div>
-          <div style="font-size:10px;color:var(--sub);margin-bottom:4px">파쇄기</div>
-          <select id="pl-fragm" style="padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">
-            <option value="1">1대 (4,000kg/일)</option>
-            <option value="2" selected>2대 (5,760kg/일)</option>
-          </select>
-        </div>
-        <button onclick="loadDecPreset()" style="background:var(--bg2,#eef);color:var(--p);border:1px solid var(--p);padding:7px 14px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">📋 26년 12월 물량</button>
-      </div>
       <table class="tbl">
-        <thead><tr><th style="width:28px"></th><th>제품</th><th class="r" style="width:110px">월 목표 (EA)</th><th class="c" style="width:90px">부위</th><th style="width:32px"></th></tr></thead>
-        <tbody id="pl-rows"></tbody>
+        <thead><tr><th>제품</th><th class="r">월 수량</th><th class="c">개/팩</th><th class="r">개당고기</th><th class="r">봉당원육</th><th class="r">필요원육</th><th class="c">부위</th><th class="c">자숙</th></tr></thead>
+        <tbody id="data-prod"></tbody>
       </table>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button onclick="addPlanRow()" style="background:var(--light);color:var(--text);border:1px solid var(--border);padding:8px 16px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">+ 제품 추가</button>
-        <button onclick="runMonthPlan()" style="background:var(--p);color:#fff;border:none;padding:8px 28px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;flex:1">🔍 월 부하 분석</button>
-      </div>
+      <div id="data-total" style="margin-top:10px"></div>
     </div>
   </div>
-  <div class="section" id="pl-summary" style="display:none">
-    <div class="sec-hdr">📊 월 종합 부하 판정</div>
-    <div class="sec-body" id="pl-summary-body"></div>
-  </div>
-  <div class="section" id="pl-detail" style="display:none">
-    <div class="sec-hdr">📋 제품별 상세</div>
-    <div class="sec-body" id="pl-detail-body"></div>
-  </div>
-</div>
-
-<!-- ═══════ 3. 설비·기준 정보 ═══════ -->
-<div id="page-spec" class="page">
-  <div class="section">
-    <div class="sec-hdr">⚙️ 부위별 기준 생산성·수율</div>
-    <div class="sec-body">
-      <div class="alert info">매월 실적 평균이 나오면 이 값을 갱신하세요. 저장 시 Firebase에 기록되어 다음 접속·다른 기기에서도 유지됩니다. 모든 시뮬레이션이 이 값을 사용합니다.</div>
-      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap">
-        <div><div style="font-size:10px;color:var(--sub);margin-bottom:4px">기준 라벨</div>
-          <input type="text" id="bl-label" style="padding:6px 10px;border:1px solid var(--border);border-radius:5px;font-size:11px;width:160px"></div>
-        <div id="bl-status" style="font-size:11px;color:var(--sub)"></div>
-      </div>
-      <table class="tbl">
-        <thead><tr><th>부위</th><th class="r">전처리(kg/인시)</th><th class="r">파쇄(kg/인시)</th><th class="r">전처리수율%</th><th class="r">자숙수율%</th><th class="r">파쇄수율%</th></tr></thead>
-        <tbody id="bl-rows"></tbody>
-      </table>
-      <div style="display:flex;gap:8px;margin-top:12px">
-        <button onclick="resetBaseline()" style="background:var(--light);color:var(--text);border:1px solid var(--border);padding:8px 16px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">5월 평균 초기화</button>
-        <button onclick="applyBaseline()" style="background:var(--mid);color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">적용(세션)</button>
-        <button onclick="saveBaselineFB()" style="background:var(--p);color:#fff;border:none;padding:8px 24px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;flex:1">💾 Firebase 저장</button>
-      </div>
-    </div>
-  </div>
-
   <div class="grid2">
     <div class="section">
-      <div class="sec-hdr">📦 제품별 정량·포장 라인</div>
-      <div class="sec-body"><table class="tbl">
-        <thead><tr><th>제품</th><th class="r">고기</th><th class="r">정량</th><th class="c">포장라인</th><th class="c">속도/분</th></tr></thead>
-        <tbody id="spec-prod"></tbody>
-      </table></div>
+      <div class="sec-hdr">🍲 자숙 설비 (확정)</div>
+      <div class="sec-body" style="font-size:11px;line-height:1.9">
+        <strong>가압 2대 (T1·T2)</strong> — 800kg/탱크 · 115℃ · 2.5hr · <span style="color:var(--mid)">FP 전용</span><br>
+        <strong>상압 4대 (T3~T6)</strong> — 800kg/탱크 · 95℃ · 4.5hr · <span style="color:var(--warn)">FC 전용</span><br>
+        <span style="color:var(--sub)">FC·FP 탱크가 달라 매일 동시 자숙 가능. (추후 FC도 가압 전환 준비 중)</span>
+      </div>
     </div>
     <div class="section">
-      <div class="sec-hdr">🍱 레토르트 트레이</div>
-      <div class="sec-body"><table class="tbl">
-        <thead><tr><th>트레이</th><th>사용 제품</th><th class="c">현재</th><th class="c">증설후</th></tr></thead>
-        <tbody>
-          <tr><td>30mm</td><td>미니·120·130·코코·메추리알</td><td class="c ok">3대</td><td class="c ok">3대</td></tr>
-          <tr><td>50mm</td><td>트레이더스 460g</td><td class="c ok">3대</td><td class="c ok">3대</td></tr>
-          <tr><td>80mm</td><td>FC 3kg 전용</td><td class="c warn">2대(96개)</td><td class="c ok">3대(192개)</td></tr>
-        </tbody>
-      </table>
-      <div style="font-size:10px;color:var(--sub);margin-top:8px">레토르트 3대 · 대당 4대차 · FC 2.5hr / 기타 1.5hr · 9hr 기준 FC 3회전·기타 6회전</div>
+      <div class="sec-hdr">🏭 공정 CAPA 기준</div>
+      <div class="sec-body" style="font-size:11px;line-height:1.9">
+        <strong>내포장</strong> 1호기 55개/분(소포장) · 2호기 15개/분(3kg) · 3·4호기 각 36개/분(2라인)<br>
+        <strong>레토르트</strong> 3대 · 대당 4대차 · FC 2.5hr/기타 1.5hr · 80mm 트레이 증설 예정<br>
+        <strong>파쇄</strong> 1대(현재)→2대(4분기) · <span style="color:var(--sub)">인력 의존: 목표 처리량으로 표시</span><br>
+        <strong>전처리</strong> <span style="color:var(--sub)">인력 의존: 목표 처리량으로 표시</span>
       </div>
     </div>
   </div>
-
   <div class="section">
-    <div class="sec-hdr">🏭 설비 요약</div>
-    <div class="sec-body" style="font-size:11px;line-height:1.9;color:var(--text)">
-      <strong>자숙</strong> 6대(800kg/탱크) — 가압 T1·T2(115℃·2.5hr, FP용) + 상압 T3~T6(95℃·4.5hr, FC용) · 투입간격 10분<br>
-      <strong>파쇄</strong> 현재 1대(순차) → 3분기 투자 → 4분기 2대(라인 독립). 인원 과다 시 동선 간섭(역설)<br>
-      <strong>내포장</strong> 1호기 55개/분(2열 소포장 ≤100g) · 2호기 15개/분(1~3kg) · 3·4호기 각 30개/분<br>
-      <strong>레토르트</strong> 3대(+1대 공간 확보) · 80mm 트레이 6월 증설 예정<br>
-      <strong>운영</strong> 전처리·자숙 06:00(FC일 05:00) · 파쇄·포장 09:00 · 주52시간(~17:30)
+    <div class="sec-hdr">📐 부위별 수율 (수정 가능)</div>
+    <div class="sec-body">
+      <table class="tbl">
+        <thead><tr><th>부위</th><th class="r">전처리수율%</th><th class="r">자숙수율%</th><th class="r">파쇄수율%</th></tr></thead>
+        <tbody id="data-yield"></tbody>
+      </table>
+      <button onclick="applyData()" style="background:var(--p);color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:10px">적용 + 스케줄 재계산</button>
     </div>
   </div>
 </div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-const firebaseConfig = {
-  apiKey: "AIzaSyCw3KlYX6A-OMbAojirXdluNeU7g6286cM",
-  authDomain: "ssbon-64b4f.firebaseapp.com", projectId: "ssbon-64b4f",
-  storageBucket: "ssbon-64b4f.firebasestorage.app",
-  messagingSenderId: "797947388860", appId: "1:797947388860:web:4baf3cc586cdec9fc501b9"
-};
-const app = initializeApp(firebaseConfig, 'capa');
-const db = getFirestore(app);
-window.saveBaseline = async (b) => { try { await setDoc(doc(db,'capa_settings','baseline'), b); return true; } catch(e){ console.error(e); return false; } };
-window.loadBaseline = async () => { try { const s = await getDoc(doc(db,'capa_settings','baseline')); return s.exists()?s.data():null; } catch(e){ return null; } };
-window.addEventListener('load', async () => {
-  const saved = await window.loadBaseline();
-  if (saved && saved.part) { window.BASELINE = saved; if(window.onBaselineLoaded) window.onBaselineLoaded(); }
-});
-</script>
-
 <script>
 // ════════ 데이터 ════════
-var BASELINE = {
-  label:'5월 평균',
-  part:{
-    '설도':  {pre:88.1,frag:30.0,preY:0.952,cook:0.568,fragY:0.884},
-    '우둔':  {pre:92.9,frag:21.4,preY:0.970,cook:0.554,fragY:0.913},
-    '홍두깨':{pre:51.5,frag:19.0,preY:0.899,cook:0.573,fragY:0.956},
+var YIELD = {
+  '설도':  {preY:0.952, cook:0.568, fragY:0.884},
+  '우둔':  {preY:0.970, cook:0.554, fragY:0.913},
+  '홍두깨':{preY:0.899, cook:0.573, fragY:0.956},
+};
+// 제품: 월수량(팩), 개당고기g, 개/팩, 부위, 그룹, 포장라인·속도·최대라인
+var PRODUCTS = [
+  {name:'FC 3kg',       ea:32141,  meat:1350, units:1, part:'홍두깨', g:'FC', cook:'상압', line:'2호기',  speed:15, maxLines:1, tray:'80mm', rPerCycle:384,  rHr:2.5},
+  {name:'미니 70g',      ea:165029, meat:24,   units:1, part:'설도',  g:'FP', cook:'가압', line:'1호기',  speed:55, maxLines:1, tray:'30mm', rPerCycle:5120, rHr:1.5},
+  {name:'130g 메추리알',  ea:60950,  meat:25,   units:1, part:'설도',  g:'FP', cook:'가압', line:'3·4호기',speed:36, maxLines:2, tray:'30mm', rPerCycle:4096, rHr:1.5},
+  {name:'코스트코 170g',  ea:77864,  meat:54,   units:4, part:'우둔',  g:'FP', cook:'가압', line:'3·4호기',speed:36, maxLines:2, tray:'30mm', rPerCycle:4096, rHr:1.5},
+  {name:'트레이더스 460g',ea:14905,  meat:147.2,units:1, part:'설도',  g:'FP', cook:'가압', line:'2호기',  speed:15, maxLines:1, tray:'50mm', rPerCycle:1520, rHr:1.5},
+];
+// 봉당 원육(g) = 봉당고기 ÷ 수율들
+function rawPerEa(p){ const y=YIELD[p.part]; return (p.meat*p.units)/y.fragY/y.cook/y.preY; }
+function totalRaw(p){ return p.ea*rawPerEa(p)/1000; } // kg
+
+var schedule = []; // [{day, items:{prodName:ea}}]
+
+// ════════ 탭 ════════
+var _page='sched';
+function goPage(name,btn){
+  _page=name;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tnav').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='tt') renderTTPicker();
+  if(name==='data') renderDataPage();
+}
+
+// ════════ 스케줄 생성 ════════
+function rebuildSchedule(){
+  const days=+document.getElementById('cfg-days').value||22;
+  const mode=document.getElementById('cfg-mode').value;
+  schedule=[];
+  for(let d=1;d<=days;d++) schedule.push({day:d, items:{}});
+
+  if(mode==='even'){
+    // 매일 균등 분배
+    PRODUCTS.forEach(p=>{
+      const base=Math.floor(p.ea/days);
+      let rem=p.ea-base*days;
+      schedule.forEach((s,i)=>{ s.items[p.name]=base+(i<rem?1:0); });
+    });
+  } else {
+    // FC 집중 후 FP: FC를 앞쪽 일수에 몰고, FP는 전체 분산하되 후반 가중
+    const fc=PRODUCTS.find(p=>p.g==='FC');
+    // FC 하루 최대 = 상압 2회전 6400kg → 봉수
+    const fcDailyMaxEa=Math.floor(6400/rawPerEa(fc)*1000);
+    let fcRem=fc.ea, fcDays=0;
+    schedule.forEach(s=>{ if(fcRem>0){ const t=Math.min(fcDailyMaxEa,fcRem); s.items[fc.name]=t; fcRem-=t; fcDays++; } else s.items[fc.name]=0; });
+    // FP는 전체 균등
+    PRODUCTS.filter(p=>p.g==='FP').forEach(p=>{
+      const base=Math.floor(p.ea/days); let rem=p.ea-base*days;
+      schedule.forEach((s,i)=>{ s.items[p.name]=base+(i<rem?1:0); });
+    });
   }
-};
-const BASELINE_DEFAULT = JSON.parse(JSON.stringify(BASELINE));
-
-// 제품 정의: meat=봉당 고기(g, 정량), line=포장라인, part=기본부위
-// 제품 정의: meat=봉당 고기(g, 정량), lineSpeed=라인당 개/분, maxLines=최대 동시 라인
-const PRODUCTS = {
-  '미니 70g':      {meat:24,   line:'1호기',  lineSpeed:55, maxLines:1, part:'설도', fill:0.070, tray:'30mm', rPerCycle:5120, rCycleHr:1.5},
-  '시그니처 120g': {meat:30,   line:'3·4호기',lineSpeed:36, maxLines:2, part:'설도', fill:0.120, tray:'30mm', rPerCycle:4096, rCycleHr:1.5},
-  '메추리알 130g': {meat:25,   line:'3·4호기',lineSpeed:36, maxLines:2, part:'설도', fill:0.130, tray:'30mm', rPerCycle:4096, rCycleHr:1.5},
-  '코코 170g':     {meat:54,   line:'3·4호기',lineSpeed:36, maxLines:2, part:'우둔', fill:0.170, tray:'30mm', rPerCycle:4096, rCycleHr:1.5},
-  '메추리알 180g': {meat:0,    line:'3·4호기',lineSpeed:36, maxLines:2, part:null,   fill:0.180, tray:'30mm', rPerCycle:4096, rCycleHr:1.5, noProcess:true},
-  '트레이더스 460g':{meat:147.2,line:'2호기', lineSpeed:15, maxLines:1, part:'설도', fill:0.460, tray:'50mm', rPerCycle:1520, rCycleHr:1.5, altLine:'3·4호기', altSpeed:26, altMaxLines:2},
-  'FC 3kg':        {meat:1350, line:'2호기',  lineSpeed:15, maxLines:1, part:'홍두깨',fill:3.0,  tray:'80mm', rPerCycle:384,  rCycleHr:2.5, fixedPart:true},
-};
-const RETORT_MACHINES = { '80mm':{cur:2,upg:3}, '50mm':{cur:3,upg:3}, '30mm':{cur:3,upg:3} };
-
-// ════════ 계산 엔진 (파쇄·포장·레토르트 연동) ════════
-// 포장 시간은 독립변수가 아니라 파쇄 공급 / 포장 처리 / 마감 제약이 맞물려 결정됨.
-const FRAG_START = 9.0;   // 파쇄·포장팀 출근(09시)
-const PACK_DELAY = 0.5;   // 파쇄 시작 후 첫 포장분 공급까지 지연
-
-function simulateFlow(product, part, meatKg, o){
-  const p = PRODUCTS[product], b = BASELINE.part[part];
-  const useAlt = o.useAlt && p.altSpeed;
-  const lineSpeed = useAlt ? p.altSpeed : p.lineSpeed;
-  const maxLines = useAlt ? (p.altMaxLines||1) : p.maxLines;
-  const packLines = Math.min(o.packLines || 1, maxLines);
-  const lineName = useAlt ? p.altLine : p.line;
-  const cookHr = p.fixedPart ? 4.5 : 2.5;
-
-  // ── 공정별 처리율 (kg/h) ──
-  const preRate = o.preW * b.pre;                 // 전처리: 원육 kg/h
-  const cookOutRate = preRate * b.cook;           // 자숙 산출(전처리에 율속): 자숙후 kg/h
-  const fragRate = o.fragW * b.frag * o.fragLines;// 파쇄 처리: 자숙후 kg/h
-  const packBongRate = lineSpeed * packLines * 60;// 포장: 봉/h
-  const packMeatRate = packBongRate * p.meat / 1000; // 포장 소비: 고기 kg/h
-
-  // ── 총량 ──
-  const cookOutput = meatKg * b.preY * b.cook;    // 자숙후 총량(파쇄 투입대상)
-  const totalMeatOut = cookOutput * b.fragY;      // 파쇄후 고기 총량
-  const totalBong = Math.floor(totalMeatOut * 1000 / p.meat);
-
-  // ── 시간축 ──
-  const preHr = meatKg / preRate;
-  const firstPreHr = Math.min(800, meatKg) / preRate;
-  const fragStart = 9;
-  const cookStart = fragStart - cookHr;            // 첫 자숙 투입(=첫 전처리분 완료)
-  const preStart = cookStart - firstPreHr;
-  const preEnd = preStart + preHr;
-  const cookLastDone = preEnd + cookHr;            // 마지막 자숙 완료
-
-  // ── 율속 체인 ──
-  // 파쇄 실효율 = min(자기 처리율, 자숙 공급률)
-  const fragEffRate = Math.min(fragRate, cookOutRate);
-  const fragMeatOutRate = fragEffRate * b.fragY;   // 파쇄가 내놓는 고기 kg/h
-  // 포장 실효율 = min(포장 소비, 파쇄 산출)
-  const packEffMeatRate = Math.min(packMeatRate, fragMeatOutRate);
-  const packEffBongRate = Math.floor(packEffMeatRate * 1000 / p.meat);
-
-  // ── 파쇄 종료: 자숙 공급 끝까지 받아야 ──
-  const fragProcessHr = cookOutput / fragEffRate;
-  const fragEnd = Math.max(cookLastDone, fragStart + fragProcessHr);
-
-  // ── 포장: 09:30 시작, 마감 제약 ──
-  const packStart = fragStart + 0.5;
-  const packDeadline = o.endHour;
-  const availPackHours = Math.max(0, packDeadline - packStart);
-  const packByTime = Math.floor(packEffBongRate * availPackHours);
-  const packActualBong = Math.min(totalBong, packByTime);
-  const packActualHours = packEffBongRate>0 ? Math.min(availPackHours, totalBong/packEffBongRate) : 0;
-  const packEnd = packStart + packActualHours;
-
-  // ── 레토르트 (투입 마감 = 정규+1h) ──
-  const retortDeadline = Math.min(o.endHour + 1, 24);
-  const rM = RETORT_MACHINES[p.tray][o.retortPeriod];
-  const rCyc = Math.floor((retortDeadline - packStart) / p.rCycleHr);
-  const retortBong = p.rPerCycle * rM * Math.max(1, rCyc);
-
-  // ── 공정별 "순수 자체 능력" (다른 공정이 충분히 받쳐준다 가정한 자기 최대) ──
-  const preAvailHr = packDeadline - preStart;      // 전처리 가용(새벽~마감)
-  const opHours = packDeadline - fragStart;        // 파쇄/포장 가용(09~마감)
-  const stages = {
-    전처리: Math.floor(preRate * preAvailHr * b.preY * b.cook * b.fragY * 1000 / p.meat),
-    파쇄: Math.floor(fragRate * opHours * b.fragY * 1000 / p.meat),   // 자체 능력(공급 충분 가정)
-    내포장: Math.floor(packBongRate * availPackHours),
-    레토르트: retortBong,
-  };
-
-  // 실 생산 = min(공정 자체능력들, 투입량) — 단 연쇄 공급 제약도 반영
-  // 자숙 공급(전처리 율속)이 파쇄보다 낮으면 실제론 전처리가 진짜 병목
-  const supplyChainCap = Math.floor(Math.min(preRate*b.cook, fragRate) * opHours * b.fragY * 1000 / p.meat);
-  const realOutput = Math.min(stages.전처리, stages.파쇄, stages.내포장, stages.레토르트, totalBong, supplyChainCap);
-
-  // ── 율속 판정 ──
-  // 각 공정 자체능력 중 최저 + 연쇄 공급 제약을 함께 본다
-  const near = (v)=> v <= realOutput*1.04;
-  const limiters=[];
-  // 자체능력 병목
-  if(near(stages.전처리)) limiters.push('전처리');
-  if(near(stages.파쇄) && fragRate <= preRate*b.cook) limiters.push('파쇄 처리속도');
-  if(near(stages.내포장)) limiters.push('포장 시간·속도');
-  if(near(stages.레토르트)) limiters.push('레토르트');
-  // 연쇄 공급 제약: 전처리가 느려서 파쇄가 못 받는 경우
-  if(preRate*b.cook < fragRate*0.98 && near(supplyChainCap) && !limiters.includes('전처리'))
-    limiters.push('전처리 (자숙 공급 부족)');
-  if(near(totalBong) && totalBong < stages.레토르트) limiters.push('투입 원료육');
-  if(limiters.length===0) limiters.push('투입 원료육');
-
-  return {
-    stages, totalBong, realOutput, packActualBong:realOutput, packActualHours,
-    preRate, cookOutRate, fragRate, fragEffRate, packMeatRate, packEffBongRate,
-    preHr, preStart, preEnd, cookStart, cookLastDone, fragStart, fragEnd,
-    packStart, packEnd, availPackHours, lineName, lineSpeed, packLines, maxLines,
-    rM, rCyc:Math.max(1,rCyc), retortDeadline, limiters, opHours,
-    cookOutput, totalMeatOut, cookHr,
-    // 하위호환 (기존 렌더 코드용)
-    limited: limiters[0],
-    fragInputRate: fragRate, fragOutRate: fragMeatOutRate, fragDuration: fragEnd-fragStart,
-  };
+  renderSchedule();
+  renderProgress();
+  document.getElementById('sched-note').textContent=`총 ${PRODUCTS.reduce((s,p)=>s+totalRaw(p),0).toFixed(1)}톤 / ${days}일 = 일 ${(PRODUCTS.reduce((s,p)=>s+totalRaw(p),0)/days).toFixed(2)}톤`;
 }
 
-function bottleneckOf(s) {
-  let bn=null, mn=Infinity;
-  ['전처리','파쇄','내포장','레토르트'].forEach(k=>{ if(s[k]<mn){mn=s[k];bn=k;} });
-  return { bottleneck:bn, output:mn };
+function renderSchedule(){
+  const days=schedule.length;
+  let h='<thead><tr><th>일</th>';
+  PRODUCTS.forEach(p=>h+=`<th class="${p.g==='FC'?'fc':'fp'}">${p.name}<br><span style="font-weight:400;opacity:.7">${p.g}·${p.cook}</span></th>`);
+  h+='<th>일 원육<br>(kg)</th></tr></thead><tbody>';
+  schedule.forEach((s,i)=>{
+    h+=`<tr><td class="day">D${s.day}</td>`;
+    let dayRaw=0;
+    PRODUCTS.forEach(p=>{
+      const ea=s.items[p.name]||0;
+      dayRaw+=ea*rawPerEa(p)/1000;
+      h+=`<td class="${p.g==='FC'?'fc':'fp'}"><input type="text" value="${ea.toLocaleString()}" data-day="${i}" data-prod="${p.name}" oninput="onCellEdit(this)"></td>`;
+    });
+    h+=`<td class="tot">${Math.round(dayRaw).toLocaleString()}</td></tr>`;
+  });
+  // 합계행
+  h+='<tr style="background:var(--p);color:#fff"><td style="color:#fff">합계</td>';
+  PRODUCTS.forEach(p=>{
+    const sum=schedule.reduce((a,s)=>a+(s.items[p.name]||0),0);
+    const pct=Math.round(sum/p.ea*100);
+    h+=`<td style="color:#fff;font-weight:600">${sum.toLocaleString()}<br><span style="font-size:9px;opacity:.8">${pct}%</span></td>`;
+  });
+  const totRaw=schedule.reduce((a,s)=>{let r=0;PRODUCTS.forEach(p=>r+=(s.items[p.name]||0)*rawPerEa(p)/1000);return a+r;},0);
+  h+=`<td style="color:#fff;font-weight:600">${Math.round(totRaw).toLocaleString()}</td></tr>`;
+  h+='</tbody>';
+  document.getElementById('sched-tbl').innerHTML=h;
 }
+
+function onCellEdit(inp){
+  const v=parseInt(inp.value.replace(/[^0-9]/g,''))||0;
+  const day=+inp.dataset.day, prod=inp.dataset.prod;
+  schedule[day].items[prod]=v;
+  renderSchedule();
+  renderProgress();
+}
+
+function renderProgress(){
+  let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">';
+  PRODUCTS.forEach(p=>{
+    const sum=schedule.reduce((a,s)=>a+(s.items[p.name]||0),0);
+    const pct=Math.min(Math.round(sum/p.ea*100),200);
+    const diff=sum-p.ea;
+    const color=Math.abs(diff)<p.ea*0.01?'var(--ok)':diff>0?'var(--warn)':'var(--mid)';
+    h+=`<div><div style="font-size:10px;color:var(--sub);margin-bottom:3px">${p.name} <span style="color:${color}">${diff>0?'+':''}${diff.toLocaleString()}</span></div>
+      <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(pct,100)}%;background:${color}">${pct}%</div></div>
+      <div style="font-size:9px;color:var(--sub);margin-top:2px">${sum.toLocaleString()} / ${p.ea.toLocaleString()}</div></div>`;
+  });
+  h+='</div>';
+  document.getElementById('prog-area').innerHTML=h;
+}
+</script>
+<script>
+// ════════ 일 타임테이블 ════════
+var _ttDay=0;
+function renderTTPicker(){
+  let h='';
+  schedule.forEach((s,i)=>{
+    const has=PRODUCTS.some(p=>(s.items[p.name]||0)>0);
+    if(!has) return;
+    h+=`<button class="tt-pick ${i===_ttDay?'active':''}" onclick="pickTTDay(${i},this)">D${s.day}</button>`;
+  });
+  document.getElementById('tt-day-pick').innerHTML=h||'<span style="color:var(--sub);font-size:11px">스케줄을 먼저 생성하세요.</span>';
+  renderTTDetail();
+}
+function pickTTDay(i,btn){
+  _ttDay=i;
+  document.querySelectorAll('#tt-day-pick .tt-pick').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTTDetail();
+}
+function renderTTDetail(){
+  const s=schedule[_ttDay]; if(!s){document.getElementById('tt-detail').innerHTML='';return;}
+  const active=PRODUCTS.filter(p=>(s.items[p.name]||0)>0);
+  // 그룹별 원육
+  let fcRaw=0, fpRaw=0;
+  active.forEach(p=>{ const r=(s.items[p.name]||0)*rawPerEa(p)/1000; if(p.g==='FC')fcRaw+=r; else fpRaw+=r; });
+
+  // 공정 목표 계산
+  // 전처리: 새벽 06시~09시(3h)에 첫 자숙분, 전체는 마감까지. 목표 처리량 = 원육 / 가용시간
+  // 파쇄: 자숙후 물량 / 가용시간 → 시간당 필요 처리량 → 인원 환산(19~30kg/인시)
+  let h='<table class="tbl"><thead><tr><th>제품</th><th class="r">수량</th><th class="r">원육</th><th class="c">부위/자숙</th><th class="c">포장라인</th><th class="r">포장시간</th></tr></thead><tbody>';
+  active.forEach(p=>{
+    const ea=s.items[p.name], raw=ea*rawPerEa(p)/1000;
+    const packHr=ea/(p.speed*p.maxLines*60);
+    h+=`<tr><td>${p.name}</td><td class="r">${ea.toLocaleString()}</td><td class="r">${Math.round(raw).toLocaleString()}kg</td><td class="c">${p.part}/${p.cook}</td><td class="c">${p.line} ${p.maxLines>1?p.maxLines+'라인':''}</td><td class="r">${packHr.toFixed(1)}h</td></tr>`;
+  });
+  h+=`</tbody></table>`;
+
+  // 공정별 목표 (인력 공정)
+  const totRaw=fcRaw+fpRaw;
+  const cookOutFC=fcRaw*1000*0.515; // FC 자숙후(홍두깨 preY×cook 근사)
+  const cookOutFP=fpRaw*1000*0.54;  // FP 자숙후 근사
+  const totCookOut=cookOutFC+cookOutFP;
+  // 전처리 목표: 원육 전량을 06~12시(6h)에 처리 가정
+  const preTargetRate=totRaw*1000/6;
+  // 파쇄 목표: 자숙후 전량을 09~17시(8h)에
+  const fragTargetRate=totCookOut/8;
+  h+=`<div class="grid2" style="margin-top:12px">
+    <div class="cost-card"><div class="cost-title">🔪 전처리 목표 (인력)</div>
+      <div class="cost-row"><span>총 원육</span><span>${Math.round(totRaw*1000).toLocaleString()} kg</span></div>
+      <div class="cost-row"><span>가용 (06~12시 6h)</span><span>${Math.round(preTargetRate).toLocaleString()} kg/h 필요</span></div>
+      <div class="cost-row"><span>인당 88kg/h 기준</span><span>${Math.ceil(preTargetRate/88)} 명</span></div>
+    </div>
+    <div class="cost-card"><div class="cost-title">⚙️ 파쇄 목표 (인력)</div>
+      <div class="cost-row"><span>자숙후 물량</span><span>${Math.round(totCookOut).toLocaleString()} kg</span></div>
+      <div class="cost-row"><span>가용 (09~17시 8h)</span><span>${Math.round(fragTargetRate).toLocaleString()} kg/h 필요</span></div>
+      <div class="cost-row"><span>인당 19~30kg/h 기준</span><span>${Math.ceil(fragTargetRate/19)}~${Math.ceil(fragTargetRate/30)} 명</span></div>
+    </div></div>`;
+
+  // 자숙 회전 체크
+  const fcCyc=fcRaw*1000/3200, fpCyc=fpRaw*1000/1600;
+  h+=`<div class="alert ${fcCyc>2||fpCyc>4?'warn':'info'}" style="margin-top:10px">
+    자숙 회전 — FC 상압 4대: <strong>${fcCyc.toFixed(1)}회전</strong> (${fcRaw.toFixed(1)}t) · FP 가압 2대: <strong>${fpCyc.toFixed(1)}회전</strong> (${fpRaw.toFixed(1)}t)
+    ${fcCyc>2?' ⚠ FC 상압 2회전 초과 — 새벽조출/연장 필요':''}${fpCyc>4?' ⚠ FP 가압 4회전 초과':''}</div>`;
+  document.getElementById('tt-detail').innerHTML=h;
+  renderTTCanvas(s,active,fcRaw,fpRaw);
+}
+
+function renderTTCanvas(s,active,fcRaw,fpRaw){
+  document.getElementById('tt-legend').innerHTML=`
+    <div class="leg-item"><div class="leg-box" style="background:#5B9BD5"></div>전처리</div>
+    <div class="leg-item"><div class="leg-box" style="background:#ED7D31"></div>자숙(상압FC)</div>
+    <div class="leg-item"><div class="leg-box" style="background:#1D9E75"></div>자숙(가압FP)</div>
+    <div class="leg-item"><div class="leg-box" style="background:#8064A2"></div>파쇄</div>
+    <div class="leg-item"><div class="leg-box" style="background:#C00000"></div>내포장</div>
+    <div class="leg-item"><div class="leg-box" style="background:#0D7377"></div>레토르트(투입)</div>`;
+  const lanes=[];
+  // 전처리: 06시~ (원육량 따라)
+  const totRaw=(fcRaw+fpRaw)*1000;
+  const preEnd=6+Math.min(totRaw/ (11*88) ,8); // 11명 88kg/h 가정 표시용
+  lanes.push({label:'전처리<br>(목표 인력)',bars:[{s:6*60,e:preEnd*60,color:'#5B9BD5',label:'전처리'}]});
+  // 자숙 FC 상압
+  if(fcRaw>0){
+    const cyc=Math.ceil(fcRaw*1000/3200);
+    const bars=[]; let t=6;
+    for(let i=0;i<cyc && t+4.5<=20;i++){ bars.push({s:t*60,e:(t+4.5)*60,color:'#ED7D31',label:`상압${i+1}`}); t+=4.5; }
+    lanes.push({label:'자숙 상압<br>(FC·4대)',bars});
+  }
+  // 자숙 FP 가압
+  if(fpRaw>0){
+    const cyc=Math.ceil(fpRaw*1000/1600);
+    const bars=[]; let t=6;
+    for(let i=0;i<cyc && t+2.5<=18;i++){ bars.push({s:t*60,e:(t+2.5)*60,color:'#1D9E75',label:`가압${i+1}`}); t+=2.5; }
+    lanes.push({label:'자숙 가압<br>(FP·2대)',bars});
+  }
+  // 파쇄 09~
+  lanes.push({label:'파쇄<br>(목표 인력)',bars:[{s:9*60,e:17*60,color:'#8064A2',label:'파쇄'}]});
+  // 포장 (제품별)
+  const packBars=[]; let pt=9.5;
+  active.forEach(p=>{
+    const ea=s.items[p.name], hr=ea/(p.speed*p.maxLines*60);
+    if(hr>0.05){ packBars.push({s:pt*60,e:(pt+hr)*60,color:'#C00000',label:p.name.slice(0,6)}); pt+=hr+0.2; }
+  });
+  lanes.push({label:'내포장<br>(라인별)',bars:packBars});
+  // 레토르트 투입 (포장 따라, 마감19시까지 진하게)
+  lanes.push({label:'레토르트<br>(투입)',bars:[{s:10*60,e:19*60,color:'#0D7377',label:'투입'},{s:19*60,e:23*60,color:'#0D7377',opacity:'0.4',label:'멸균(당직)'}]});
+
+  buildTT('tt-canvas',lanes,0,24,lanes.length*34+44);
+  document.getElementById('tt-note').innerHTML=`D${s.day}: 전처리·자숙(FC상압+FP가압 동시) 새벽 시작 → 파쇄 09시 → 포장 → 레토르트 투입(~19시). 인력 공정은 위 '공정 목표' 표의 필요 인원 참조.`;
+}
+
+// ════════ 데이터 페이지 ════════
+function renderDataPage(){
+  let h='';
+  PRODUCTS.forEach((p,i)=>{
+    h+=`<tr><td>${p.name}</td>
+      <td><input type="text" value="${p.ea.toLocaleString()}" data-i="${i}" oninput="onProdEdit(this,'ea')" style="width:75px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
+      <td class="c">${p.units}</td><td class="r">${p.meat}g</td><td class="r">${Math.round(rawPerEa(p))}g</td>
+      <td class="r">${Math.round(totalRaw(p)).toLocaleString()}kg</td><td class="c">${p.part}</td><td class="c">${p.cook}</td></tr>`;
+  });
+  document.getElementById('data-prod').innerHTML=h;
+  const tot=PRODUCTS.reduce((s,p)=>s+totalRaw(p),0);
+  const fc=PRODUCTS.filter(p=>p.g==='FC').reduce((s,p)=>s+totalRaw(p),0);
+  document.getElementById('data-total').innerHTML=`<div class="alert info" style="margin:0">총 필요 원육 <strong>${(tot/1000).toFixed(1)}톤</strong> (FC ${(fc/1000).toFixed(1)}t / FP ${((tot-fc)/1000).toFixed(1)}t) · 22일 기준 일 <strong>${(tot/22/1000).toFixed(2)}톤</strong></div>`;
+  // 수율
+  let yh='';
+  ['설도','우둔','홍두깨'].forEach(part=>{ const y=YIELD[part];
+    yh+=`<tr><td><strong>${part}</strong></td>
+      <td><input type="number" step="0.1" value="${(y.preY*100).toFixed(1)}" data-part="${part}" data-k="preY" style="width:70px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
+      <td><input type="number" step="0.1" value="${(y.cook*100).toFixed(1)}" data-part="${part}" data-k="cook" style="width:70px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
+      <td><input type="number" step="0.1" value="${(y.fragY*100).toFixed(1)}" data-part="${part}" data-k="fragY" style="width:70px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td></tr>`;
+  });
+  document.getElementById('data-yield').innerHTML=yh;
+}
+function onProdEdit(inp,key){ const i=+inp.dataset.i; const v=parseInt(inp.value.replace(/[^0-9]/g,''))||0; PRODUCTS[i][key]=v; renderDataPage(); }
+function applyData(){
+  document.querySelectorAll('#data-yield input').forEach(inp=>{
+    const part=inp.dataset.part, k=inp.dataset.k; YIELD[part][k]=(parseFloat(inp.value)||0)/100;
+  });
+  rebuildSchedule();
+  renderDataPage();
+  alert('적용되었습니다. 월간 스케줄이 재계산되었습니다.');
+}
+
+// ════════ 초기화 ════════
+window.addEventListener('DOMContentLoaded',()=>{ rebuildSchedule(); });
 </script>
 <script>
 function buildTT(canvasId, lanes, timeStart, timeEnd, height) {
@@ -606,367 +623,6 @@ function buildTT(canvasId, lanes, timeStart, timeEnd, height) {
     });
   });
 }
-</script>
-<script>
-// ════════ 탭 전환 ════════
-var _page='sim';
-function goPage(name, btn){
-  _page=name;
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.tnav').forEach(b=>b.classList.remove('active'));
-  document.getElementById('page-'+name).classList.add('active');
-  btn.classList.add('active');
-  if(name==='sim') runSimulator();
-  if(name==='plan' && document.getElementById('pl-rows').children.length===0) loadDecPreset();
-  if(name==='spec'){ renderBaselinePanel(); renderSpecTables(); }
-}
-function refreshAll(){
-  if(_page==='sim') runSimulator();
-  else if(_page==='plan' && document.getElementById('pl-rows').children.length>0) runMonthPlan();
-  else if(_page==='spec'){ renderBaselinePanel(); renderSpecTables(); }
-}
-window.onBaselineLoaded = function(){ BASELINE=window.BASELINE; refreshAll(); };
-
-// ════════ 시뮬레이터 ════════
-function initProductDropdown(){
-  const sel=document.getElementById('sm-product');
-  sel.innerHTML = Object.keys(PRODUCTS).map(k=>`<option value="${k}">${k}</option>`).join('');
-}
-function onProductChange(){
-  const prod=document.getElementById('sm-product').value;
-  const p=PRODUCTS[prod];
-  document.getElementById('sm-part-row').style.display = p.fixedPart ? 'none' : 'flex';
-  if(!p.fixedPart && p.part) document.getElementById('sm-part').value=p.part;
-  document.getElementById('sm-altline-row').style.display = p.altSpeed ? 'flex' : 'none';
-  // 포장 라인 수 행: maxLines 2 이상이거나 대체라인 가능할 때만
-  updatePackLinesRow();
-  runSimulator();
-}
-function updatePackLinesRow(){
-  const prod=document.getElementById('sm-product').value;
-  const p=PRODUCTS[prod];
-  const useAlt = p.altSpeed ? document.getElementById('sm-altline').value==='1' : false;
-  const maxL = useAlt ? (p.altMaxLines||1) : p.maxLines;
-  document.getElementById('sm-packlines-row').style.display = maxL>1 ? 'flex' : 'none';
-  if(maxL<=1) document.getElementById('sm-packlines').value='1';
-}
-function runSimulator(){
-  const mode=document.getElementById('sm-mode').value;
-  const prod=document.getElementById('sm-product').value;
-  const p=PRODUCTS[prod];
-  const part = p.fixedPart ? p.part : document.getElementById('sm-part').value;
-  const preW=+document.getElementById('sm-prew').value;
-  const fragW=+document.getElementById('sm-fragw').value;
-  const fragLines=+document.getElementById('sm-fragline').value;
-  const retortPeriod=document.getElementById('sm-retort').value;
-  const endHour=+document.getElementById('sm-endh').value;
-  const useAlt = p.altSpeed ? document.getElementById('sm-altline').value==='1' : false;
-  updatePackLinesRow();
-  const packLines=+document.getElementById('sm-packlines').value;
-
-  document.getElementById('sm-meat-row').style.display = mode==='forward' ? 'flex' : 'none';
-  document.getElementById('sm-prew-out').textContent=preW+' 명';
-  document.getElementById('sm-fragw-out').textContent=fragW+' 명';
-  const eh=Math.floor(endHour), em=(endHour%1)*60;
-  document.getElementById('sm-endh-out').textContent=`${eh}:${em===0?'00':'30'}`;
-
-  // 메추리알 180g 무공정
-  if(p.noProcess){
-    const lineSpeed=p.lineSpeed, lines=packLines;
-    const packStart=9.5, avail=endHour-packStart;
-    const packBong=Math.floor(lineSpeed*lines*60*avail);
-    document.getElementById('sm-result').innerHTML=`
-      <div class="res-grid"><div class="res-card"><div class="rv" style="color:var(--ok)">${packBong.toLocaleString()}</div><div class="rl">일 포장 가능 (개)</div></div>
-      <div class="res-card"><div class="rv" style="color:var(--p)">${lines}라인</div><div class="rl">3·4호기</div></div>
-      <div class="res-card"><div class="rv">${avail.toFixed(1)}h</div><div class="rl">포장 가능 시간</div></div></div>
-      <div class="alert info" style="margin-top:10px">메추리알 180g은 고기 없이 충진만 → 전처리·자숙·파쇄 없이 09:30 포장 직행. 3·4호기 ${lineSpeed}개/분 × ${lines}라인.</div>`;
-    document.getElementById('sm-bottleneck').innerHTML='<div class="alert info" style="margin:0">무공정 제품 — 포장 라인만 점유</div>';
-    renderSimTT(prod,part,0,{packLines:lines,endHour,useAlt,fragW,fragLines,retortPeriod},null,'내포장',{packStart:9.5,availPackHours:avail});
-    return;
-  }
-
-  const o={preW,fragW,fragLines,packLines,retortPeriod,endHour,useAlt};
-  let meatKg, optMeat=null, packBongCap=null;
-
-  if(mode==='reverse'){
-    // 포장 기준 역산: 포장이 가용시간 풀로 돌 때의 봉수 → 적정 원료육
-    const b=BASELINE.part[part];
-    const lineSpeed=useAlt?p.altSpeed:p.lineSpeed;
-    const packStart=9.5, avail=endHour-packStart;
-    packBongCap=Math.floor(lineSpeed*packLines*60*avail);
-    optMeat=packBongCap*p.meat/1000/(b.preY*b.cook*b.fragY);
-    meatKg=optMeat;
-  } else {
-    meatKg=+document.getElementById('sm-meat').value;
-    document.getElementById('sm-meat-out').textContent=meatKg.toLocaleString()+' kg';
-  }
-
-  const f=simulateFlow(prod,part,meatKg,o);
-  const result=bottleneckOf(f.stages);
-  const realOutput=f.realOutput;
-  const b=BASELINE.part[part];
-
-  const limiterStr=f.limiters.join(' + ');
-  const limColor=limiterStr.includes('전처리')||limiterStr.includes('파쇄')?'var(--bad)':limiterStr.includes('포장')||limiterStr.includes('레토르트')?'var(--warn)':'var(--ok)';
-  let html='';
-  if(mode==='reverse'){
-    html+=`<div class="res-grid">
-      <div class="res-card"><div class="rv" style="color:var(--p)">${packBongCap.toLocaleString()}</div><div class="rl">포장 가능 봉수</div></div>
-      <div class="res-card"><div class="rv" style="color:var(--ok)">${Math.round(optMeat).toLocaleString()}</div><div class="rl">적정 원료육 (kg)</div></div>
-      <div class="res-card"><div class="rv" style="color:${limColor}">${realOutput.toLocaleString()}</div><div class="rl">실 생산량 (봉)</div></div>
-    </div>`;
-  } else {
-    html+=`<div class="res-grid">
-      <div class="res-card"><div class="rv" style="color:var(--p)">${meatKg.toLocaleString()}</div><div class="rl">투입 원료육 (kg)</div></div>
-      <div class="res-card"><div class="rv" style="color:${limColor}">${realOutput.toLocaleString()}</div><div class="rl">실 생산량 (봉)</div></div>
-      <div class="res-card"><div class="rv" style="color:${limColor};font-size:13px;line-height:1.3">${limiterStr}</div><div class="rl">율속(제한) 요인</div></div>
-    </div>`;
-  }
-  const fillKg=Math.round(realOutput*p.fill).toLocaleString();
-
-  // 공정별 처리율 흐름 표
-  html+=`<table class="tbl" style="margin-top:10px">
-    <thead><tr><th>공정</th><th class="r">처리율</th><th class="r">실효율(공급제약 후)</th><th>비고</th></tr></thead>
-    <tbody>
-      <tr><td>전처리</td><td class="r">${Math.round(f.preRate)} kg/h</td><td class="r">→ 자숙공급 ${Math.round(f.cookOutRate)} kg/h</td><td>${o.preW}명 · ${f.preHr.toFixed(1)}h 소요</td></tr>
-      <tr><td>파쇄</td><td class="r">${Math.round(f.fragRate)} kg/h</td><td class="r ${f.fragEffRate<f.fragRate*0.98?'warn':''}">${Math.round(f.fragEffRate)} kg/h</td><td>${f.fragEffRate<f.fragRate*0.98?'⚠ 자숙 공급에 묶임':'여유'}</td></tr>
-      <tr><td>내포장</td><td class="r">${Math.round(f.packMeatRate)} kg/h</td><td class="r ${f.packEffBongRate*p.meat/1000<f.packMeatRate*0.98?'warn':''}">${Math.round(f.packEffBongRate*p.meat/1000)} kg/h</td><td>${f.lineName} ${f.packLines}라인 · 파쇄 산출에 묶임</td></tr>
-      <tr><td>레토르트</td><td class="r">${f.stages.레토르트.toLocaleString()} 봉</td><td class="r">${f.rM}대 ${f.rCyc}회전</td><td>투입 마감 ${fmtH(f.retortDeadline)}</td></tr>
-    </tbody></table>`;
-
-  // 진단·개선 방향
-  let advice='';
-  if(limiterStr.includes('전처리')){
-    const need=Math.ceil(meatKg/((o.endHour-f.preStart)*b.pre));
-    advice=`전처리가 ${f.preHr.toFixed(1)}시간 걸려 자숙 공급이 ${Math.round(f.cookOutRate)}kg/h로 묶입니다. 뒤 공정(파쇄 ${Math.round(f.fragRate)}kg/h)이 놀고 있어요. <strong>전처리 인원을 늘리거나(현재 ${o.preW}명)</strong> 새벽조출을 더 당겨야 합니다.`;
-  } else if(limiterStr.includes('파쇄')){
-    advice=`파쇄(${Math.round(f.fragRate)}kg/h)가 병목입니다. 자숙은 ${Math.round(f.cookOutRate)}kg/h 공급 가능한데 파쇄가 못 받아요. <strong>파쇄 인원/라인을 늘리면</strong> 생산량이 증가합니다.`;
-  } else if(limiterStr.includes('포장')){
-    advice=`포장 시간·속도가 병목입니다. ${f.lineName} ${f.packLines}라인으로 ${f.availPackHours.toFixed(1)}h 안에 다 못 만듭니다. <strong>포장 라인 추가(3·4호기 2라인)나 마감 연장</strong>을 검토하세요.`;
-  } else if(limiterStr.includes('레토르트')){
-    advice=`레토르트가 병목입니다. ${f.rM}대 ${f.rCyc}회전으로는 부족합니다. <strong>트레이 증설(6월 192개→3대)</strong>이 필요합니다.`;
-  } else {
-    advice=`투입한 원료육 ${meatKg.toLocaleString()}kg이 ${realOutput.toLocaleString()}봉으로 다 소화됩니다. 모든 공정에 여유가 있어요. 원료육을 더 넣으면 다음 병목이 드러납니다.`;
-  }
-  html+=`<div class="alert ${(limiterStr.includes('전처리')||limiterStr.includes('파쇄'))?'bad':limiterStr.includes('투입')?'ok':'warn'}" style="margin-top:10px">
-    하루 <strong>${realOutput.toLocaleString()}봉</strong>(완제품 ${fillKg}kg) · ${advice}
-    ${mode==='reverse'?`<br>포장 라인 기준 원료육 <strong>${Math.round(optMeat).toLocaleString()}kg</strong> 투입이 균형점입니다.`:''}</div>`;
-  document.getElementById('sm-result').innerHTML=html;
-
-  renderBottleneckBars(f.stages, result.bottleneck, f);
-  renderSimTT(prod,part,meatKg,o,f,result.bottleneck);
-}
-
-function renderBottleneckBars(stages, bn, f){
-  const order=['전처리','파쇄','내포장','레토르트'];
-  const max=Math.max(...order.map(k=>stages[k]));
-  const colors={전처리:'#2F5496',파쇄:'#C00000',내포장:'#ED7D31',레토르트:'#0D7377'};
-  // 실효 공급(연쇄 제약 후) — 전처리/파쇄에 적용
-  const realOut = f ? f.realOutput : null;
-  let html='';
-  order.forEach(k=>{
-    const v=stages[k], pct=Math.min(Math.round(v/max*100),100);
-    // 이 공정이 실생산을 결정하는 진짜 병목인지 (자체능력이 실생산과 근접)
-    const isBn = realOut!=null ? (v<=realOut*1.04) : (k===bn);
-    // 실효 공급선 (전처리가 자숙공급으로 묶이는 경우 표시)
-    let effPct=null, effVal=null;
-    if(f && k==='전처리' && f.cookOutRate < f.fragRate*0.98){
-      effVal=realOut; effPct=Math.min(Math.round(effVal/max*100),100);
-    }
-    html+=`<div class="bn-item">
-      <div class="bn-hd"><span class="lbl">${k}${isBn?' <span class="badge bad">병목</span>':''}</span><span class="val">${v.toLocaleString()} 봉/일${effVal?` <span style="color:var(--bad)">(실공급 ${effVal.toLocaleString()})</span>`:''}</span></div>
-      <div class="bn-track"><div class="bn-fill" style="width:${pct}%;background:${colors[k]};opacity:${effVal?0.4:1};${isBn&&!effVal?'box-shadow:0 0 0 2px var(--bad) inset':''}">${pct}%</div>${effVal?`<div class="bn-fill" style="width:${effPct}%;background:${colors[k]};margin-top:-24px;box-shadow:0 0 0 2px var(--bad) inset">실${effPct}%</div>`:''}</div>
-    </div>`;
-  });
-  html+=`<div style="font-size:10px;color:var(--sub);margin-top:6px">막대 = 각 공정 <b>자체 최대능력</b>. 전처리가 느리면 진한 테두리 = <b>실제 공급량</b>(뒤 공정이 그만큼만 받음). 가장 낮은 실선이 그날 생산량.</div>`;
-  document.getElementById('sm-bottleneck').innerHTML=html;
-}
-
-function renderSimTT(prod,part,meatKg,o,f,bn,fallbackBn,fallback){
-  const p=PRODUCTS[prod];
-  document.getElementById('sm-legend').innerHTML=`
-    <div class="leg-item"><div class="leg-box" style="background:#5B9BD5"></div>전처리(새벽)</div>
-    <div class="leg-item"><div class="leg-box" style="background:#ED7D31"></div>자숙</div>
-    <div class="leg-item"><div class="leg-box" style="background:#8064A2"></div>파쇄</div>
-    <div class="leg-item"><div class="leg-box" style="background:#C00000"></div>내포장</div>
-    <div class="leg-item"><div class="leg-box" style="background:#0D7377"></div>레토르트(투입)</div>
-    <div class="leg-item"><div class="leg-box" style="background:#0D7377;opacity:.4"></div>레토르트(멸균·익일)</div>`;
-
-  const retortDeadline = Math.min(o.endHour + 1, 24); // 투입 마감 = 정규+연장1h
-
-  if(p.noProcess){
-    const fb=fallback||{packStart:9.5,availPackHours:8};
-    const pe=Math.min(fb.packStart+fb.availPackHours, o.endHour);
-    const lanes=[
-      {label:'내포장<br>(3·4호기)',bars:[{s:fb.packStart*60,e:pe*60,color:'#C00000',label:'메추리알 충진·포장'}]},
-      {label:'레토르트<br>(투입~익일멸균)',bars:[
-        {s:(fb.packStart+0.3)*60,e:(retortDeadline)*60,color:'#0D7377',label:'레토르트 투입'},
-        {s:retortDeadline*60,e:24*60,color:'#0D7377',opacity:'0.4',label:'멸균(당직)'}
-      ]}];
-    buildTT('sm-tt',lanes,0,24,lanes.length*34+44);
-    document.getElementById('sm-tt-note').textContent='무공정 제품 — 09:30 포장 직행. 레토르트는 투입만 마감 내 완료하면 멸균·냉각은 당직자 처리.';
-    return;
-  }
-
-  const b=BASELINE.part[part];
-  // ── 전처리·자숙 겹침 모델 ──
-  // 전처리 새벽 시작 → 800kg 차는 대로 자숙 탱크 투입 (전처리와 병행)
-  // 파쇄 09시 시작을 위해 자숙 첫 배치가 09시 전 완료되어야 함
-  const fragStart = 9;
-  const cookHr = p.fixedPart ? 4.5 : 2.5;
-  const preRate = o.preW * b.pre;            // kg/h 전처리 속도
-  const preHr = meatKg / preRate;            // 전체 전처리 소요
-  // 첫 자숙 배치(800kg 또는 전체 중 적은쪽) 전처리 시간
-  const firstBatch = Math.min(800, meatKg);
-  const firstPreHr = firstBatch / preRate;
-  // 자숙 첫 배치 완료 = 09시(파쇄 시작) → 역산: 전처리 첫배치 시작 + firstPreHr + cookHr = 9
-  // 자숙 시작 = 전처리 첫배치 완료 시점
-  let cookStart = fragStart - cookHr;        // 자숙 첫 배치가 09시 완료되려면
-  let preStart = cookStart - firstPreHr;     // 그 전에 첫 전처리분
-  // 전처리 종료 = preStart + 전체 preHr
-  const preEnd = preStart + preHr;
-  // 자숙 종료 = 마지막 전처리분 + cookHr (단 09시 이후로 이어질 수 있음)
-  const cookEnd = preEnd + cookHr;
-
-  // 파쇄: 09시 시작, f.fragEnd까지
-  const fragEnd = f.fragEnd;
-  // 포장
-  const packStart=f.packStart, packEnd=packStart+f.packActualHours;
-
-  const lanes=[
-    {label:`전처리(새벽)<br>(${o.preW}명)`,bars:[{s:preStart*60,e:preEnd*60,color:'#5B9BD5',label:`전처리 ${preHr.toFixed(1)}h`}]},
-    {label:`자숙<br>(${p.fixedPart?'상압4.5h':'가압2.5h'})`,bars:[{s:cookStart*60,e:cookEnd*60,color:'#ED7D31',label:`자숙(순차투입)`}]},
-    {label:`파쇄<br>(${o.fragW}명·${o.fragLines}대)`,bars:[{s:fragStart*60,e:fragEnd*60,color:'#8064A2',label:`파쇄 ${(fragEnd-fragStart).toFixed(1)}h`}]},
-    {label:`내포장<br>(${f.lineName}·${f.packLines}라인)`,bars:[{s:packStart*60,e:packEnd*60,color:'#C00000',label:`포장 ${(packEnd-packStart).toFixed(1)}h`}]},
-  ];
-  // 레토르트: 포장 시작~ 투입, 마감(정규+1h)까지 투입. 그 후는 멸균(흐리게)
-  const retortInStart = packStart + 0.3;
-  const retortInEnd = Math.min(retortDeadline, Math.max(retortInStart+p.rCycleHr, packEnd+0.3));
-  const lanes_retort = {label:`레토르트<br>(${f.rM}대·투입${f.rCyc}회)`, bars:[
-    {s:retortInStart*60, e:retortInEnd*60, color:'#0D7377', label:`투입 (${f.rCyc}회전분)`},
-    {s:retortInEnd*60, e:Math.min(retortInEnd+p.rCycleHr,24)*60, color:'#0D7377', opacity:'0.4', label:`멸균·냉각(당직)`}
-  ]};
-  lanes.push(lanes_retort);
-
-  buildTT('sm-tt',lanes,0,24,lanes.length*34+44);
-  document.getElementById('sm-tt-note').innerHTML=`전처리 ${fmtH(preStart)} 시작(새벽조출) → 800kg 차는 대로 자숙 순차투입 → 파쇄 09시(${(fragEnd-9).toFixed(1)}h) → 포장 ${fmtH(packStart)}(${(packEnd-packStart).toFixed(1)}h) → 레토르트 투입 마감 ${fmtH(retortDeadline)}. 멸균·냉각은 당직자 처리(익일 외포장). 제한: <strong>${f.limited}</strong>`;
-}
-function fmtH(h){ const hh=Math.floor(h), mm=Math.round((h%1)*60); return `${(hh%24+24)%24}:${mm<10?'0'+mm:mm}`; }
-</script>
-<script>
-// ════════ 월 생산계획 ════════
-var plSeq=0;
-const PLAN_PRODUCTS=Object.keys(PRODUCTS).filter(k=>!PRODUCTS[k].noProcess);
-const DEC_PRESET=[
-  {prod:'FC 3kg',ea:32141},{prod:'미니 70g',ea:165029},{prod:'시그니처 120g',ea:60950},
-  {prod:'코코 170g',ea:77864},{prod:'트레이더스 460g',ea:14905},
-];
-function planProdOptions(sel){return PLAN_PRODUCTS.map(p=>`<option value="${p}" ${p===sel?'selected':''}>${p}</option>`).join('');}
-function addPlanRow(prod,ea){
-  plSeq++; const id=plSeq;
-  const tbody=document.getElementById('pl-rows');
-  const tr=document.createElement('tr'); tr.id='plr-'+id;
-  const part=PRODUCTS[prod||'FC 3kg'].part||'설도';
-  tr.innerHTML=`<td class="c" style="color:var(--sub)">${tbody.children.length+1}</td>
-    <td><select id="plr-prod-${id}" onchange="updatePlrPart(${id})" style="width:100%;padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit">${planProdOptions(prod)}</select></td>
-    <td><input type="text" id="plr-ea-${id}" value="${ea?ea.toLocaleString():''}" style="width:100%;padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px;text-align:right" oninput="this.value=this.value.replace(/[^0-9]/g,'')?parseInt(this.value.replace(/[^0-9]/g,'')).toLocaleString():''"></td>
-    <td class="c" id="plr-part-${id}">${part}</td>
-    <td class="c"><button onclick="rmPlanRow(${id})" style="background:none;border:none;color:var(--bad);cursor:pointer;font-size:14px">✕</button></td>`;
-  tbody.appendChild(tr);
-}
-function updatePlrPart(id){ const prod=document.getElementById('plr-prod-'+id).value; document.getElementById('plr-part-'+id).textContent=PRODUCTS[prod].part||'설도'; }
-function rmPlanRow(id){ const r=document.getElementById('plr-'+id); if(r)r.remove(); [...document.getElementById('pl-rows').children].forEach((t,i)=>t.querySelector('td').textContent=i+1); }
-function loadDecPreset(){ document.getElementById('pl-rows').innerHTML=''; plSeq=0; DEC_PRESET.forEach(d=>addPlanRow(d.prod,d.ea)); document.getElementById('pl-days').value='23'; runMonthPlan(); }
-function getPlanRows(){ const rows=[]; [...document.getElementById('pl-rows').children].forEach(tr=>{ const id=tr.id.replace('plr-',''); const prod=document.getElementById('plr-prod-'+id)?.value; const ea=parseInt((document.getElementById('plr-ea-'+id)?.value||'').replace(/,/g,''))||0; if(prod&&ea>0)rows.push({prod,ea}); }); return rows; }
-
-function runMonthPlan(){
-  const rows=getPlanRows(); if(!rows.length){alert('제품을 입력하세요');return;}
-  const days=+document.getElementById('pl-days').value||23;
-  const fragM=+document.getElementById('pl-fragm').value;
-  const fragCap=fragM===2?5760:4000;
-  let totMeat=0,totFrag=0,totEa=0,totRetortMhr=0,hongMeat=0,seodoMeat=0;
-  const detail=[];
-  rows.forEach(r=>{
-    const p=PRODUCTS[r.prod], b=BASELINE.part[p.part];
-    const meatPerEa=p.fill/b.preY/b.cook/b.fragY;
-    const meat=r.ea*meatPerEa, frag=meat*b.preY*b.cook;
-    const rM=RETORT_MACHINES[p.tray].cur, eaPerM=p.rPerCycle;
-    const rCyc=r.ea/eaPerM, rMhr=rCyc*p.rCycleHr;
-    totMeat+=meat; totFrag+=frag; totEa+=r.ea; totRetortMhr+=rMhr;
-    if(p.part==='홍두깨')hongMeat+=meat; else seodoMeat+=meat;
-    detail.push({...r,p,b,meat,frag,meatPerEa,rCyc});
-  });
-  const dMeat=totMeat/days, dFrag=totFrag/days, dRMhr=totRetortMhr/days;
-  const fragPct=dFrag/fragCap*100, fragS=fragPct>100?'bad':fragPct>85?'warn':'ok';
-  const tanks=dMeat/800, tankS=dMeat>9600?'bad':dMeat>4800?'warn':'ok';
-  const preW=dMeat/(120*8), preS=preW>15?'bad':preW>11?'warn':'ok';
-  const rPct=dRMhr/27*100, rS=rPct>100?'bad':rPct>80?'warn':'ok';
-  document.getElementById('pl-summary').style.display='';
-  document.getElementById('pl-summary-body').innerHTML=`
-    <div class="kpi-row">
-      <div class="kpi"><div class="kl">총 생산량</div><div class="kv">${totEa.toLocaleString()}</div><div class="ks">EA/월</div></div>
-      <div class="kpi" style="--accent:var(--mid)"><div class="kl">총 원료육</div><div class="kv">${(totMeat/1000).toFixed(1)}</div><div class="ks">ton (일 ${(dMeat/1000).toFixed(2)}t)</div></div>
-      <div class="kpi" style="--accent:var(--${fragS})"><div class="kl">일평균 파쇄</div><div class="kv">${Math.round(dFrag).toLocaleString()}</div><div class="ks">kg/일 (${fragPct.toFixed(0)}%)</div></div>
-      <div class="kpi" style="--accent:var(--${rS})"><div class="kl">레토르트</div><div class="kv">${rPct.toFixed(0)}%</div><div class="ks">3대 기준</div></div>
-    </div>
-    <table class="tbl"><thead><tr><th>공정</th><th class="r">일 부하</th><th>판정</th><th class="c">상태</th></tr></thead><tbody>
-      <tr><td><strong>전처리</strong></td><td class="r">${Math.round(dMeat).toLocaleString()}kg</td><td>120kg/인시 기준 ${Math.ceil(preW)}명</td><td class="c"><span class="badge ${preS}">${preS==='ok'?'여유':preS==='warn'?'적정':'증원'}</span></td></tr>
-      <tr><td><strong>자숙</strong></td><td class="r">${tanks.toFixed(1)}탱크</td><td>${dMeat>4800?'2사이클/가압 필요':'1사이클 가능'}</td><td class="c"><span class="badge ${tankS}">${tankS==='ok'?'주간가능':tankS==='warn'?'가압/야간':'부족'}</span></td></tr>
-      <tr><td><strong>파쇄</strong></td><td class="r">${Math.round(dFrag).toLocaleString()}kg</td><td>${fragM}대 ${fragCap.toLocaleString()}kg/일 → ${fragPct.toFixed(0)}%</td><td class="c"><span class="badge ${fragS}">${fragS==='ok'?'충분':fragS==='warn'?'빠듯':'부족'}</span></td></tr>
-      <tr><td><strong>레토르트</strong></td><td class="r">${dRMhr.toFixed(1)}대·hr</td><td>3대×9hr=27 → ${rPct.toFixed(0)}%</td><td class="c"><span class="badge ${rS}">${rS==='ok'?'충분':rS==='warn'?'빠듯':'4대'}</span></td></tr>
-    </tbody></table>
-    <div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--sub)">
-      <span>설도/우둔 원육: <strong style="color:var(--text)">${(seodoMeat/1000).toFixed(1)}t</strong></span>
-      <span>홍두깨(FC): <strong style="color:var(--text)">${(hongMeat/1000).toFixed(1)}t</strong></span>
-    </div>
-    <div class="alert ${totFrag/fragCap<=days?'ok':'bad'}" style="margin-top:8px;margin-bottom:0">파쇄 기준 ${(totFrag/fragCap).toFixed(1)}일 필요 / 가동 ${days}일 → ${totFrag/fragCap<=days?`충분 (여유 ${(days-totFrag/fragCap).toFixed(1)}일)`:'초과! capa 확대 필요'}</div>`;
-  document.getElementById('pl-detail').style.display='';
-  let dt='<table class="tbl"><thead><tr><th>제품</th><th class="r">월EA</th><th class="r">원육</th><th class="r">봉당</th><th class="c">부위</th><th class="r">레토르트회전</th></tr></thead><tbody>';
-  detail.forEach(d=>{ dt+=`<tr><td>${d.prod}</td><td class="r">${d.ea.toLocaleString()}</td><td class="r">${(d.meat/1000).toFixed(1)}t</td><td class="r">${(d.meatPerEa*1000).toFixed(0)}g</td><td class="c">${d.p.part}</td><td class="r">${d.rCyc.toFixed(1)}회</td></tr>`; });
-  dt+='</tbody></table>';
-  document.getElementById('pl-detail-body').innerHTML=dt;
-}
-
-// ════════ 기준치 설정 ════════
-function renderBaselinePanel(){
-  document.getElementById('bl-label').value=BASELINE.label||'';
-  let html='';
-  ['설도','우둔','홍두깨'].forEach(part=>{ const b=BASELINE.part[part];
-    html+=`<tr><td><strong>${part}</strong></td>
-      <td><input type="number" step="0.1" id="bl-${part}-pre" value="${b.pre}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
-      <td><input type="number" step="0.1" id="bl-${part}-frag" value="${b.frag}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
-      <td><input type="number" step="0.1" id="bl-${part}-preY" value="${(b.preY*100).toFixed(1)}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
-      <td><input type="number" step="0.1" id="bl-${part}-cook" value="${(b.cook*100).toFixed(1)}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
-      <td><input type="number" step="0.1" id="bl-${part}-fragY" value="${(b.fragY*100).toFixed(1)}" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td></tr>`;
-  });
-  document.getElementById('bl-rows').innerHTML=html;
-}
-function collectBaseline(){ const nb={label:document.getElementById('bl-label').value||'사용자 설정',part:{}};
-  ['설도','우둔','홍두깨'].forEach(part=>{ nb.part[part]={
-    pre:+document.getElementById(`bl-${part}-pre`).value||0, frag:+document.getElementById(`bl-${part}-frag`).value||0,
-    preY:(+document.getElementById(`bl-${part}-preY`).value||0)/100, cook:(+document.getElementById(`bl-${part}-cook`).value||0)/100,
-    fragY:(+document.getElementById(`bl-${part}-fragY`).value||0)/100 }; });
-  return nb;
-}
-function applyBaseline(){ BASELINE=collectBaseline(); window.BASELINE=BASELINE; document.getElementById('bl-status').innerHTML='<span style="color:var(--ok)">✓ 세션 적용됨</span>'; refreshAll(); }
-function resetBaseline(){ BASELINE=JSON.parse(JSON.stringify(BASELINE_DEFAULT)); window.BASELINE=BASELINE; renderBaselinePanel(); document.getElementById('bl-status').innerHTML='<span style="color:var(--sub)">초기화됨</span>'; }
-async function saveBaselineFB(){ applyBaseline(); document.getElementById('bl-status').innerHTML='<span style="color:var(--sub)">저장 중...</span>';
-  if(window.saveBaseline){ const ok=await window.saveBaseline(BASELINE); document.getElementById('bl-status').innerHTML=ok?'<span style="color:var(--ok)">✓ Firebase 저장 완료</span>':'<span style="color:var(--bad)">✗ 저장 실패</span>'; }
-  else document.getElementById('bl-status').innerHTML='<span style="color:var(--warn)">Firebase 미연결</span>'; }
-
-function renderSpecTables(){
-  let html='';
-  Object.entries(PRODUCTS).forEach(([k,p])=>{
-    html+=`<tr><td>${k}</td><td class="r">${p.meat>0?p.meat+'g':'—'}</td><td class="r">${p.fill>=1?p.fill+'kg':(p.fill*1000)+'g'}</td><td class="c">${p.line}</td><td class="c">${p.lineSpeed}${p.altSpeed?' / '+p.altSpeed:''}${p.maxLines>1?' ×'+p.maxLines:''}</td></tr>`;
-  });
-  document.getElementById('spec-prod').innerHTML=html;
-}
-
-// ════════ 초기화 ════════
-window.addEventListener('DOMContentLoaded',()=>{
-  initProductDropdown();
-  onProductChange();
-});
 </script>
 </body>
 </html>
