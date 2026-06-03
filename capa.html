@@ -189,7 +189,7 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
         <div class="ctrl-row"><label>전처리 인원</label><input type="range" id="c-prew" min="5" max="20" value="10" oninput="runCap()"><span class="ctrl-out" id="c-prew-o">10명</span></div>
         <div class="ctrl-row"><label>전처리 가동시간</label><input type="range" id="c-preh" min="6" max="14" value="8" step="0.5" oninput="runCap()"><span class="ctrl-out" id="c-preh-o">8h</span></div>
         <div style="border-top:1px solid var(--border);margin:8px 0;padding-top:8px;font-size:10px;color:var(--sub);font-weight:600">자숙 (설비)</div>
-        <div class="ctrl-row"><label>자숙 가동시간</label><input type="range" id="c-cookh" min="9" max="18" value="12" step="0.5" oninput="runCap()"><span class="ctrl-out" id="c-cookh-o">12h</span></div>
+        <div class="ctrl-row"><label>자숙 배치 수</label><input type="range" id="c-cookb" min="6" max="12" value="9" oninput="runCap()"><span class="ctrl-out" id="c-cookb-o">9배치</span></div>
         <div style="border-top:1px solid var(--border);margin:8px 0;padding-top:8px;font-size:10px;color:var(--sub);font-weight:600">파쇄 (인력+설비)</div>
         <div class="ctrl-row"><label>파쇄기 대수</label><select id="c-fragm" onchange="runCap()"><option value="1">1대 (현재)</option><option value="2">2대 (투자)</option></select></div>
         <div class="ctrl-row"><label>파쇄 인원</label><input type="range" id="c-fragw" min="5" max="30" value="11" oninput="runCap()"><span class="ctrl-out" id="c-fragw-o">11명</span></div>
@@ -261,7 +261,7 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
 var YIELD={
   '설도':  {pre:88.1, frag:30.0, preY:0.952, cook:0.568, fragY:0.884},
   '우둔':  {pre:92.9, frag:21.4, preY:0.970, cook:0.554, fragY:0.913},
-  '홍두깨':{pre:51.5, frag:19.0, preY:0.899, cook:0.573, fragY:0.956},
+  '홍두깨':{pre:51.5, frag:23.0, preY:0.899, cook:0.573, fragY:0.956},
 };
 var PRODUCTS=[
   {name:'FC 3kg',       ea:32141,  meat:1350, units:1, part:'홍두깨', line:'2호기',  speed:15, maxLines:1, grow:false},
@@ -276,8 +276,8 @@ function totalRaw(){return PRODUCTS.reduce((s,p)=>s+totRaw(p),0);}
 
 // 시나리오 프리셋
 var SCENARIOS={
-  asis:  {days:22, preW:8,  preH:8,  cookH:9,  fragM:1, fragW:11, fragH:8,  packH:8},
-  tobe:  {days:22, preW:10, preH:11, cookH:13, fragM:2, fragW:20, fragH:8,  packH:8},
+  asis:  {days:22, preW:8,  preH:8,  cookBatch:7, fragM:1, fragW:11, fragH:8,  packH:8},
+  tobe:  {days:22, preW:10, preH:11, cookBatch:9, fragM:2, fragW:20, fragH:8,  packH:8},
 };
 var _scn='asis';
 
@@ -288,17 +288,20 @@ function weighted(){
     wPre+=y.pre*w; wFrag+=y.frag*w; wPreY+=y.preY*w; wCook+=y.cook*w; wFragY+=y.fragY*w;});
   return {wPre,wFrag,wPreY,wCook,wFragY};
 }
+var PERLINE_MAX=13; // 파쇄 라인당 최대 인원
 function capacities(o){
   const W=weighted();
   const need=totalRaw()/o.days;
   // 전처리: 인력 (원육 kg/일)
   const pre=o.preW*W.wPre*o.preH;
-  // 자숙: 설비. 가압2대(2.5hr) + 상압4대(4.5hr), 원육 투입 기준
-  const cook=(2*800*Math.floor(o.cookH/2.5))+(4*800*Math.floor(o.cookH/4.5));
-  // 파쇄: 인력×라인. 자숙후 처리 → 원육 환산
-  const fragCookKg=o.fragW*W.wFrag*o.fragM*o.fragH;
+  // 자숙: 설비. 배치 수 직접 입력 (탱크당 800kg, 원육 투입 기준)
+  const cook=o.cookBatch*800;
+  // 파쇄: 선별작업 — 라인(설비)이 능력 결정. 라인당 인원 상한 적용
+  //  자숙후 처리량 = 대수 × min(인원/대수, 라인당상한) × 생산성 × 시간
+  const perLine=Math.min(o.fragW/o.fragM, PERLINE_MAX);
+  const fragCookKg=o.fragM*perLine*W.wFrag*o.fragH;
   const frag=fragCookKg/(W.wPreY*W.wCook);
-  return {need, 전처리:pre, 자숙:cook, 파쇄:frag, W};
+  return {need, 전처리:pre, 자숙:cook, 파쇄:frag, W, perLine};
 }
 
 // ════════ 탭 ════════
@@ -322,7 +325,7 @@ function setScenario(s,btn){
     document.getElementById('c-days').value=sc.days;
     document.getElementById('c-prew').value=sc.preW;
     document.getElementById('c-preh').value=sc.preH;
-    document.getElementById('c-cookh').value=sc.cookH;
+    document.getElementById('c-cookb').value=sc.cookBatch;
     document.getElementById('c-fragm').value=sc.fragM;
     document.getElementById('c-fragw').value=sc.fragW;
     document.getElementById('c-fragh').value=sc.fragH;
@@ -335,7 +338,7 @@ function readOpts(){
     days:+document.getElementById('c-days').value,
     preW:+document.getElementById('c-prew').value,
     preH:+document.getElementById('c-preh').value,
-    cookH:+document.getElementById('c-cookh').value,
+    cookBatch:+document.getElementById('c-cookb').value,
     fragM:+document.getElementById('c-fragm').value,
     fragW:+document.getElementById('c-fragw').value,
     fragH:+document.getElementById('c-fragh').value,
@@ -363,10 +366,10 @@ function bestPackEaPerDay(name, packH){
 // ════════ 공정 CAPA 렌더 ════════
 function runCap(){
   const o=readOpts();
-  ['days','prew','preh','cookh','fragw','fragh','packh'].forEach(k=>{
+  ['days','prew','preh','cookb','fragw','fragh','packh'].forEach(k=>{
     const el=document.getElementById('c-'+k+'-o'); if(!el)return;
     const v=document.getElementById('c-'+k).value;
-    const unit={days:'일',prew:'명',preh:'h',cookh:'h',fragw:'명',fragh:'h',packh:'h'}[k];
+    const unit={days:'일',prew:'명',preh:'h',cookb:'배치',fragw:'명',fragh:'h',packh:'h'}[k];
     el.textContent=v+unit;
   });
   const c=capacities(o);
@@ -436,7 +439,7 @@ function runCap(){
 // ════════ 최대 CAPA·증산여력 ════════
 function runMax(){
   // TO-BE 풀가동: 파쇄2대, 인원 충분, 연장
-  const o={days:22,preW:12,preH:12,cookH:14,fragM:2,fragW:25,fragH:10,packH:10};
+  const o={days:22,preW:12,preH:12,cookBatch:11,fragM:2,fragW:26,fragH:10,packH:10};
   const c=capacities(o);
   const procs=['전처리','자숙','파쇄'];
   // 공장 최대 = 가장 약한 공정
@@ -493,12 +496,13 @@ function renderData(){
   document.getElementById('d-tot').innerHTML=`<div class="alert info" style="margin:0">총 필요 원육 <strong>${(tot/1000).toFixed(1)}톤</strong> (FC ${(fc/1000).toFixed(1)}t / FP ${((tot-fc)/1000).toFixed(1)}t) · 22일 일평균 <strong>${(tot/22/1000).toFixed(2)}톤</strong></div>`;
   let yh='';
   ['설도','우둔','홍두깨'].forEach(part=>{const y=YIELD[part];
+    const ist='width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right';
     yh+=`<tr><td><strong>${part}</strong></td>
-      <td><input type="number" step="0.1" value="${y.pre}" data-p="${part}" data-k="pre" style="width:70px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
-      <td><input type="number" step="0.1" value="${y.frag}" data-p="${part}" data-k="frag" style="width:70px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
-      <td><input type="number" step="0.1" value="${(y.preY*100).toFixed(1)}" data-p="${part}" data-k="preY" style="width:70px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
-      <td><input type="number" step="0.1" value="${(y.cook*100).toFixed(1)}" data-p="${part}" data-k="cook" style="width:70px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>
-      <td><input type="number" step="0.1" value="${(y.fragY*100).toFixed(1)}" data-p="${part}" data-k="fragY" style="width:70px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td></tr>`;
+      <td class="r"><input type="number" step="0.1" value="${y.pre}" data-p="${part}" data-k="pre" style="${ist}"></td>
+      <td class="r"><input type="number" step="0.1" value="${y.frag}" data-p="${part}" data-k="frag" style="${ist}"></td>
+      <td class="r"><input type="number" step="0.1" value="${(y.preY*100).toFixed(1)}" data-p="${part}" data-k="preY" style="${ist}"></td>
+      <td class="r"><input type="number" step="0.1" value="${(y.cook*100).toFixed(1)}" data-p="${part}" data-k="cook" style="${ist}"></td>
+      <td class="r"><input type="number" step="0.1" value="${(y.fragY*100).toFixed(1)}" data-p="${part}" data-k="fragY" style="${ist}"></td></tr>`;
   });
   document.getElementById('d-yield').innerHTML=yh;
 }
