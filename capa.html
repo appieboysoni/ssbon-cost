@@ -277,7 +277,7 @@ function totalRaw(){return PRODUCTS.reduce((s,p)=>s+totRaw(p),0);}
 // 시나리오 프리셋
 var SCENARIOS={
   asis:  {days:22, preW:8,  preH:8,  cookBatch:7, fragM:1, fragW:11, fragH:8,  packH:8},
-  tobe:  {days:22, preW:10, preH:11, cookBatch:9, fragM:2, fragW:20, fragH:8,  packH:8},
+  tobe:  {days:22, preW:10, preH:7,  cookBatch:9, fragM:2, fragW:20, fragH:8,  packH:8},
 };
 var _scn='asis';
 
@@ -430,9 +430,13 @@ function runCap(){
     vh=`<div class="alert bad" style="margin:0"><strong>${short.join(', ')}</strong>가 부족합니다 (필요 ${Math.round(c.need).toLocaleString()}kg/일).<br>`;
     short.forEach(p=>{
       const gap=c.need-c[p];
-      if(p==='전처리') vh+=`· 전처리: ${Math.round(gap).toLocaleString()}kg 부족 → 인원 증원 또는 가동시간 연장(새벽조출) 필요<br>`;
-      if(p==='파쇄') vh+=`· 파쇄: ${Math.round(gap).toLocaleString()}kg 부족 → 파쇄기 증설(2대) 또는 인원 증원 필요<br>`;
-      if(p==='자숙') vh+=`· 자숙: ${Math.round(gap).toLocaleString()}kg 부족 → 가동시간 연장 또는 가압 회전 증가<br>`;
+      if(p==='전처리'){
+        const machineRate=gap/o.preH; // 7h(=preH) 가동 시 부족분 메우는 설비 능력
+        const needWorkers=Math.ceil(c.need/(c.W.wPre*o.preH));
+        vh+=`· 전처리: ${Math.round(gap).toLocaleString()}kg 부족 → <strong>전처리 설비(절단기 등) 투자 필요</strong>. ${o.preH}h 가동 기준 <strong>최소 ${Math.round(machineRate).toLocaleString()} kg/hr</strong> 능력의 설비를 도입하면 ${o.preW}명으로 충족. (설비 없이 인력만이면 ${needWorkers}명 필요 — 주52시간·인건비 부담)<br>`;
+      }
+      if(p==='파쇄') vh+=`· 파쇄: ${Math.round(gap).toLocaleString()}kg 부족 → 파쇄기 증설(2대) 필요. 1대는 라인당 인원 상한(13명)에 묶여 인원을 늘려도 한계.<br>`;
+      if(p==='자숙') vh+=`· 자숙: ${Math.round(gap).toLocaleString()}kg 부족 → 배치 수 증가(새벽조출로 가압 회전 추가) 필요.<br>`;
     });
     vh+='</div>';
   }
