@@ -165,7 +165,7 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
 <div class="tab-nav">
   <button class="tnav active" onclick="goPage('cap',this)">📊 공정 CAPA 분석</button>
   <button class="tnav" onclick="goPage('max',this)">🚀 최대 CAPA·증산여력</button>
-  <button class="tnav" onclick="goPage('retort',this)">🔥 레토르트 순환</button>
+  <button class="tnav" onclick="goPage('retort',this)">⏱ 통합 타임테이블</button>
   <button class="tnav" onclick="goPage('data',this)">📦 물량·기준 데이터</button>
 </div>
 
@@ -236,30 +236,29 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
   </div>
 </div>
 
-<!-- ═══ 레토르트 순환 ═══ -->
+<!-- ═══ 통합 타임테이블 ═══ -->
 <div id="page-retort" class="page">
-  <div class="alert info">혼합생산일에 <strong>레토르트 3대</strong>가 막힘없이 순환되는지 시간축으로 확인합니다. 그날 생산할 제품과 봉수를 입력하면, 포장이 대차(1기분)를 채우는 시점에 맞춰 빈 레토르트에 투입 → 회전 → 배출되는 흐름을 시뮬레이션합니다. 투입 마감 <strong>20:30</strong> (FC는 냉장 이동, FP는 상온).</div>
-  <div class="section">
-    <div class="sec-hdr">🎛 그날 생산 입력 (봉수)</div>
-    <div class="sec-body">
-      <table class="tbl"><thead><tr><th>제품</th><th class="c">레토르트 1기</th><th class="c">회전</th><th class="c">포장</th><th class="r">생산 봉수</th></tr></thead><tbody id="rt-inputs"></tbody></table>
-      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
-        <label style="font-size:11px">레토르트 대수</label>
-        <select id="rt-machines" onchange="runRetort()" style="padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit"><option value="3" selected>3대</option><option value="2">2대</option><option value="4">4대(증설)</option></select>
-        <label style="font-size:11px">포장 시작</label>
-        <input type="number" id="rt-start" value="9" min="5" max="12" step="0.5" onchange="runRetort()" style="width:60px;padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px">시
-        <button onclick="runRetort()" style="background:var(--p);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">▶ 순환 시뮬레이션</button>
+  <div class="alert info">그날 생산할 제품·봉수를 입력하면 <strong>원육 총량</strong>이 환산되고, 각 공정의 인원·설비를 조절하면 <strong>처리시간(막대 길이)</strong>이 자동 계산됩니다. <strong>시작 시각은 직접 입력</strong>해 배치하세요. 투입 마감 20:30 기준.</div>
+  <div class="grid2">
+    <div class="section">
+      <div class="sec-hdr">📦 그날 생산 (제품·봉수, 최대 3품목)</div>
+      <div class="sec-body">
+        <table class="tbl"><thead><tr><th>제품</th><th class="c">부위</th><th class="r">봉수</th><th class="r">원육(kg)</th></tr></thead><tbody id="tt-prod"></tbody></table>
       </div>
+    </div>
+    <div class="section">
+      <div class="sec-hdr">⚖️ 원육 환산</div>
+      <div class="sec-body" id="tt-rawsum"></div>
     </div>
   </div>
   <div class="section">
-    <div class="sec-hdr">📊 순환 결과</div>
-    <div class="sec-body" id="rt-summary"></div>
+    <div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div>
+    <div class="sec-body" id="tt-controls"></div>
   </div>
   <div class="section">
-    <div class="sec-hdr">⏱ 레토르트 3대 타임라인</div>
+    <div class="sec-hdr">⏱ 공정 타임테이블</div>
     <div class="sec-body" style="padding:10px">
-      <div class="tt-wrap"><div class="tt" id="rt-canvas" style="min-height:140px"></div></div>
+      <div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div>
     </div>
   </div>
 </div>
@@ -362,7 +361,7 @@ function goPage(name,btn){
   btn.classList.add('active');
   if(name==='cap') runCap();
   if(name==='max') runMax();
-  if(name==='retort'){ renderRtInputs(); runRetort(); }
+  if(name==='retort'){ renderTTProd(); renderTTControls(); runTT(); }
   if(name==='data') renderData();
 }
 function setScenario(s,btn){
@@ -676,89 +675,99 @@ function buildTT(canvasId, lanes, timeStart, timeEnd, height) {
 }
 
 
-// ════════ 레토르트 순환 시뮬레이션 ════════
-var RT_DEFAULT={'FC 3kg':1461,'미니 70g':0,'130g 메추리알':0,'코스트코 170g':3539,'트레이더스 460g':0};
-function renderRtInputs(){
-  let h='';
-  PRODUCTS.forEach(function(p){
-    const def=RT_DEFAULT[p.name]||0;
-    h+='<tr><td>'+p.name+'</td><td class="c">'+p.rPerCycle+'봉</td><td class="c">'+p.rHr+'h</td><td class="c" style="font-size:10px">'+(PACK_LINES[p.name]||[]).map(function(l){return l.line+'('+l.speed+(l.max>1?'×'+l.max:'')+')';}).join(',')+'</td>'+
-      '<td class="r"><input type="text" value="'+def.toLocaleString()+'" data-rt="'+p.name+'" oninput="runRetort()" style="width:90px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td></tr>';
+// ════════ 통합 타임테이블 시뮬레이터 ════════
+var TT_PROD=['FC 3kg','코스트코 170g','미니 70g']; // 기본 3품목
+var TT_DEFAULT={'FC 3kg':1461,'코스트코 170g':3539,'미니 70g':0,'130g 메추리알':0,'트레이더스 460g':0};
+// 공정 시작시각(시) - 사용자 조절. 기본값은 병현님 원래 타임테이블 참고
+var TT_START={pre:5.0};
+var TT_WORK={pre:10}; // 인원/설비 조건
+
+function ttDayRaw(){
+  // 입력된 봉수 → 부위별 원육, 총원육
+  var parts={}, total=0, byProd=[];
+  document.querySelectorAll('#tt-prod input[data-ttp]').forEach(function(inp){
+    var name=inp.dataset.ttp;
+    var ea=parseInt(inp.value.replace(/[^0-9]/g,''))||0;
+    var p=PRODUCTS.find(function(x){return x.name===name;});
+    var raw=ea*rawPerEa(p)/1000;
+    if(ea>0){ parts[p.part]=(parts[p.part]||0)+raw; total+=raw; byProd.push({name:name,ea:ea,raw:raw,part:p.part}); }
   });
-  document.getElementById('rt-inputs').innerHTML=h;
-}
-function readRtItems(){
-  const items=[];
-  document.querySelectorAll('#rt-inputs input[data-rt]').forEach(function(inp){
-    const name=inp.dataset.rt;
-    const ea=parseInt(inp.value.replace(/[^0-9]/g,''))||0;
-    if(ea<=0) return;
-    const p=PRODUCTS.find(function(x){return x.name===name;});
-    const lines=PACK_LINES[name]||[{speed:15,max:1}];
-    const packRate=lines[0].speed*lines[0].max; // 개/분 (주력 라인)
-    items.push({name:name, ea:ea, packRate:packRate, perCycle:p.rPerCycle, rHr:p.rHr});
-  });
-  return items;
-}
-function simRetort(items, machineCount){
-  var events=[];
-  items.forEach(function(it){
-    var filled=0, t=0;
-    while(filled<it.ea){
-      var batch=Math.min(it.perCycle, it.ea-filled);
-      t += batch/it.packRate;
-      filled+=batch;
-      events.push({ready:t, name:it.name, perCycle:batch, rHr:it.rHr});
-    }
-  });
-  events.sort(function(a,b){return a.ready-b.ready;});
-  var free=new Array(machineCount).fill(0);
-  var log=[], maxWait=0, totalWait=0;
-  events.forEach(function(e){
-    var mi=0; for(var i=1;i<free.length;i++) if(free[i]<free[mi]) mi=i;
-    var start=Math.max(e.ready, free[mi]);
-    var wait=start-e.ready;
-    maxWait=Math.max(maxWait,wait); totalWait+=wait;
-    var end=start+e.rHr*60;
-    free[mi]=end;
-    log.push({machine:mi+1, name:e.name, ready:e.ready, start:start, end:end, wait:wait, rHr:e.rHr});
-  });
-  return {log:log, maxWait:maxWait, totalWait:totalWait, finishTime:Math.max.apply(null,free), cycles:events.length};
-}
-function runRetort(){
-  const items=readRtItems();
-  const machines=+document.getElementById('rt-machines').value;
-  const startH=+document.getElementById('rt-start').value;
-  if(items.length===0){ document.getElementById('rt-summary').innerHTML='<div class="alert info" style="margin:0">생산 봉수를 입력하세요.</div>'; document.getElementById('rt-canvas').innerHTML=''; return; }
-  const r=simRetort(items, machines);
-  const finishH=startH + r.finishTime/60;
-  const deadline=20.5;
-  const ok=finishH<=deadline && r.maxWait<60;
-  // 요약
-  let h='<div class="kpi-row">';
-  h+='<div class="kpi"><div class="kl">총 기수</div><div class="kv">'+r.cycles+'</div><div class="ks">기</div></div>';
-  h+='<div class="kpi" style="--accent:'+(finishH<=deadline?'var(--ok)':'var(--bad)')+'"><div class="kl">마지막 배출</div><div class="kv">'+finishH.toFixed(1)+'</div><div class="ks">시 (마감 20:30)</div></div>';
-  h+='<div class="kpi" style="--accent:'+(r.maxWait<60?'var(--ok)':'var(--warn)')+'"><div class="kl">최대 대기</div><div class="kv">'+Math.round(r.maxWait)+'</div><div class="ks">분</div></div>';
-  h+='<div class="kpi" style="--accent:var(--mid)"><div class="kl">총 대기</div><div class="kv">'+Math.round(r.totalWait)+'</div><div class="ks">분</div></div>';
-  h+='</div>';
-  h+='<div class="alert '+(ok?'ok':'warn')+'" style="margin-top:8px;margin-bottom:0">'+
-    (ok?'레토르트 '+machines+'대로 <strong>막힘없이 순환</strong>됩니다. 마지막 배출 '+finishH.toFixed(1)+'시로 마감(20:30) 이내.':
-    '⚠ '+(finishH>deadline?'마지막 배출 '+finishH.toFixed(1)+'시로 마감(20:30) 초과. ':'')+(r.maxWait>=60?'최대 대기 '+Math.round(r.maxWait)+'분 발생. ':'')+'레토르트 대수 증설 또는 물량 조정 검토.')+'</div>';
-  document.getElementById('rt-summary').innerHTML=h;
-  // 타임라인: 레토르트 대별 레인
-  const colors={'FC 3kg':'#ED7D31','미니 70g':'#5B9BD5','130g 메추리알':'#1D9E75','코스트코 170g':'#8064A2','트레이더스 460g':'#C00000'};
-  const lanes=[];
-  for(let m=1;m<=machines;m++){
-    const bars=r.log.filter(function(l){return l.machine===m;}).map(function(l){
-      return {s:(startH*60+l.start), e:(startH*60+l.end), color:colors[l.name]||'#888', label:l.name.slice(0,4), note:l.wait>1?'대기 '+Math.round(l.wait)+'분':''};
-    });
-    lanes.push({label:'레토르트 '+m, bars:bars});
-  }
-  const endH=Math.max(21, Math.ceil(finishH)+1);
-  buildTT('rt-canvas', lanes, startH, endH, machines*34+44);
+  return {parts:parts, total:total, byProd:byProd};
 }
 
-window.addEventListener('DOMContentLoaded',()=>{ runCap(); renderRtInputs(); });
+function renderTTProd(){
+  var h='';
+  TT_PROD.forEach(function(name){
+    var p=PRODUCTS.find(function(x){return x.name===name;});
+    var def=TT_DEFAULT[name]||0;
+    h+='<tr><td>'+name+'</td><td class="c">'+p.part+'</td>'+
+      '<td class="r"><input type="text" value="'+def.toLocaleString()+'" data-ttp="'+name+'" oninput="runTT()" style="width:90px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td>'+
+      '<td class="r" id="ttraw-'+name.replace(/[^a-zA-Z0-9]/g,'')+'">-</td></tr>';
+  });
+  // 품목 선택 (3개)
+  h+='<tr><td colspan="4" style="font-size:10px;color:var(--sub);padding-top:8px">품목 변경: '+
+    PRODUCTS.map(function(p){return '<label style="margin-right:10px;cursor:pointer"><input type="checkbox" '+(TT_PROD.indexOf(p.name)>=0?'checked':'')+' onchange="toggleTTProd(\''+p.name+'\')"> '+p.name+'</label>';}).join('')+
+    ' <span style="color:var(--bad)">(최대 3품목)</span></td></tr>';
+  document.getElementById('tt-prod').innerHTML=h;
+}
+function toggleTTProd(name){
+  var i=TT_PROD.indexOf(name);
+  if(i>=0){ TT_PROD.splice(i,1); }
+  else { if(TT_PROD.length>=3){ alert('최대 3품목까지만 동시 생산 가능합니다.'); return; } TT_PROD.push(name); }
+  renderTTProd(); runTT();
+}
+
+function renderTTControls(){
+  // 1단계: 전처리만. 인원 조절 + 시작시각 입력
+  var h='<table class="tbl"><thead><tr><th>공정</th><th class="c">인원/설비</th><th class="c">시작시각</th><th class="r">처리시간</th><th class="r">종료</th></tr></thead><tbody>';
+  h+='<tr><td>전처리</td>'+
+    '<td class="c"><input type="number" id="tt-prew" value="'+TT_WORK.pre+'" min="1" max="20" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명</td>'+
+    '<td class="c"><input type="number" id="tt-pres" value="'+TT_START.pre+'" min="0" max="23" step="0.5" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td>'+
+    '<td class="r" id="tt-pretime">-</td><td class="r" id="tt-preend">-</td></tr>';
+  h+='</tbody></table>';
+  document.getElementById('tt-controls').innerHTML=h;
+}
+
+function fmtH(h){var hh=Math.floor(h),mm=Math.round((h-hh)*60);return (hh%24)+':' + (mm<10?'0':'')+mm;}
+
+function runTT(){
+  var d=ttDayRaw();
+  // 원육 환산 표 갱신
+  d.byProd.forEach(function(it){
+    var el=document.getElementById('ttraw-'+it.name.replace(/[^a-zA-Z0-9]/g,''));
+    if(el) el.textContent=Math.round(it.raw).toLocaleString();
+  });
+  TT_PROD.forEach(function(name){
+    if(!d.byProd.find(function(x){return x.name===name;})){
+      var el=document.getElementById('ttraw-'+name.replace(/[^a-zA-Z0-9]/g,'')); if(el)el.textContent='-';
+    }
+  });
+  // 원육 환산 요약
+  var sum='<div class="kpi-row"><div class="kpi" style="--accent:var(--p)"><div class="kl">총 투입 원육</div><div class="kv">'+Math.round(d.total).toLocaleString()+'</div><div class="ks">kg</div></div>';
+  Object.keys(d.parts).forEach(function(part){
+    sum+='<div class="kpi" style="--accent:var(--mid)"><div class="kl">'+part+'</div><div class="kv" style="font-size:16px">'+Math.round(d.parts[part]).toLocaleString()+'</div><div class="ks">kg</div></div>';
+  });
+  sum+='</div>';
+  document.getElementById('tt-rawsum').innerHTML=sum;
+
+  // 전처리 처리시간 = 부위별 순차 처리시간 합
+  var prew=+document.getElementById('tt-prew').value||1;
+  var preStart=+document.getElementById('tt-pres').value||0;
+  var preTime=0;
+  Object.keys(d.parts).forEach(function(part){
+    preTime += d.parts[part]/(prew*YIELD[part].pre);
+  });
+  var preEnd=preStart+preTime;
+  document.getElementById('tt-pretime').textContent=preTime.toFixed(1)+'h';
+  document.getElementById('tt-preend').textContent=fmtH(preEnd);
+  TT_WORK.pre=prew; TT_START.pre=preStart;
+
+  // 타임라인
+  var lanes=[{label:'전처리<br>('+prew+'명)', bars:[{s:preStart*60, e:preEnd*60, color:'#2F5496', label:'전처리 '+preTime.toFixed(1)+'h', note:Math.round(d.total)+'kg'}]}];
+  var endH=Math.max(20, Math.ceil(preEnd)+1);
+  buildTT('tt-canvas2', lanes, Math.min(preStart,5), endH, lanes.length*34+44);
+}
+window.addEventListener('DOMContentLoaded',()=>{ runCap(); });
 </script>
 </body>
 </html>
