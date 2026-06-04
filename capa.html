@@ -271,7 +271,7 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
     <div class="sec-body" id="tt-controls"></div>
   </div>
   <div class="section">
-    <div class="sec-hdr">⏱ 공정 타임테이블</div>
+    <div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span></div>
     <div class="sec-body" style="padding:10px">
       <div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div>
     </div>
@@ -1177,6 +1177,16 @@ function runTT(){
     else if(rtMaxEnd>0){ lateMsg=' <span style="color:var(--ok)">레토르트 종료 '+fmtH(rtMaxEnd)+' (마감 20:30 이내)</span>'; }
     rbalEl.innerHTML='레토르트 현황: '+(parts2||'제품을 입력하세요')+lateMsg;
   }
+
+  // 총원 합산 (각 공정별 인원)
+  var laborPre=prew;
+  var laborCook=TT_LABOR.cook;
+  var laborFrag=0; TT_FRAG.forEach(function(f){ if(f.use) laborFrag+=(f.workers||0); });
+  var laborPack=0; TT_PACK.forEach(function(pk){ if(pk.use) laborPack+=(pk.labor||0); });
+  var laborRt=TT_LABOR.retort;
+  var total=laborPre+laborCook+laborFrag+laborPack+laborRt;
+  var tlEl=document.getElementById('tt-totallabor');
+  if(tlEl){ tlEl.innerHTML='· 총원 '+total+'명 [전처리 '+laborPre+' / 자숙 '+laborCook+' / 파쇄 '+laborFrag+' / 포장 '+laborPack+' / 레토르트 '+laborRt+']'; }
 
   var endH=Math.max(20, Math.ceil(maxEnd)+1);
   buildTT('tt-canvas2', lanes, Math.min(preStart,5), endH, lanes.length*42+44);
