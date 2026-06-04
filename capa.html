@@ -698,6 +698,13 @@ var TT_FRAG=[
   {line:2, workers:10, use:true, segs:[{part:'우둔', kg:0, start:9.5}]},
 ];
 var FRAG_PERLINE_MAX=13;
+// 포장 4호기: 호기별 속도(ea/min, 직접입력) + 작업구간(제품·봉수·시작시각)
+var TT_PACK=[
+  {line:'1호기', speed:55, use:true, segs:[{prod:'미니 70g', ea:0, start:9.5}]},
+  {line:'2호기', speed:15, use:true, segs:[{prod:'FC 3kg', ea:0, start:9.5}]},
+  {line:'3호기', speed:36, use:true, segs:[{prod:'코스트코 170g', ea:0, start:9.5}]},
+  {line:'4호기', speed:36, use:true, segs:[{prod:'코스트코 170g', ea:0, start:9.5}]},
+];
 
 function ttDayRaw(){
   // 입력된 봉수 → 부위별 원육, 총원육
@@ -782,8 +789,46 @@ function renderTTControls(){
   h+='<tr><td colspan="5" style="padding:6px 8px;font-size:10px;color:var(--sub)">파쇄 생산성(kg/인시) 조정: '+
     ['홍두깨','설도','우둔'].map(function(pt){return pt+' <input type="number" id="tt-fragprod-'+pt+'" value="'+FRAG_PROD[pt]+'" step="0.1" min="1" oninput="updateFragProd()" style="width:56px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right;margin-right:10px">';}).join('')+
     '</td></tr>';
+  // 포장 4호기
+  h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">포장 (호기별 속도 직접 입력 · 제품을 구간으로 배치 · 라인 유연 운영)</td></tr>';
+  TT_PACK.forEach(function(pk,i){
+    h+='<tr><td>'+pk.line+'</td>'+
+      '<td class="c"><input type="number" id="tt-packspd-'+i+'" value="'+pk.speed+'" min="1" oninput="runTT()" style="width:54px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">ea/min</td>'+
+      '<td class="c"><label style="font-size:9px"><input type="checkbox" id="tt-packuse-'+i+'" '+(pk.use?'checked':'')+' onchange="runTT()">사용</label> <button onclick="addPackSeg('+i+')" style="font-size:10px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer;font-family:inherit">+구간</button></td>'+
+      '<td class="r" id="tt-packtime-'+i+'" colspan="2">-</td></tr>';
+    pk.segs.forEach(function(sg,j){
+      var prodOpts=PRODUCTS.map(function(p){return '<option value="'+p.name+'"'+(sg.prod===p.name?' selected':'')+'>'+p.name+'</option>';}).join('');
+      h+='<tr style="background:#fafbff"><td style="padding-left:18px;font-size:10px;color:var(--sub)">└ 구간 '+(j+1)+'</td>'+
+        '<td class="c"><select id="tt-packseg-prod-'+i+'-'+j+'" onchange="runTT()" style="padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit">'+prodOpts+'</select></td>'+
+        '<td class="c"><input type="number" id="tt-packseg-start-'+i+'-'+j+'" value="'+sg.start+'" min="0" max="23" step="0.5" oninput="runTT()" title="시작시각" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td>'+
+        '<td class="r"><input type="text" id="tt-packseg-ea-'+i+'-'+j+'" value="'+(sg.ea||0).toLocaleString()+'" oninput="runTT()" title="포장 봉수" style="width:80px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right">봉</td>'+
+        '<td class="r" id="tt-packseg-time-'+i+'-'+j+'">'+(pk.segs.length>1?'<button onclick="delPackSeg('+i+','+j+')" style="font-size:9px;padding:1px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer">삭제</button>':'')+'</td></tr>';
+    });
+  });
+  h+='<tr><td colspan="5" id="tt-packbalance" style="padding:6px 8px;font-size:10px;color:var(--sub)"></td></tr>';
   h+='</tbody></table>';
   document.getElementById('tt-controls').innerHTML=h;
+}
+function addPackSeg(i){
+  if(TT_PACK[i].segs.length>=4){ alert('구간은 호기당 최대 4개입니다.'); return; }
+  var last=TT_PACK[i].segs[TT_PACK[i].segs.length-1];
+  TT_PACK[i].segs.push({prod:last.prod, ea:0, start:+(last.start+1).toFixed(1)});
+  syncPackFromDOM(); renderTTControls(); runTT();
+}
+function delPackSeg(i,j){
+  TT_PACK[i].segs.splice(j,1);
+  syncPackFromDOM(); renderTTControls(); runTT();
+}
+function syncPackFromDOM(){
+  TT_PACK.forEach(function(pk,i){
+    var spd=document.getElementById('tt-packspd-'+i); if(spd)pk.speed=+spd.value||pk.speed;
+    var u=document.getElementById('tt-packuse-'+i); if(u)pk.use=u.checked;
+    pk.segs.forEach(function(sg,j){
+      var pe=document.getElementById('tt-packseg-prod-'+i+'-'+j); if(pe&&pe.value)sg.prod=pe.value;
+      var se=document.getElementById('tt-packseg-start-'+i+'-'+j); if(se)sg.start=+se.value||sg.start;
+      var ee=document.getElementById('tt-packseg-ea-'+i+'-'+j); if(ee)sg.ea=parseInt(String(ee.value).replace(/[^0-9]/g,''))||0;
+    });
+  });
 }
 function addFragSeg(i){
   if(TT_FRAG[i].segs.length>=3){ alert('구간은 라인당 최대 3개입니다.'); return; }
@@ -947,6 +992,42 @@ function runTT(){
       return part+' 자숙육 '+Math.round(total).toLocaleString()+'kg 중 <strong>'+Math.round(alloc).toLocaleString()+'kg</strong> 배분 <span style="color:'+color+'">('+(diff>0?'미배분 '+Math.round(diff).toLocaleString():diff<0?'초과 '+Math.round(-diff).toLocaleString():'완료')+')</span>';
     }).join(' · ');
     balEl.innerHTML='파쇄 배분 현황: '+(bal||'제품을 입력하세요');
+  }
+
+  // 포장 4호기: 제품별 봉수를 호기 구간에 배분
+  var packAlloc={}; // 제품별 배분 봉수
+  TT_PACK.forEach(function(pk,i){
+    var spdEl=document.getElementById('tt-packspd-'+i); var speed=spdEl?(+spdEl.value||1):pk.speed;
+    var useEl=document.getElementById('tt-packuse-'+i); var use=useEl?useEl.checked:pk.use;
+    pk.speed=speed; pk.use=use;
+    var bars=[]; var lineInfo=[];
+    pk.segs.forEach(function(sg,j){
+      var pe=document.getElementById('tt-packseg-prod-'+i+'-'+j); var prod=pe&&pe.value?pe.value:sg.prod;
+      var se=document.getElementById('tt-packseg-start-'+i+'-'+j); var start=se?(+se.value||0):sg.start;
+      var ee=document.getElementById('tt-packseg-ea-'+i+'-'+j); var ea=ee?(parseInt(String(ee.value).replace(/[^0-9]/g,''))||0):(sg.ea||0);
+      pk.segs[j]={prod:prod, ea:ea, start:start};
+      packAlloc[prod]=(packAlloc[prod]||0)+ea;
+      var time = (ea>0 && speed>0) ? ea/(speed*60) : 0; // 시간
+      var end=start+time;
+      if(use && ea>0){
+        bars.push({s:start*60, e:end*60, color:'#C00000', label:prod.slice(0,5)+' '+time.toFixed(1)+'h', note:ea.toLocaleString()+'봉'});
+        lineInfo.push(prod.slice(0,5)+' '+time.toFixed(1)+'h');
+        maxEnd=Math.max(maxEnd,end);
+      }
+    });
+    var tEl=document.getElementById('tt-packtime-'+i);
+    if(tEl){ tEl.innerHTML = (use && lineInfo.length) ? lineInfo.join(' → ') : (use?'봉수 미입력':'미사용'); }
+    lanes.push({label:pk.line, bars: use?bars:[]});
+  });
+  // 포장 배분 현황 (그날 제품 봉수 대비)
+  var pbalEl=document.getElementById('tt-packbalance');
+  if(pbalEl){
+    var pbal=d.byProd.map(function(it){
+      var alloc=packAlloc[it.name]||0, diff=it.ea-alloc;
+      var color=Math.abs(diff)<it.ea*0.02?'var(--ok)':(diff>0?'var(--warn)':'var(--bad)');
+      return it.name+' '+it.ea.toLocaleString()+'봉 중 <strong>'+alloc.toLocaleString()+'봉</strong> <span style="color:'+color+'">('+(diff>0?'미배분 '+diff.toLocaleString():diff<0?'초과 '+(-diff).toLocaleString():'완료')+')</span>';
+    }).join(' · ');
+    pbalEl.innerHTML='포장 배분 현황: '+(pbal||'제품을 입력하세요');
   }
 
   var endH=Math.max(20, Math.ceil(maxEnd)+1);
