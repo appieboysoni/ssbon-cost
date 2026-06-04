@@ -692,10 +692,10 @@ function buildTT(canvasId, lanes, timeStart, timeEnd, height) {
           position:'absolute',
           left: (140 + x) + 'px',
           width: w + 'px',
-          top: (top + 28) + 'px',
-          height: '11px',
-          fontSize: '8px',
-          color: '#888',
+          top: (top + 29) + 'px',
+          height: '12px',
+          fontSize: '9.5px',
+          color: '#777',
           textAlign: 'center',
           whiteSpace: 'nowrap',
           overflow: 'visible',
@@ -724,6 +724,9 @@ var TT_COOK=[
   {tank:6, mode:'가압', use:true, starts:[8.0]},
 ];
 var COOK_HR={'상압':4.5,'가압':2.5};
+// 표시용 인원(CAPA·시간 계산엔 영향 없음, 타임테이블 좌측 축 표기용)
+var TT_LABOR={cook:3, retort:2}; // 자숙 그룹, 레토르트 그룹 인원
+// 포장 호기별 표시용 인원 (TT_PACK에 labor 필드로)
 // 파쇄 2라인: 라인당 인원 + 작업구간(부위·물량·시작시각) 배열
 var FRAG_PROD={'홍두깨':23.0,'설도':30.0,'우둔':21.4}; // 부위별 파쇄 생산성(kg/인시), 직접조정
 var TT_FRAG=[
@@ -733,10 +736,10 @@ var TT_FRAG=[
 var FRAG_PERLINE_MAX=13;
 // 포장 4호기: 호기별 속도(ea/min, 직접입력) + 작업구간(제품·봉수·시작시각)
 var TT_PACK=[
-  {line:'1호기', speed:55, use:true, segs:[{prod:'미니 70g', ea:0, start:9.5}]},
-  {line:'2호기', speed:15, use:true, segs:[{prod:'FC 3kg', ea:0, start:9.5}]},
-  {line:'3호기', speed:36, use:true, segs:[{prod:'코스트코 170g', ea:0, start:9.5}]},
-  {line:'4호기', speed:36, use:true, segs:[{prod:'코스트코 170g', ea:0, start:9.5}]},
+  {line:'1호기', speed:55, labor:3, use:true, segs:[{prod:'미니 70g', ea:0, start:9.5}]},
+  {line:'2호기', speed:15, labor:3, use:true, segs:[{prod:'FC 3kg', ea:0, start:9.5}]},
+  {line:'3호기', speed:36, labor:3, use:true, segs:[{prod:'코스트코 170g', ea:0, start:9.5}]},
+  {line:'4호기', speed:36, labor:3, use:true, segs:[{prod:'코스트코 170g', ea:0, start:9.5}]},
 ];
 // 레토르트: 기본 3대(+예비 4대까지). 각 대에 작업구간(제품·기수·시작시각). 1기 봉수·회전시간은 제품에서 가져옴
 var TT_RETORT=[
@@ -789,7 +792,7 @@ function renderTTControls(){
     '<td class="c"><input type="number" id="tt-pres" value="'+TT_START.pre+'" min="0" max="23" step="0.5" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td>'+
     '<td class="r" id="tt-pretime">-</td><td class="r" id="tt-preend">-</td></tr>';
   // 자숙 탱크 6개
-  h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">자숙 탱크 (1~4호기 상압전용 / 5·6호기 가압·상압 선택) · 800kg/탱크</td></tr>';
+  h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">자숙 탱크 (1~4호기 상압전용 / 5·6호기 가압·상압 선택) · 800kg/탱크 · 인원 <input type="number" id="tt-cooklabor" value="'+TT_LABOR.cook+'" min="0" max="20" oninput="runTT()" style="width:42px;padding:2px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명</td></tr>';
   TT_COOK.forEach(function(c,i){
     var selectable=(c.tank>=5);
     var modeCell = selectable
@@ -833,7 +836,7 @@ function renderTTControls(){
   h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">포장 (호기별 속도 직접 입력 · 제품을 구간으로 배치 · 라인 유연 운영)</td></tr>';
   TT_PACK.forEach(function(pk,i){
     h+='<tr><td>'+pk.line+'</td>'+
-      '<td class="c"><input type="number" id="tt-packspd-'+i+'" value="'+pk.speed+'" min="1" oninput="runTT()" style="width:54px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">ea/min</td>'+
+      '<td class="c"><input type="number" id="tt-packspd-'+i+'" value="'+pk.speed+'" min="1" oninput="runTT()" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">ea/min <input type="number" id="tt-packlabor-'+i+'" value="'+(pk.labor||0)+'" min="0" max="20" oninput="runTT()" title="인원(표시용)" style="width:40px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명</td>'+
       '<td class="c"><label style="font-size:9px"><input type="checkbox" id="tt-packuse-'+i+'" '+(pk.use?'checked':'')+' onchange="runTT()">사용</label> <button onclick="addPackSeg('+i+')" style="font-size:10px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer;font-family:inherit">+구간</button></td>'+
       '<td class="r" id="tt-packtime-'+i+'" colspan="2">-</td></tr>';
     pk.segs.forEach(function(sg,j){
@@ -847,7 +850,7 @@ function renderTTControls(){
   });
   h+='<tr><td colspan="5" id="tt-packbalance" style="padding:6px 8px;font-size:10px;color:var(--sub)"></td></tr>';
   // 레토르트 (기본 3대 + 예비 4대). 1기 봉수·회전시간은 제품 기준
-  h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">레토르트 (기본 3대 · 4호기는 증설 검토용) · 1기 봉수/회전시간은 제품 기준 (FC 384봉·2.5h / FP 30mm 4096~5120봉·1.25h)</td></tr>';
+  h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">레토르트 (기본 3대 · 4호기는 증설 검토용) · 1기 봉수/회전시간은 제품 기준 (FC 384봉·2.5h / FP 30mm 4096~5120봉·1.25h) · 인원 <input type="number" id="tt-rtlabor" value="'+TT_LABOR.retort+'" min="0" max="20" oninput="runTT()" style="width:42px;padding:2px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명</td></tr>';
   TT_RETORT.forEach(function(rt,i){
     h+='<tr><td>'+rt.line+'</td>'+
       '<td class="c"><label style="font-size:9px"><input type="checkbox" id="tt-rtuse-'+i+'" '+(rt.use?'checked':'')+' onchange="runTT()">사용</label></td>'+
@@ -900,6 +903,7 @@ function syncPackFromDOM(){
   TT_PACK.forEach(function(pk,i){
     var spd=document.getElementById('tt-packspd-'+i); if(spd)pk.speed=+spd.value||pk.speed;
     var u=document.getElementById('tt-packuse-'+i); if(u)pk.use=u.checked;
+    var lb=document.getElementById('tt-packlabor-'+i); if(lb)pk.labor=+lb.value||0;
     pk.segs.forEach(function(sg,j){
       var pe=document.getElementById('tt-packseg-prod-'+i+'-'+j); if(pe&&pe.value)sg.prod=pe.value;
       var se=document.getElementById('tt-packseg-start-'+i+'-'+j); if(se)sg.start=+se.value||sg.start;
@@ -998,6 +1002,8 @@ function runTT(){
   var maxEnd=preEnd;
 
   // 자숙 탱크 6개
+  var cookLabor=document.getElementById('tt-cooklabor'); TT_LABOR.cook=cookLabor?(+cookLabor.value||0):TT_LABOR.cook;
+  lanes.push({label:'<strong>자숙 ('+TT_LABOR.cook+'명)</strong>', bars:[]});
   TT_COOK.forEach(function(c,i){
     var useEl=document.getElementById('tt-cookuse-'+i);
     var use=useEl?useEl.checked:c.use;
@@ -1072,7 +1078,7 @@ function runTT(){
       if(use && lineInfo.length){ tEl.innerHTML=lineInfo.join(' → ')+(workers>FRAG_PERLINE_MAX?' <span style="color:var(--bad)">⚠13명초과</span>':''); }
       else { tEl.textContent= use?'구간 미설정':'미사용'; }
     }
-    lanes.push({label:'파쇄 '+f.line+'라인', bars: use?bars:[]});
+    lanes.push({label:'파쇄 '+f.line+'라인<br>('+workers+'명)', bars: use?bars:[]});
   });
   // 부위별 배분 현황
   var balEl=document.getElementById('tt-fragbalance');
@@ -1090,7 +1096,8 @@ function runTT(){
   TT_PACK.forEach(function(pk,i){
     var spdEl=document.getElementById('tt-packspd-'+i); var speed=spdEl?(+spdEl.value||1):pk.speed;
     var useEl=document.getElementById('tt-packuse-'+i); var use=useEl?useEl.checked:pk.use;
-    pk.speed=speed; pk.use=use;
+    var laborEl=document.getElementById('tt-packlabor-'+i); var labor=laborEl?(+laborEl.value||0):(pk.labor||0);
+    pk.speed=speed; pk.use=use; pk.labor=labor;
     var bars=[]; var lineInfo=[];
     pk.segs.forEach(function(sg,j){
       var pe=document.getElementById('tt-packseg-prod-'+i+'-'+j); var prod=pe&&pe.value?pe.value:sg.prod;
@@ -1108,7 +1115,7 @@ function runTT(){
     });
     var tEl=document.getElementById('tt-packtime-'+i);
     if(tEl){ tEl.innerHTML = (use && lineInfo.length) ? lineInfo.join(' → ') : (use?'봉수 미입력':'미사용'); }
-    lanes.push({label:pk.line, bars: use?bars:[]});
+    lanes.push({label:'포장 '+pk.line+'<br>('+labor+'명)', bars: use?bars:[]});
   });
   // 포장 배분 현황 (그날 제품 봉수 대비)
   var pbalEl=document.getElementById('tt-packbalance');
@@ -1129,6 +1136,8 @@ function runTT(){
     rtNeed[it.name]=Math.ceil(it.ea/p.rPerCycle);
   });
   var rtMaxEnd=0;
+  var rtLabor=document.getElementById('tt-rtlabor'); TT_LABOR.retort=rtLabor?(+rtLabor.value||0):TT_LABOR.retort;
+  lanes.push({label:'<strong>레토르트 ('+TT_LABOR.retort+'명)</strong>', bars:[]});
   TT_RETORT.forEach(function(rt,i){
     var useEl=document.getElementById('tt-rtuse-'+i); var use=useEl?useEl.checked:rt.use;
     rt.use=use;
@@ -1187,6 +1196,9 @@ function initFB(){
 // 현재 타임테이블 상태 전부 수집
 function collectTTState(){
   syncFragFromDOM(); syncPackFromDOM(); syncRtFromDOM();
+  // 인원(표시용) DOM에서 갱신
+  var clEl=document.getElementById('tt-cooklabor'); if(clEl)TT_LABOR.cook=+clEl.value||0;
+  var rlEl=document.getElementById('tt-rtlabor'); if(rlEl)TT_LABOR.retort=+rlEl.value||0;
   // 제품 봉수
   var prod={};
   document.querySelectorAll('#tt-prod input[data-ttp]').forEach(function(inp){ prod[inp.dataset.ttp]=parseInt(String(inp.value).replace(/[^0-9]/g,''))||0; });
@@ -1195,6 +1207,7 @@ function collectTTState(){
     products:TT_PROD.slice(),
     prodEa:prod,
     pre:{w:+document.getElementById('tt-prew').value||10, s:+document.getElementById('tt-pres').value||5},
+    labor:JSON.parse(JSON.stringify(TT_LABOR)),
     cook:JSON.parse(JSON.stringify(TT_COOK)),
     frag:JSON.parse(JSON.stringify(TT_FRAG)),
     fragProd:JSON.parse(JSON.stringify(FRAG_PROD)),
@@ -1212,6 +1225,7 @@ function applyTTState(st){
   if(st.fragProd) FRAG_PROD=st.fragProd;
   if(st.pack) TT_PACK=st.pack;
   if(st.retort) TT_RETORT=st.retort;
+  if(st.labor) TT_LABOR=st.labor;
   renderTTProd(); renderTTControls();
   // 전처리 인원·시각
   if(st.pre){ var pw=document.getElementById('tt-prew'); if(pw)pw.value=st.pre.w; var ps=document.getElementById('tt-pres'); if(ps)ps.value=st.pre.s; }
