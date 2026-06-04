@@ -266,10 +266,10 @@ var YIELD={
 };
 var PRODUCTS=[
   {name:'FC 3kg',       ea:32141,  meat:1350, units:1, part:'홍두깨', line:'2호기',  speed:15, maxLines:1, grow:false, tray:'80mm', rPerCycle:384,  rHr:2.5},
-  {name:'미니 70g',      ea:165029, meat:24,   units:1, part:'설도',  line:'1호기',  speed:55, maxLines:1, grow:true,  tray:'30mm', rPerCycle:5120, rHr:1.5},
-  {name:'130g 메추리알',  ea:60950,  meat:25,   units:1, part:'설도',  line:'3·4호기',speed:36, maxLines:2, grow:true,  tray:'30mm', rPerCycle:4096, rHr:1.5},
-  {name:'코스트코 170g',  ea:77864,  meat:54,   units:4, part:'우둔',  line:'3·4호기',speed:36, maxLines:2, grow:true,  tray:'30mm', rPerCycle:4096, rHr:1.5},
-  {name:'트레이더스 460g',ea:14905,  meat:147.2,units:1, part:'설도',  line:'2호기',  speed:15, maxLines:1, grow:false, tray:'50mm', rPerCycle:1520, rHr:1.5},
+  {name:'미니 70g',      ea:165029, meat:24,   units:1, part:'설도',  line:'1호기',  speed:55, maxLines:1, grow:true,  tray:'30mm', rPerCycle:5120, rHr:1.25},
+  {name:'130g 메추리알',  ea:60950,  meat:25,   units:1, part:'설도',  line:'3·4호기',speed:36, maxLines:2, grow:true,  tray:'30mm', rPerCycle:4096, rHr:1.25},
+  {name:'코스트코 170g',  ea:77864,  meat:54,   units:4, part:'우둔',  line:'3·4호기',speed:36, maxLines:2, grow:true,  tray:'30mm', rPerCycle:4096, rHr:1.25},
+  {name:'트레이더스 460g',ea:14905,  meat:147.2,units:1, part:'설도',  line:'2호기',  speed:15, maxLines:1, grow:false, tray:'50mm', rPerCycle:1520, rHr:1.25},
 ];
 function rawPerEa(p){const y=YIELD[p.part];return (p.meat*p.units)/y.fragY/y.cook/y.preY;}
 function totRaw(p){return p.ea*rawPerEa(p)/1000;} // kg
@@ -407,7 +407,7 @@ function runCap(){
     전처리:`${o.preW}명 × ${W.wPre.toFixed(0)}kg/인시 × ${o.preH}h (원육 직접 처리)`,
     자숙:`${o.cookBatch}배치 × 800kg (탱크 투입 원육)`,
     파쇄:`${o.fragM}대 × ${c.perLine.toFixed(0)}명(라인당) × ${W.wFrag.toFixed(0)}kg/인시 × ${o.fragH}h = 자숙육 ${Math.round(fragCookKg).toLocaleString()}kg 처리${o.fragW>c.perLine*o.fragM?` · 입력 ${o.fragW}명 중 ${Math.round(c.perLine*o.fragM)}명 유효(나머지 포장지원)`:''}`,
-    레토르트:`3대(80mm FC는 ${o.retortUpg?'증설3대':'현재2대'}) · 제품 믹스 가중 · 회전 ${o.packH}h 기준 (제품마다 트레이·봉수 달라 가중평균)`,
+    레토르트:`3대 · FC(80mm·384봉/기·2.5h)는 ${o.retortUpg?'3대':'2대'} 사용 · FP(30mm·4~5천봉/기·1.25h) · 회전 ${o.packH}h 기준 믹스 가중 (혼합일 3대로 순환 가능)`,
   };
   let html='';
   procs.forEach(p=>{
