@@ -705,6 +705,13 @@ var TT_PACK=[
   {line:'3호기', speed:36, use:true, segs:[{prod:'코스트코 170g', ea:0, start:9.5}]},
   {line:'4호기', speed:36, use:true, segs:[{prod:'코스트코 170g', ea:0, start:9.5}]},
 ];
+// 레토르트: 기본 3대(+예비 4대까지). 각 대에 작업구간(제품·기수·시작시각). 1기 봉수·회전시간은 제품에서 가져옴
+var TT_RETORT=[
+  {line:'레토르트1', use:true, segs:[{prod:'FC 3kg', cycles:1, start:11.0}]},
+  {line:'레토르트2', use:true, segs:[{prod:'FC 3kg', cycles:1, start:11.5}]},
+  {line:'레토르트3', use:true, segs:[{prod:'코스트코 170g', cycles:1, start:11.0}]},
+  {line:'레토르트4', use:false, segs:[{prod:'FC 3kg', cycles:1, start:11.0}]},
+];
 
 function ttDayRaw(){
   // 입력된 봉수 → 부위별 원육, 총원육
@@ -806,8 +813,45 @@ function renderTTControls(){
     });
   });
   h+='<tr><td colspan="5" id="tt-packbalance" style="padding:6px 8px;font-size:10px;color:var(--sub)"></td></tr>';
+  // 레토르트 (기본 3대 + 예비 4대). 1기 봉수·회전시간은 제품 기준
+  h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">레토르트 (기본 3대 · 4호기는 증설 검토용) · 1기 봉수/회전시간은 제품 기준 (FC 384봉·2.5h / FP 30mm 4096~5120봉·1.25h)</td></tr>';
+  TT_RETORT.forEach(function(rt,i){
+    h+='<tr><td>'+rt.line+'</td>'+
+      '<td class="c"><label style="font-size:9px"><input type="checkbox" id="tt-rtuse-'+i+'" '+(rt.use?'checked':'')+' onchange="runTT()">사용</label></td>'+
+      '<td class="c"><button onclick="addRtSeg('+i+')" style="font-size:10px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer;font-family:inherit">+구간</button></td>'+
+      '<td class="r" id="tt-rttime-'+i+'" colspan="2">-</td></tr>';
+    rt.segs.forEach(function(sg,j){
+      var prodOpts=PRODUCTS.map(function(p){return '<option value="'+p.name+'"'+(sg.prod===p.name?' selected':'')+'>'+p.name+'</option>';}).join('');
+      h+='<tr style="background:#fafbff"><td style="padding-left:18px;font-size:10px;color:var(--sub)">└ 구간 '+(j+1)+'</td>'+
+        '<td class="c"><select id="tt-rtseg-prod-'+i+'-'+j+'" onchange="runTT()" style="padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit">'+prodOpts+'</select></td>'+
+        '<td class="c"><input type="number" id="tt-rtseg-start-'+i+'-'+j+'" value="'+sg.start+'" min="0" max="24" step="0.25" oninput="runTT()" title="투입시각" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td>'+
+        '<td class="r"><input type="number" id="tt-rtseg-cyc-'+i+'-'+j+'" value="'+(sg.cycles||1)+'" min="1" max="6" oninput="runTT()" title="기수(회전수)" style="width:46px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">기</td>'+
+        '<td class="r" id="tt-rtseg-time-'+i+'-'+j+'">'+(rt.segs.length>1?'<button onclick="delRtSeg('+i+','+j+')" style="font-size:9px;padding:1px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer">삭제</button>':'')+'</td></tr>';
+    });
+  });
+  h+='<tr><td colspan="5" id="tt-rtbalance" style="padding:6px 8px;font-size:10px;color:var(--sub)"></td></tr>';
   h+='</tbody></table>';
   document.getElementById('tt-controls').innerHTML=h;
+}
+function addRtSeg(i){
+  if(TT_RETORT[i].segs.length>=5){ alert('구간은 레토르트당 최대 5개입니다.'); return; }
+  var last=TT_RETORT[i].segs[TT_RETORT[i].segs.length-1];
+  TT_RETORT[i].segs.push({prod:last.prod, cycles:1, start:+(last.start+2.5).toFixed(2)});
+  syncRtFromDOM(); renderTTControls(); runTT();
+}
+function delRtSeg(i,j){
+  TT_RETORT[i].segs.splice(j,1);
+  syncRtFromDOM(); renderTTControls(); runTT();
+}
+function syncRtFromDOM(){
+  TT_RETORT.forEach(function(rt,i){
+    var u=document.getElementById('tt-rtuse-'+i); if(u)rt.use=u.checked;
+    rt.segs.forEach(function(sg,j){
+      var pe=document.getElementById('tt-rtseg-prod-'+i+'-'+j); if(pe&&pe.value)sg.prod=pe.value;
+      var se=document.getElementById('tt-rtseg-start-'+i+'-'+j); if(se)sg.start=+se.value||sg.start;
+      var ce=document.getElementById('tt-rtseg-cyc-'+i+'-'+j); if(ce)sg.cycles=+ce.value||1;
+    });
+  });
 }
 function addPackSeg(i){
   if(TT_PACK[i].segs.length>=4){ alert('구간은 호기당 최대 4개입니다.'); return; }
@@ -871,6 +915,18 @@ function changeCookCyc(i){
 }
 
 function fmtH(h){var hh=Math.floor(h),mm=Math.round((h-hh)*60);return (hh%24)+':' + (mm<10?'0':'')+mm;}
+// 같은 계열 색의 명도 단계 (k=0 진함 → 커질수록 연함). 구간/회전 구분용
+function shade(hex, k){
+  var palettes={
+    '#8064A2':['#5E4781','#8064A2','#A38BC0','#C4B4D9'], // 파쇄 보라
+    '#1D9E75':['#137A59','#1D9E75','#46BD97','#7FD3BC'], // 자숙 가압 초록
+    '#ED7D31':['#C75E16','#ED7D31','#F3A065','#F7C29C'], // 자숙 상압 주황
+    '#C00000':['#900000','#C00000','#D94545','#E88080']  // 포장 빨강
+  };
+  var arr=palettes[hex];
+  if(!arr) return hex;
+  return arr[Math.min(k, arr.length-1)];
+}
 
 function runTT(){
   var d=ttDayRaw();
@@ -941,7 +997,7 @@ function runTT(){
     var bars=[];
     if(use){
       starts.forEach(function(st,k){
-        bars.push({s:st*60, e:(st+hr)*60, color:color, label:c.tank+'호기 '+mode+(cyc>1?' '+(k+1):''), note:'800kg'});
+        bars.push({s:st*60, e:(st+hr)*60, color:shade(color,k), label:c.tank+'호기 '+mode+(cyc>1?' '+(k+1):''), note:'800kg'});
       });
     }
     lanes.push({label:'자숙 '+c.tank+'호기', bars:bars});
@@ -969,7 +1025,7 @@ function runTT(){
       var end=start+time;
       var segTimeEl=document.getElementById('tt-fragseg-time-'+i+'-'+j);
       if(use && kg>0){
-        bars.push({s:start*60, e:end*60, color:'#8064A2', label:part+' '+time.toFixed(1)+'h', note:kg.toLocaleString()+'kg'});
+        bars.push({s:start*60, e:end*60, color:shade('#8064A2',j), label:part+' '+time.toFixed(1)+'h', note:kg.toLocaleString()+'kg'});
         lineLastEnd=Math.max(lineLastEnd,end);
         lineInfo.push(part+' '+time.toFixed(1)+'h');
         maxEnd=Math.max(maxEnd,end);
@@ -1010,7 +1066,7 @@ function runTT(){
       var time = (ea>0 && speed>0) ? ea/(speed*60) : 0; // 시간
       var end=start+time;
       if(use && ea>0){
-        bars.push({s:start*60, e:end*60, color:'#C00000', label:prod.slice(0,5)+' '+time.toFixed(1)+'h', note:ea.toLocaleString()+'봉'});
+        bars.push({s:start*60, e:end*60, color:shade('#C00000',j), label:prod.slice(0,5)+' '+time.toFixed(1)+'h', note:ea.toLocaleString()+'봉'});
         lineInfo.push(prod.slice(0,5)+' '+time.toFixed(1)+'h');
         maxEnd=Math.max(maxEnd,end);
       }
@@ -1028,6 +1084,54 @@ function runTT(){
       return it.name+' '+it.ea.toLocaleString()+'봉 중 <strong>'+alloc.toLocaleString()+'봉</strong> <span style="color:'+color+'">('+(diff>0?'미배분 '+diff.toLocaleString():diff<0?'초과 '+(-diff).toLocaleString():'완료')+')</span>';
     }).join(' · ');
     pbalEl.innerHTML='포장 배분 현황: '+(pbal||'제품을 입력하세요');
+  }
+
+  // 레토르트: 1기 봉수·회전시간은 제품 기준. 제품별 필요 기수 = ceil(봉수/1기봉수)
+  var rtAlloc={}; // 제품별 배분 기수
+  var rtNeed={};  // 제품별 필요 기수
+  d.byProd.forEach(function(it){
+    var p=PRODUCTS.find(function(x){return x.name===it.name;});
+    rtNeed[it.name]=Math.ceil(it.ea/p.rPerCycle);
+  });
+  var rtMaxEnd=0;
+  TT_RETORT.forEach(function(rt,i){
+    var useEl=document.getElementById('tt-rtuse-'+i); var use=useEl?useEl.checked:rt.use;
+    rt.use=use;
+    var bars=[]; var lineInfo=[];
+    rt.segs.forEach(function(sg,j){
+      var pe=document.getElementById('tt-rtseg-prod-'+i+'-'+j); var prod=pe&&pe.value?pe.value:sg.prod;
+      var se=document.getElementById('tt-rtseg-start-'+i+'-'+j); var start=se?(+se.value||0):sg.start;
+      var ce=document.getElementById('tt-rtseg-cyc-'+i+'-'+j); var cycles=ce?(+ce.value||1):(sg.cycles||1);
+      rt.segs[j]={prod:prod, cycles:cycles, start:start};
+      var p=PRODUCTS.find(function(x){return x.name===prod;});
+      var rHr=p.rHr;
+      if(use){
+        rtAlloc[prod]=(rtAlloc[prod]||0)+cycles;
+        for(var k=0;k<cycles;k++){
+          var s=start+rHr*k, e=start+rHr*(k+1);
+          bars.push({s:s*60, e:e*60, color:shade('#0D7377',k), label:prod.slice(0,4)+(cycles>1?' '+(k+1):''), note:rHr+'h'});
+          rtMaxEnd=Math.max(rtMaxEnd,e); maxEnd=Math.max(maxEnd,e);
+        }
+        lineInfo.push(prod.slice(0,4)+' '+cycles+'기');
+      }
+    });
+    var tEl=document.getElementById('tt-rttime-'+i);
+    if(tEl){ tEl.innerHTML = (use && lineInfo.length)? lineInfo.join(' → ') : (use?'구간 없음':'미사용'); }
+    lanes.push({label:rt.line, bars: use?bars:[]});
+  });
+  // 레토르트 배분 현황 + 마감 판정
+  var rbalEl=document.getElementById('tt-rtbalance');
+  if(rbalEl){
+    var DEADLINE=20.5;
+    var parts2=Object.keys(rtNeed).map(function(prod){
+      var need=rtNeed[prod], alloc=rtAlloc[prod]||0, diff=need-alloc;
+      var color=diff===0?'var(--ok)':(diff>0?'var(--bad)':'var(--warn)');
+      return prod.slice(0,6)+' 필요 '+need+'기 / 투입 <strong>'+alloc+'기</strong> <span style="color:'+color+'">('+(diff>0?'부족 '+diff:diff<0?'초과 '+(-diff):'완료')+')</span>';
+    }).join(' · ');
+    var lateMsg='';
+    if(rtMaxEnd>DEADLINE){ lateMsg=' <span style="color:var(--bad);font-weight:600">⚠ 레토르트 종료 '+fmtH(rtMaxEnd)+' → 투입마감 20:30 초과! 레토르트 증설(4호기) 검토 필요</span>'; }
+    else if(rtMaxEnd>0){ lateMsg=' <span style="color:var(--ok)">레토르트 종료 '+fmtH(rtMaxEnd)+' (마감 20:30 이내)</span>'; }
+    rbalEl.innerHTML='레토르트 현황: '+(parts2||'제품을 입력하세요')+lateMsg;
   }
 
   var endH=Math.max(20, Math.ceil(maxEnd)+1);
