@@ -165,6 +165,7 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
 <div class="tab-nav">
   <button class="tnav active" onclick="goPage('cap',this)">📊 공정 CAPA 분석</button>
   <button class="tnav" onclick="goPage('max',this)">🚀 최대 CAPA·증산여력</button>
+  <button class="tnav" onclick="goPage('retort',this)">🔥 레토르트 순환</button>
   <button class="tnav" onclick="goPage('data',this)">📦 물량·기준 데이터</button>
 </div>
 
@@ -232,6 +233,34 @@ body{font-family:'Malgun Gothic',sans-serif;background:var(--bg);color:var(--tex
   <div class="section">
     <div class="sec-hdr">📈 주력 3품목 증산 여력 (130g·코스트코·미니)</div>
     <div class="sec-body" id="growth-area"></div>
+  </div>
+</div>
+
+<!-- ═══ 레토르트 순환 ═══ -->
+<div id="page-retort" class="page">
+  <div class="alert info">혼합생산일에 <strong>레토르트 3대</strong>가 막힘없이 순환되는지 시간축으로 확인합니다. 그날 생산할 제품과 봉수를 입력하면, 포장이 대차(1기분)를 채우는 시점에 맞춰 빈 레토르트에 투입 → 회전 → 배출되는 흐름을 시뮬레이션합니다. 투입 마감 <strong>20:30</strong> (FC는 냉장 이동, FP는 상온).</div>
+  <div class="section">
+    <div class="sec-hdr">🎛 그날 생산 입력 (봉수)</div>
+    <div class="sec-body">
+      <table class="tbl"><thead><tr><th>제품</th><th class="c">레토르트 1기</th><th class="c">회전</th><th class="c">포장</th><th class="r">생산 봉수</th></tr></thead><tbody id="rt-inputs"></tbody></table>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <label style="font-size:11px">레토르트 대수</label>
+        <select id="rt-machines" onchange="runRetort()" style="padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px;font-family:inherit"><option value="3" selected>3대</option><option value="2">2대</option><option value="4">4대(증설)</option></select>
+        <label style="font-size:11px">포장 시작</label>
+        <input type="number" id="rt-start" value="9" min="5" max="12" step="0.5" onchange="runRetort()" style="width:60px;padding:5px;border:1px solid var(--border);border-radius:5px;font-size:11px">시
+        <button onclick="runRetort()" style="background:var(--p);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">▶ 순환 시뮬레이션</button>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="sec-hdr">📊 순환 결과</div>
+    <div class="sec-body" id="rt-summary"></div>
+  </div>
+  <div class="section">
+    <div class="sec-hdr">⏱ 레토르트 3대 타임라인</div>
+    <div class="sec-body" style="padding:10px">
+      <div class="tt-wrap"><div class="tt" id="rt-canvas" style="min-height:140px"></div></div>
+    </div>
   </div>
 </div>
 
@@ -333,6 +362,7 @@ function goPage(name,btn){
   btn.classList.add('active');
   if(name==='cap') runCap();
   if(name==='max') runMax();
+  if(name==='retort'){ renderRtInputs(); runRetort(); }
   if(name==='data') renderData();
 }
 function setScenario(s,btn){
@@ -558,7 +588,177 @@ function applyData(){
   });
   renderData(); alert('적용되었습니다. 다른 탭에서 재계산됩니다.');
 }
-window.addEventListener('DOMContentLoaded',()=>{ runCap(); });
+function buildTT(canvasId, lanes, timeStart, timeEnd, height) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  canvas.innerHTML = '';
+  canvas.style.height = (height || lanes.length * 34 + 40) + 'px';
+
+  const W = canvas.clientWidth || 800;
+  const CW = W - 140 - 12;
+  const TW = (timeEnd - timeStart) * 60;
+  const LANE_H = 32;
+  const TOP = 8;
+
+  function minToX(m) { return ((m - timeStart * 60) / TW) * CW; }
+  function fmt(m) {
+    const h = Math.floor(m / 60), mn = Math.round(m % 60);
+    return (h % 24).toString().padStart(2,'0') + ':' + mn.toString().padStart(2,'0');
+  }
+  function addEl(tag, styles, parent) {
+    const el = document.createElement(tag);
+    Object.assign(el.style, styles); (parent || canvas).appendChild(el); return el;
+  }
+
+  // 눈금선
+  for (let h = Math.ceil(timeStart); h <= timeEnd; h++) {
+    const x = minToX(h * 60);
+    if (x < 0 || x > CW) continue;
+    const vl = addEl('div', {
+      position:'absolute', left:(140+x)+'px', top:'0', bottom:'26px',
+      width: h % 2 === 0 ? '1px' : '0.5px',
+      background: h % 2 === 0 ? '#bbb' : '#ddd'
+    });
+  }
+
+  // 시간 축
+  addEl('div', {position:'absolute',bottom:'26px',left:'140px',right:'12px',height:'1px',background:'#ccc'});
+  const ticks = addEl('div', {position:'absolute',bottom:'6px',left:'140px',right:'12px',display:'flex',justifyContent:'space-between',fontSize:'9px',color:'#999'});
+  for (let h = Math.ceil(timeStart); h <= timeEnd; h += 2) {
+    const s = document.createElement('span');
+    s.textContent = fmt(h * 60); ticks.appendChild(s);
+  }
+
+  // 레인
+  lanes.forEach((lane, i) => {
+    const top = TOP + i * LANE_H;
+    // 레이블
+    const lbl = addEl('div', {
+      position:'absolute', width:'134px', right:'calc(100% - 138px)',
+      top: top + 'px', textAlign:'right', fontSize:'10px', color:'#666',
+      paddingRight:'8px', lineHeight:'1.3', display:'flex',
+      alignItems:'center', justifyContent:'flex-end'
+    });
+    lbl.innerHTML = lane.label;
+
+    // 바들
+    (lane.bars || []).forEach(b => {
+      let s = b.s, e = b.e;
+      // 자정 넘어가는 바 처리
+      if (s > timeEnd * 60) return;
+      if (e > timeEnd * 60) e = timeEnd * 60;
+      if (s < timeStart * 60) s = timeStart * 60;
+
+      const x = minToX(s);
+      const w = Math.max(minToX(e) - x, 2);
+      const bar = addEl('div', {
+        position:'absolute',
+        left: (140 + x) + 'px',
+        width: w + 'px',
+        top: (top + 5) + 'px',
+        height: '22px',
+        borderRadius: '5px',
+        background: b.color,
+        opacity: b.opacity || '1',
+        display:'flex', alignItems:'center',
+        padding:'0 5px',
+        fontSize:'9px', fontWeight:'600', color:'#fff',
+        overflow:'hidden', whiteSpace:'nowrap',
+        cursor:'default',
+        zIndex:'5'
+      });
+      const tooltip = `${lane.label}: ${fmt(b.s)}~${fmt(b.e)}${b.note ? ' · '+b.note : ''}`;
+      bar.title = tooltip;
+      if (b.label && w > 35) bar.textContent = b.label;
+      canvas.appendChild(bar);
+    });
+  });
+}
+
+
+// ════════ 레토르트 순환 시뮬레이션 ════════
+var RT_DEFAULT={'FC 3kg':1461,'미니 70g':0,'130g 메추리알':0,'코스트코 170g':3539,'트레이더스 460g':0};
+function renderRtInputs(){
+  let h='';
+  PRODUCTS.forEach(function(p){
+    const def=RT_DEFAULT[p.name]||0;
+    h+='<tr><td>'+p.name+'</td><td class="c">'+p.rPerCycle+'봉</td><td class="c">'+p.rHr+'h</td><td class="c" style="font-size:10px">'+(PACK_LINES[p.name]||[]).map(function(l){return l.line+'('+l.speed+(l.max>1?'×'+l.max:'')+')';}).join(',')+'</td>'+
+      '<td class="r"><input type="text" value="'+def.toLocaleString()+'" data-rt="'+p.name+'" oninput="runRetort()" style="width:90px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td></tr>';
+  });
+  document.getElementById('rt-inputs').innerHTML=h;
+}
+function readRtItems(){
+  const items=[];
+  document.querySelectorAll('#rt-inputs input[data-rt]').forEach(function(inp){
+    const name=inp.dataset.rt;
+    const ea=parseInt(inp.value.replace(/[^0-9]/g,''))||0;
+    if(ea<=0) return;
+    const p=PRODUCTS.find(function(x){return x.name===name;});
+    const lines=PACK_LINES[name]||[{speed:15,max:1}];
+    const packRate=lines[0].speed*lines[0].max; // 개/분 (주력 라인)
+    items.push({name:name, ea:ea, packRate:packRate, perCycle:p.rPerCycle, rHr:p.rHr});
+  });
+  return items;
+}
+function simRetort(items, machineCount){
+  var events=[];
+  items.forEach(function(it){
+    var filled=0, t=0;
+    while(filled<it.ea){
+      var batch=Math.min(it.perCycle, it.ea-filled);
+      t += batch/it.packRate;
+      filled+=batch;
+      events.push({ready:t, name:it.name, perCycle:batch, rHr:it.rHr});
+    }
+  });
+  events.sort(function(a,b){return a.ready-b.ready;});
+  var free=new Array(machineCount).fill(0);
+  var log=[], maxWait=0, totalWait=0;
+  events.forEach(function(e){
+    var mi=0; for(var i=1;i<free.length;i++) if(free[i]<free[mi]) mi=i;
+    var start=Math.max(e.ready, free[mi]);
+    var wait=start-e.ready;
+    maxWait=Math.max(maxWait,wait); totalWait+=wait;
+    var end=start+e.rHr*60;
+    free[mi]=end;
+    log.push({machine:mi+1, name:e.name, ready:e.ready, start:start, end:end, wait:wait, rHr:e.rHr});
+  });
+  return {log:log, maxWait:maxWait, totalWait:totalWait, finishTime:Math.max.apply(null,free), cycles:events.length};
+}
+function runRetort(){
+  const items=readRtItems();
+  const machines=+document.getElementById('rt-machines').value;
+  const startH=+document.getElementById('rt-start').value;
+  if(items.length===0){ document.getElementById('rt-summary').innerHTML='<div class="alert info" style="margin:0">생산 봉수를 입력하세요.</div>'; document.getElementById('rt-canvas').innerHTML=''; return; }
+  const r=simRetort(items, machines);
+  const finishH=startH + r.finishTime/60;
+  const deadline=20.5;
+  const ok=finishH<=deadline && r.maxWait<60;
+  // 요약
+  let h='<div class="kpi-row">';
+  h+='<div class="kpi"><div class="kl">총 기수</div><div class="kv">'+r.cycles+'</div><div class="ks">기</div></div>';
+  h+='<div class="kpi" style="--accent:'+(finishH<=deadline?'var(--ok)':'var(--bad)')+'"><div class="kl">마지막 배출</div><div class="kv">'+finishH.toFixed(1)+'</div><div class="ks">시 (마감 20:30)</div></div>';
+  h+='<div class="kpi" style="--accent:'+(r.maxWait<60?'var(--ok)':'var(--warn)')+'"><div class="kl">최대 대기</div><div class="kv">'+Math.round(r.maxWait)+'</div><div class="ks">분</div></div>';
+  h+='<div class="kpi" style="--accent:var(--mid)"><div class="kl">총 대기</div><div class="kv">'+Math.round(r.totalWait)+'</div><div class="ks">분</div></div>';
+  h+='</div>';
+  h+='<div class="alert '+(ok?'ok':'warn')+'" style="margin-top:8px;margin-bottom:0">'+
+    (ok?'레토르트 '+machines+'대로 <strong>막힘없이 순환</strong>됩니다. 마지막 배출 '+finishH.toFixed(1)+'시로 마감(20:30) 이내.':
+    '⚠ '+(finishH>deadline?'마지막 배출 '+finishH.toFixed(1)+'시로 마감(20:30) 초과. ':'')+(r.maxWait>=60?'최대 대기 '+Math.round(r.maxWait)+'분 발생. ':'')+'레토르트 대수 증설 또는 물량 조정 검토.')+'</div>';
+  document.getElementById('rt-summary').innerHTML=h;
+  // 타임라인: 레토르트 대별 레인
+  const colors={'FC 3kg':'#ED7D31','미니 70g':'#5B9BD5','130g 메추리알':'#1D9E75','코스트코 170g':'#8064A2','트레이더스 460g':'#C00000'};
+  const lanes=[];
+  for(let m=1;m<=machines;m++){
+    const bars=r.log.filter(function(l){return l.machine===m;}).map(function(l){
+      return {s:(startH*60+l.start), e:(startH*60+l.end), color:colors[l.name]||'#888', label:l.name.slice(0,4), note:l.wait>1?'대기 '+Math.round(l.wait)+'분':''};
+    });
+    lanes.push({label:'레토르트 '+m, bars:bars});
+  }
+  const endH=Math.max(21, Math.ceil(finishH)+1);
+  buildTT('rt-canvas', lanes, startH, endH, machines*34+44);
+}
+
+window.addEventListener('DOMContentLoaded',()=>{ runCap(); renderRtInputs(); });
 </script>
 </body>
 </html>
