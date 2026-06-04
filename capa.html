@@ -709,8 +709,8 @@ var COOK_HR={'상압':4.5,'가압':2.5};
 // 파쇄 2라인: 라인당 인원 + 작업구간(부위·물량·시작시각) 배열
 var FRAG_PROD={'홍두깨':23.0,'설도':30.0,'우둔':21.4}; // 부위별 파쇄 생산성(kg/인시), 직접조정
 var TT_FRAG=[
-  {line:1, workers:13, use:true, segs:[{part:'홍두깨', kg:0, start:9.0}]},
-  {line:2, workers:10, use:true, segs:[{part:'우둔', kg:0, start:9.5}]},
+  {line:1, workers:13, use:true, segs:[{part:'홍두깨', start:9.0, end:14.0}]},
+  {line:2, workers:10, use:true, segs:[{part:'우둔', start:9.5, end:14.0}]},
 ];
 var FRAG_PERLINE_MAX=13;
 // 포장 4호기: 호기별 속도(ea/min, 직접입력) + 작업구간(제품·봉수·시작시각)
@@ -801,8 +801,8 @@ function renderTTControls(){
       var partOpts=['홍두깨','설도','우둔'].map(function(pt){return '<option value="'+pt+'"'+(sg.part===pt?' selected':'')+'>'+pt+'</option>';}).join('');
       h+='<tr style="background:#fafbff"><td style="padding-left:18px;font-size:10px;color:var(--sub)">└ 구간 '+(j+1)+'</td>'+
         '<td class="c"><select id="tt-fragseg-part-'+i+'-'+j+'" onchange="runTT()" style="padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit">'+partOpts+'</select></td>'+
-        '<td class="c"><input type="number" id="tt-fragseg-start-'+i+'-'+j+'" value="'+sg.start+'" min="0" max="23" step="0.5" oninput="runTT()" title="시작시각" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td>'+
-        '<td class="r"><input type="text" id="tt-fragseg-kg-'+i+'-'+j+'" value="'+(sg.kg||0).toLocaleString()+'" oninput="runTT()" title="처리 자숙육 kg" style="width:80px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right">kg</td>'+
+        '<td class="c"><input type="number" id="tt-fragseg-start-'+i+'-'+j+'" value="'+sg.start+'" min="0" max="23" step="0.5" oninput="runTT()" title="시작시각" style="width:46px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">~<input type="number" id="tt-fragseg-end-'+i+'-'+j+'" value="'+(sg.end||sg.start+4)+'" min="0" max="24" step="0.25" oninput="runTT()" title="종료시각" style="width:46px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td>'+
+        '<td class="r" id="tt-fragseg-kg-'+i+'-'+j+'" style="font-size:10px;color:var(--sub)">-</td>'+
         '<td class="r" id="tt-fragseg-time-'+i+'-'+j+'">'+(f.segs.length>1?'<button onclick="delFragSeg('+i+','+j+')" style="font-size:9px;padding:1px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer">삭제</button>':'')+'</td></tr>';
     });
   });
@@ -892,7 +892,7 @@ function syncPackFromDOM(){
 function addFragSeg(i){
   if(TT_FRAG[i].segs.length>=3){ alert('구간은 라인당 최대 3개입니다.'); return; }
   var last=TT_FRAG[i].segs[TT_FRAG[i].segs.length-1];
-  TT_FRAG[i].segs.push({part:last.part, kg:0, start:+(last.start+2).toFixed(1)});
+  TT_FRAG[i].segs.push({part:last.part, start:+(last.end||last.start+2).toFixed(2), end:+((last.end||last.start+2)+2).toFixed(2)});
   syncFragFromDOM(); renderTTControls(); runTT();
 }
 function delFragSeg(i,j){
@@ -907,7 +907,7 @@ function syncFragFromDOM(){
     f.segs.forEach(function(sg,j){
       var pEl=document.getElementById('tt-fragseg-part-'+i+'-'+j); if(pEl&&pEl.value)sg.part=pEl.value;
       var sEl=document.getElementById('tt-fragseg-start-'+i+'-'+j); if(sEl)sg.start=+sEl.value||sg.start;
-      var kEl=document.getElementById('tt-fragseg-kg-'+i+'-'+j); if(kEl)sg.kg=parseInt(String(kEl.value).replace(/[^0-9]/g,''))||0;
+      var eEl=document.getElementById('tt-fragseg-end-'+i+'-'+j); if(eEl)sg.end=+eEl.value||sg.end;
     });
   });
 }
@@ -1032,17 +1032,19 @@ function runTT(){
     f.segs.forEach(function(sg,j){
       var pEl=document.getElementById('tt-fragseg-part-'+i+'-'+j); var part=pEl&&pEl.value?pEl.value:sg.part;
       var sEl=document.getElementById('tt-fragseg-start-'+i+'-'+j); var start=sEl?(+sEl.value||0):sg.start;
-      var kEl=document.getElementById('tt-fragseg-kg-'+i+'-'+j); var kg=kEl?(parseInt(String(kEl.value).replace(/[^0-9]/g,''))||0):(sg.kg||0);
-      f.segs[j]={part:part, kg:kg, start:start};
-      allocated[part]=(allocated[part]||0)+kg;
+      var eEl=document.getElementById('tt-fragseg-end-'+i+'-'+j); var end=eEl?(+eEl.value||start):(sg.end||start);
+      if(end<start) end=start; // 종료가 시작보다 빠르면 보정
+      f.segs[j]={part:part, start:start, end:end};
       var prod=FRAG_PROD[part]||23;
-      var time = kg>0 ? kg/(capped*prod) : 0;
-      var end=start+time;
-      var segTimeEl=document.getElementById('tt-fragseg-time-'+i+'-'+j);
-      if(use && kg>0){
-        bars.push({s:start*60, e:end*60, color:shade('#8064A2',j), label:part+' '+time.toFixed(1)+'h', note:kg.toLocaleString()+'kg'});
+      var dur=end-start; // 가동 시간
+      var kg = Math.round(dur*capped*prod); // 종료시각 → 처리 물량 역산
+      allocated[part]=(allocated[part]||0)+kg;
+      var kgEl=document.getElementById('tt-fragseg-kg-'+i+'-'+j);
+      if(kgEl) kgEl.textContent = kg>0 ? '≈'+kg.toLocaleString()+'kg' : '-';
+      if(use && dur>0){
+        bars.push({s:start*60, e:end*60, color:shade('#8064A2',j), label:part+' '+dur.toFixed(1)+'h', note:'≈'+kg.toLocaleString()+'kg'});
         lineLastEnd=Math.max(lineLastEnd,end);
-        lineInfo.push(part+' '+time.toFixed(1)+'h');
+        lineInfo.push(part+' '+dur.toFixed(1)+'h');
         maxEnd=Math.max(maxEnd,end);
       }
     });
@@ -1050,7 +1052,7 @@ function runTT(){
     var tEl=document.getElementById('tt-fragtime-'+i);
     if(tEl){
       if(use && lineInfo.length){ tEl.innerHTML=lineInfo.join(' → ')+(workers>FRAG_PERLINE_MAX?' <span style="color:var(--bad)">⚠13명초과</span>':''); }
-      else { tEl.textContent= use?'물량 미입력':'미사용'; }
+      else { tEl.textContent= use?'구간 미설정':'미사용'; }
     }
     lanes.push({label:'파쇄 '+f.line+'라인', bars: use?bars:[]});
   });
