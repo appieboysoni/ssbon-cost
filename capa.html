@@ -606,12 +606,12 @@ function buildTT(canvasId, lanes, timeStart, timeEnd, height) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   canvas.innerHTML = '';
-  canvas.style.height = (height || lanes.length * 34 + 40) + 'px';
+  canvas.style.height = (height || lanes.length * 42 + 40) + 'px';
 
   const W = canvas.clientWidth || 800;
   const CW = W - 140 - 12;
   const TW = (timeEnd - timeStart) * 60;
-  const LANE_H = 32;
+  const LANE_H = 42;
   const TOP = 8;
 
   function minToX(m) { return ((m - timeStart * 60) / TW) * CW; }
@@ -638,7 +638,7 @@ function buildTT(canvasId, lanes, timeStart, timeEnd, height) {
   // 시간 축
   addEl('div', {position:'absolute',bottom:'26px',left:'140px',right:'12px',height:'1px',background:'#ccc'});
   const ticks = addEl('div', {position:'absolute',bottom:'6px',left:'140px',right:'12px',display:'flex',justifyContent:'space-between',fontSize:'9px',color:'#999'});
-  for (let h = Math.ceil(timeStart); h <= timeEnd; h += 2) {
+  for (let h = Math.ceil(timeStart); h <= timeEnd; h += 1) {
     const s = document.createElement('span');
     s.textContent = fmt(h * 60); ticks.appendChild(s);
   }
@@ -685,6 +685,24 @@ function buildTT(canvasId, lanes, timeStart, timeEnd, height) {
       bar.title = tooltip;
       if (b.label && w > 35) bar.textContent = b.label;
       canvas.appendChild(bar);
+
+      // 막대 아래 시간 구간 표시 (폭이 충분할 때)
+      if (w > 48) {
+        const tlbl = addEl('div', {
+          position:'absolute',
+          left: (140 + x) + 'px',
+          width: w + 'px',
+          top: (top + 28) + 'px',
+          height: '11px',
+          fontSize: '8px',
+          color: '#888',
+          textAlign: 'center',
+          whiteSpace: 'nowrap',
+          overflow: 'visible',
+          zIndex: '4'
+        });
+        tlbl.textContent = fmt(b.s) + '~' + fmt(b.e);
+      }
     });
   });
 }
@@ -1152,7 +1170,7 @@ function runTT(){
   }
 
   var endH=Math.max(20, Math.ceil(maxEnd)+1);
-  buildTT('tt-canvas2', lanes, Math.min(preStart,5), endH, lanes.length*34+44);
+  buildTT('tt-canvas2', lanes, Math.min(preStart,5), endH, lanes.length*42+44);
 }
 // ════════ Firebase 시나리오 저장/불러오기 ════════
 var FB_DB=null;
