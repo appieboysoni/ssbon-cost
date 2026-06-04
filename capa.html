@@ -683,12 +683,12 @@ var TT_START={pre:5.0};
 var TT_WORK={pre:10}; // 인원/설비 조건
 // 자숙 탱크 6개: 투입시각, 모드(상압/가압). 1~4호기 상압전용, 5·6호기 선택가능
 var TT_COOK=[
-  {tank:1, start:5.5, mode:'상압', use:true},
-  {tank:2, start:6.0, mode:'상압', use:true},
-  {tank:3, start:6.5, mode:'상압', use:true},
-  {tank:4, start:7.0, mode:'상압', use:true},
-  {tank:5, start:7.5, mode:'가압', use:true},
-  {tank:6, start:8.0, mode:'가압', use:true},
+  {tank:1, mode:'상압', use:true, starts:[5.5]},
+  {tank:2, mode:'상압', use:true, starts:[6.0]},
+  {tank:3, mode:'상압', use:true, starts:[6.5]},
+  {tank:4, mode:'상압', use:true, starts:[7.0]},
+  {tank:5, mode:'가압', use:true, starts:[7.5]},
+  {tank:6, mode:'가압', use:true, starts:[8.0]},
 ];
 var COOK_HR={'상압':4.5,'가압':2.5};
 
@@ -741,13 +741,29 @@ function renderTTControls(){
     var modeCell = selectable
       ? '<select id="tt-cookmode-'+i+'" oninput="runTT()" onchange="runTT()" style="padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit"><option value="상압"'+(c.mode==='상압'?' selected':'')+'>상압</option><option value="가압"'+(c.mode==='가압'?' selected':'')+'>가압</option></select>'
       : '<span style="font-size:11px;color:var(--sub)">상압</span>';
+    var cyc=c.starts.length;
+    // 회전별 시각 입력칸
+    var timeInputs='';
+    c.starts.forEach(function(st,k){
+      timeInputs+='<input type="number" id="tt-cooks-'+i+'-'+k+'" value="'+st+'" min="0" max="23" step="0.5" oninput="runTT()" title="'+(k+1)+'회전 투입시각" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center;margin-right:2px">';
+    });
     h+='<tr><td>자숙 '+c.tank+'호기</td>'+
       '<td class="c">'+modeCell+'</td>'+
-      '<td class="c"><input type="number" id="tt-cooks-'+i+'" value="'+c.start+'" min="0" max="23" step="0.5" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center"><label style="font-size:9px;margin-left:3px"><input type="checkbox" id="tt-cookuse-'+i+'" '+(c.use?'checked':'')+' onchange="runTT()">사용</label></td>'+
+      '<td class="c"><input type="number" id="tt-cookcyc-'+i+'" value="'+cyc+'" min="1" max="4" onchange="changeCookCyc('+i+')" title="회전수" style="width:42px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">회전 <label style="font-size:9px;margin-left:3px"><input type="checkbox" id="tt-cookuse-'+i+'" '+(c.use?'checked':'')+' onchange="runTT()">사용</label><div style="margin-top:3px">'+timeInputs+'</div></td>'+
       '<td class="r" id="tt-cooktime-'+i+'">-</td><td class="r" id="tt-cookend-'+i+'">-</td></tr>';
   });
   h+='</tbody></table>';
   document.getElementById('tt-controls').innerHTML=h;
+}
+function changeCookCyc(i){
+  var cyc=+document.getElementById('tt-cookcyc-'+i).value||1;
+  var cur=TT_COOK[i].starts.slice();
+  if(cyc>cur.length){
+    var hr=COOK_HR[TT_COOK[i].mode]||4.5;
+    while(cur.length<cyc){ cur.push(+(cur[cur.length-1]+hr).toFixed(1)); }
+  } else { cur=cur.slice(0,cyc); }
+  TT_COOK[i].starts=cur;
+  renderTTControls(); runTT();
 }
 
 function fmtH(h){var hh=Math.floor(h),mm=Math.round((h-hh)*60);return (hh%24)+':' + (mm<10?'0':'')+mm;}
@@ -792,26 +808,38 @@ function runTT(){
   TT_COOK.forEach(function(c,i){
     var useEl=document.getElementById('tt-cookuse-'+i);
     var use=useEl?useEl.checked:c.use;
-    var startEl=document.getElementById('tt-cooks-'+i);
-    var start=startEl?(+startEl.value||0):c.start;
+    var cycEl=document.getElementById('tt-cookcyc-'+i);
+    var cyc=cycEl?(+cycEl.value||1):c.starts.length;
     var mode=c.mode;
-    if(c.tank>=5){ var me=document.getElementById('tt-cookmode-'+i); if(me) mode=me.value; }
+    if(c.tank>=5){ var me=document.getElementById('tt-cookmode-'+i); if(me && me.value) mode=me.value; }
     else { mode='상압'; }
+    if(mode!=='상압' && mode!=='가압') mode='상압';
     var hr=COOK_HR[mode];
-    var end=start+hr;
-    // 상태 저장
-    TT_COOK[i]={tank:c.tank, start:start, mode:mode, use:use};
+    // 회전별 시각 수집
+    var starts=[];
+    for(var k=0;k<cyc;k++){
+      var el=document.getElementById('tt-cooks-'+i+'-'+k);
+      starts.push(el?(+el.value||0):(c.starts[k]||0));
+    }
+    TT_COOK[i]={tank:c.tank, mode:mode, use:use, starts:starts};
     var tEl=document.getElementById('tt-cooktime-'+i), eEl=document.getElementById('tt-cookend-'+i);
+    var lastEnd=0;
     if(use){
-      if(tEl) tEl.textContent=hr.toFixed(1)+'h ('+mode+')';
-      if(eEl) eEl.textContent=fmtH(end);
-      maxEnd=Math.max(maxEnd,end);
+      starts.forEach(function(st){ lastEnd=Math.max(lastEnd, st+hr); });
+      if(tEl) tEl.textContent=hr.toFixed(1)+'h×'+cyc+' ('+mode+')';
+      if(eEl) eEl.textContent=fmtH(lastEnd);
+      maxEnd=Math.max(maxEnd,lastEnd);
     } else {
       if(tEl) tEl.textContent='미사용';
       if(eEl) eEl.textContent='-';
     }
     var color = (mode==='가압')?'#1D9E75':'#ED7D31';
-    var bars = use ? [{s:start*60, e:end*60, color:color, label:c.tank+'호기 '+mode, note:'800kg'}] : [];
+    var bars=[];
+    if(use){
+      starts.forEach(function(st,k){
+        bars.push({s:st*60, e:(st+hr)*60, color:color, label:c.tank+'호기 '+mode+(cyc>1?' '+(k+1):''), note:'800kg'});
+      });
+    }
     lanes.push({label:'자숙 '+c.tank+'호기', bars:bars});
   });
 
