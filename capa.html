@@ -681,6 +681,16 @@ var TT_DEFAULT={'FC 3kg':1461,'코스트코 170g':3539,'미니 70g':0,'130g 메�
 // 공정 시작시각(시) - 사용자 조절. 기본값은 병현님 원래 타임테이블 참고
 var TT_START={pre:5.0};
 var TT_WORK={pre:10}; // 인원/설비 조건
+// 자숙 탱크 6개: 투입시각, 모드(상압/가압). 1~4호기 상압전용, 5·6호기 선택가능
+var TT_COOK=[
+  {tank:1, start:5.5, mode:'상압', use:true},
+  {tank:2, start:6.0, mode:'상압', use:true},
+  {tank:3, start:6.5, mode:'상압', use:true},
+  {tank:4, start:7.0, mode:'상압', use:true},
+  {tank:5, start:7.5, mode:'가압', use:true},
+  {tank:6, start:8.0, mode:'가압', use:true},
+];
+var COOK_HR={'상압':4.5,'가압':2.5};
 
 function ttDayRaw(){
   // 입력된 봉수 → 부위별 원육, 총원육
@@ -718,12 +728,24 @@ function toggleTTProd(name){
 }
 
 function renderTTControls(){
-  // 1단계: 전처리만. 인원 조절 + 시작시각 입력
   var h='<table class="tbl"><thead><tr><th>공정</th><th class="c">인원/설비</th><th class="c">시작시각</th><th class="r">처리시간</th><th class="r">종료</th></tr></thead><tbody>';
+  // 전처리
   h+='<tr><td>전처리</td>'+
     '<td class="c"><input type="number" id="tt-prew" value="'+TT_WORK.pre+'" min="1" max="20" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명</td>'+
     '<td class="c"><input type="number" id="tt-pres" value="'+TT_START.pre+'" min="0" max="23" step="0.5" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td>'+
     '<td class="r" id="tt-pretime">-</td><td class="r" id="tt-preend">-</td></tr>';
+  // 자숙 탱크 6개
+  h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">자숙 탱크 (1~4호기 상압전용 / 5·6호기 가압·상압 선택) · 800kg/탱크</td></tr>';
+  TT_COOK.forEach(function(c,i){
+    var selectable=(c.tank>=5);
+    var modeCell = selectable
+      ? '<select id="tt-cookmode-'+i+'" oninput="runTT()" onchange="runTT()" style="padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit"><option value="상압"'+(c.mode==='상압'?' selected':'')+'>상압</option><option value="가압"'+(c.mode==='가압'?' selected':'')+'>가압</option></select>'
+      : '<span style="font-size:11px;color:var(--sub)">상압</span>';
+    h+='<tr><td>자숙 '+c.tank+'호기</td>'+
+      '<td class="c">'+modeCell+'</td>'+
+      '<td class="c"><input type="number" id="tt-cooks-'+i+'" value="'+c.start+'" min="0" max="23" step="0.5" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center"><label style="font-size:9px;margin-left:3px"><input type="checkbox" id="tt-cookuse-'+i+'" '+(c.use?'checked':'')+' onchange="runTT()">사용</label></td>'+
+      '<td class="r" id="tt-cooktime-'+i+'">-</td><td class="r" id="tt-cookend-'+i+'">-</td></tr>';
+  });
   h+='</tbody></table>';
   document.getElementById('tt-controls').innerHTML=h;
 }
@@ -762,9 +784,38 @@ function runTT(){
   document.getElementById('tt-preend').textContent=fmtH(preEnd);
   TT_WORK.pre=prew; TT_START.pre=preStart;
 
-  // 타임라인
+  // 타임라인 레인
   var lanes=[{label:'전처리<br>('+prew+'명)', bars:[{s:preStart*60, e:preEnd*60, color:'#2F5496', label:'전처리 '+preTime.toFixed(1)+'h', note:Math.round(d.total)+'kg'}]}];
-  var endH=Math.max(20, Math.ceil(preEnd)+1);
+  var maxEnd=preEnd;
+
+  // 자숙 탱크 6개
+  TT_COOK.forEach(function(c,i){
+    var useEl=document.getElementById('tt-cookuse-'+i);
+    var use=useEl?useEl.checked:c.use;
+    var startEl=document.getElementById('tt-cooks-'+i);
+    var start=startEl?(+startEl.value||0):c.start;
+    var mode=c.mode;
+    if(c.tank>=5){ var me=document.getElementById('tt-cookmode-'+i); if(me) mode=me.value; }
+    else { mode='상압'; }
+    var hr=COOK_HR[mode];
+    var end=start+hr;
+    // 상태 저장
+    TT_COOK[i]={tank:c.tank, start:start, mode:mode, use:use};
+    var tEl=document.getElementById('tt-cooktime-'+i), eEl=document.getElementById('tt-cookend-'+i);
+    if(use){
+      if(tEl) tEl.textContent=hr.toFixed(1)+'h ('+mode+')';
+      if(eEl) eEl.textContent=fmtH(end);
+      maxEnd=Math.max(maxEnd,end);
+    } else {
+      if(tEl) tEl.textContent='미사용';
+      if(eEl) eEl.textContent='-';
+    }
+    var color = (mode==='가압')?'#1D9E75':'#ED7D31';
+    var bars = use ? [{s:start*60, e:end*60, color:color, label:c.tank+'호기 '+mode, note:'800kg'}] : [];
+    lanes.push({label:'자숙 '+c.tank+'호기', bars:bars});
+  });
+
+  var endH=Math.max(20, Math.ceil(maxEnd)+1);
   buildTT('tt-canvas2', lanes, Math.min(preStart,5), endH, lanes.length*34+44);
 }
 window.addEventListener('DOMContentLoaded',()=>{ runCap(); });
