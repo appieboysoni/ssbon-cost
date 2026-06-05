@@ -486,8 +486,8 @@ tr.total td{background:var(--light);font-weight:700}
     <div class="card-hdr">📅 월별 원가 이력</div>
     <div class="card-body">
       <div class="tbl-wrap"><table>
-        <thead><tr><th>연월</th><th>생산금액(백만)</th><th>원재료비</th><th>부재료비</th><th>노무비</th><th>경비</th><th>제조원가</th><th>원가율</th><th>원재료비율</th><th>노무비율</th><th>전월대비</th><th>비고</th><th>관리</th></tr></thead>
-        <tbody id="history-body"><tr><td colspan="13" class="loading">로딩중...</td></tr></tbody>
+        <thead><tr><th>연월</th><th>생산금액(백만)</th><th>원재료비</th><th>부재료비</th><th>노무비</th><th>경비</th><th>제조원가</th><th>원가율</th><th>원재료비율</th><th>부재료비율</th><th>노무비율</th><th>경비율</th><th>전월대비</th><th>비고</th><th>관리</th></tr></thead>
+        <tbody id="history-body"><tr><td colspan="15" class="loading">로딩중...</td></tr></tbody>
       </table></div>
     </div>
   </div>
@@ -2808,15 +2808,17 @@ window.loadHistory = async () => {
   const snap=await getDocs(q);
   const rows=[]; snap.forEach(d=>rows.push(d.data()));
   const tbody=document.getElementById('history-body');
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="13" class="empty">데이터가 없습니다.</td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="15" class="empty">데이터가 없습니다.</td></tr>';return;}
   const calc=rows.map(r=>computeMonthCost(r, window._bom));
   tbody.innerHTML=rows.map((r,i)=>{
     const c=calc[i].sum;
     const rawV=c.raw,subV=c.sub,laborV=c.labor,expV=c.exp,total=c.total;
     const prodV=r.prodAmt||0;
     const rate=prodV>0?total/prodV:0;
-    const rRaw=total>0?rawV/total:0;
-    const rLabor=total>0?laborV/total:0;
+    const rRaw=prodV>0?rawV/prodV:0;
+    const rSub=prodV>0?subV/prodV:0;
+    const rLabor=prodV>0?laborV/prodV:0;
+    const rExp=prodV>0?expV/prodV:0;
     const prev=i>0?calc[i-1].sum:null;
     const prevProd=i>0?rows[i-1].prodAmt:0;
     const prevRate=prev&&prevProd>0?prev.total/prevProd:null;
@@ -2827,7 +2829,7 @@ window.loadHistory = async () => {
       <td>${M(prodV)}</td><td>${M(rawV)}</td><td>${M(subV)}</td>
       <td>${laborV>0?M(laborV):'—'}</td><td>${M(expV)}</td><td>${M(total)}</td>
       <td class="c ${rC(rate)}">${fmtP(rate)}</td>
-      <td class="c">${fmtP(rRaw)}</td><td class="c">${fmtP(rLabor)}</td>
+      <td class="c">${fmtP(rRaw)}</td><td class="c">${fmtP(rSub)}</td><td class="c">${fmtP(rLabor)}</td><td class="c">${fmtP(rExp)}</td>
       <td class="c ${diff!=null?(diff>0?'bad':'ok'):''}">${diff!=null?(diff>=0?'+':'')+((diff)*100).toFixed(1)+'%p':'—'}</td>
       <td class="l">${r.note||''}</td>
       <td class="c">
