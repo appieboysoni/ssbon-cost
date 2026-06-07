@@ -757,7 +757,9 @@ function ttDayRaw(){
     var ea=parseInt(inp.value.replace(/[^0-9]/g,''))||0;
     var p=PRODUCTS.find(function(x){return x.name===name;});
     var raw=ea*rawPerEa(p)/1000;
-    if(ea>0){ parts[p.part]=(parts[p.part]||0)+raw; total+=raw; byProd.push({name:name,ea:ea,raw:raw,part:p.part}); }
+    // bong = 실제 포장/레토르트 개수 (코스트코는 팩×4). 원육은 팩 기준이라 ea 그대로 사용
+    var bong=ea*(p.units||1);
+    if(ea>0){ parts[p.part]=(parts[p.part]||0)+raw; total+=raw; byProd.push({name:name,ea:ea,bong:bong,units:(p.units||1),raw:raw,part:p.part}); }
   });
   return {parts:parts, total:total, byProd:byProd};
 }
@@ -1121,9 +1123,10 @@ function runTT(){
   var pbalEl=document.getElementById('tt-packbalance');
   if(pbalEl){
     var pbal=d.byProd.map(function(it){
-      var alloc=packAlloc[it.name]||0, diff=it.ea-alloc;
-      var color=Math.abs(diff)<it.ea*0.02?'var(--ok)':(diff>0?'var(--warn)':'var(--bad)');
-      return it.name+' '+it.ea.toLocaleString()+'봉 중 <strong>'+alloc.toLocaleString()+'봉</strong> <span style="color:'+color+'">('+(diff>0?'미배분 '+diff.toLocaleString():diff<0?'초과 '+(-diff).toLocaleString():'완료')+')</span>';
+      var alloc=packAlloc[it.name]||0, diff=it.bong-alloc;
+      var color=Math.abs(diff)<it.bong*0.02?'var(--ok)':(diff>0?'var(--warn)':'var(--bad)');
+      var packNote=it.units>1?' ('+it.ea.toLocaleString()+'팩×'+it.units+')':'';
+      return it.name+' '+it.bong.toLocaleString()+'봉'+packNote+' 중 <strong>'+alloc.toLocaleString()+'봉</strong> <span style="color:'+color+'">('+(diff>0?'미배분 '+diff.toLocaleString():diff<0?'초과 '+(-diff).toLocaleString():'완료')+')</span>';
     }).join(' · ');
     pbalEl.innerHTML='포장 배분 현황: '+(pbal||'제품을 입력하세요');
   }
@@ -1133,7 +1136,7 @@ function runTT(){
   var rtNeed={};  // 제품별 필요 기수
   d.byProd.forEach(function(it){
     var p=PRODUCTS.find(function(x){return x.name===it.name;});
-    rtNeed[it.name]=Math.ceil(it.ea/p.rPerCycle);
+    rtNeed[it.name]=Math.ceil(it.bong/p.rPerCycle);
   });
   var rtMaxEnd=0;
   var rtLabor=document.getElementById('tt-rtlabor'); TT_LABOR.retort=rtLabor?(+rtLabor.value||0):TT_LABOR.retort;
