@@ -385,6 +385,18 @@ tr.total td{background:var(--light);font-weight:700}
         </table></div>
       </div>
 
+      <div class="sec">⑧ 노무비 배부 방식 선택</div>
+      <div class="paste-box" style="border-color:var(--warn);background:#FFFBF0">
+        <div class="pb-title" style="color:var(--warn)">⚖️ 이 달의 노무비 배부 방식을 선택하세요 (저장 시 함께 기록됩니다)</div>
+        <div class="pb-desc">스마트팩토리 공수 데이터가 한 달치 다 쌓이지 않은 달은 <b>방식A(원육중량+수량)</b>를 권장합니다. 실공수(방식C)는 데이터가 충분히 쌓인 달에만 정확합니다.</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+          <label style="font-size:12px;cursor:pointer"><input type="radio" name="laborMethod" value="auto" onchange="onLaborMethodChange()" checked> <b>자동</b> — 공수 데이터 있으면 실공수(C), 없으면 원육중량+수량(A) <span style="color:#888">(기존 동작)</span></label>
+          <label style="font-size:12px;cursor:pointer"><input type="radio" name="laborMethod" value="A" onchange="onLaborMethodChange()"> <b>방식A 강제</b> — 원육중량(임금1~3)+수량(임금4~5+기타). 공수 있어도 무시 <span style="color:var(--ok)">(데이터 부족한 달 권장)</span></label>
+          <label style="font-size:12px;cursor:pointer"><input type="radio" name="laborMethod" value="C" onchange="onLaborMethodChange()"> <b>방식C 강제</b> — 스마트팩토리 실공수 배부 <span style="color:#888">(공수 데이터 충분한 달)</span></label>
+        </div>
+        <div class="paste-result" id="laborMethod-result" style="display:block;color:var(--sub)">현재 선택: 자동</div>
+      </div>
+
       <div id="cost-preview" style="display:none;margin-top:14px">
         <div class="sec">📊 원가 계산 미리보기</div>
         <div class="tbl-wrap"><table>
@@ -1185,6 +1197,26 @@ window.clearManhours = () => {
   updateStepIndicators();
   showToast('🗑️ 공수 데이터 초기화');
 };
+
+// ── 노무비 배부 방식 (월별 저장: 'auto' | 'A' | 'C')
+function getLaborMethod() {
+  const sel = document.querySelector('input[name="laborMethod"]:checked');
+  return sel ? sel.value : 'auto';
+}
+function setLaborMethod(method) {
+  const v = (method === 'A' || method === 'C') ? method : 'auto';
+  const el = document.querySelector(`input[name="laborMethod"][value="${v}"]`);
+  if(el) el.checked = true;
+  onLaborMethodChange();
+}
+window.onLaborMethodChange = () => {
+  const v = getLaborMethod();
+  const txt = v === 'A' ? '방식A 강제 (원육중량+수량) — 공수 무시'
+            : v === 'C' ? '방식C 강제 (스마트팩토리 실공수)'
+            : '자동 (공수 있으면 실공수, 없으면 원육중량+수량)';
+  const el = document.getElementById('laborMethod-result');
+  if(el) el.textContent = '현재 선택: ' + txt;
+};
 // ════════════════════════════════════
 window.parseErpLabor = () => {
   const raw=document.getElementById('paste-erp').value.trim();
@@ -1539,6 +1571,7 @@ window.saveAllData = async () => {
     } : null,
     prodByName, meatInByCode, laborTotal, erpQty,
     manhoursData: window._parsed.manhours || null,
+    laborMethod: getLaborMethod(),
     updatedAt: new Date().toISOString()
   });
   showToast('✅ 저장 완료!'); loadHistory();
@@ -1549,8 +1582,9 @@ window.saveAllData = async () => {
 // ════════════════════════════════════
 window.loadExistingData = async () => {
   const month=document.getElementById('inputMonth').value; if(!month)return;
-  const snap=await getDoc(doc(db,'costData',month)); if(!snap.exists())return;
+  const snap=await getDoc(doc(db,'costData',month)); if(!snap.exists()){ setLaborMethod('auto'); return; }
   const d=snap.data();
+  setLaborMethod(d.laborMethod || 'auto');
   document.getElementById('exp-labor').value=d.laborTotal||(d.erpLabor?.total||'');
   document.getElementById('exp-raw').value=d.raw||'';
   document.getElementById('exp-sub').value=d.sub||'';
@@ -1640,10 +1674,14 @@ function computeMonthCost(d, bomFallback) {
   window._masters.forEach(m=>masterMap[m.code]=m);
 
   // ════ 노무비 배부 방식 결정 ════
-  // 실공수 데이터(manhoursData) 있으면 → 방식C(실공수 배부)
-  // 없으면 → 방식A(원육중량+수량 배부, 기존)
+  // 월별 저장 설정(d.laborMethod) 우선: 'A'=원육중량+수량 강제, 'C'=실공수 강제, 'auto'/없음=자동판정
+  // 자동판정: 실공수 데이터(manhoursData) 있으면 방식C, 없으면 방식A
   const mhData = d.manhoursData || null;
-  const useRealManhours = mhData && Object.keys(mhData).length > 0;
+  const method = d.laborMethod || 'auto';
+  const hasMhData = mhData && Object.keys(mhData).length > 0;
+  const useRealManhours = method === 'A' ? false
+                        : method === 'C' ? hasMhData
+                        : hasMhData; // auto
 
   // 원육투입량 (기존 방식A용 + 트렌드 차트용)
   const savedMeat=d.meatInByCode||{};
