@@ -452,24 +452,29 @@ function ttAutoPack(){
   TT_PACK.forEach(function(pk){pk.use=pk.segs.length>0;});
 }
 function ttAutoRetort(){
-  var packEnd={}; TT_PACK.forEach(function(pk){if(pk.use)pk.segs.forEach(function(s){var t=s.start+s.ea/((pk.speed||36)*60);packEnd[s.prod]=Math.max(packEnd[s.prod]||0,t);});});
+  var packStart={}, packRate={};
+  TT_PACK.forEach(function(pk){if(pk.use)pk.segs.forEach(function(s){
+    if(packStart[s.prod]==null||s.start<packStart[s.prod])packStart[s.prod]=s.start;
+    packRate[s.prod]=(packRate[s.prod]||0)+(pk.speed||36)*60; // 제품 포장 처리율(봉/h, 호기 병렬 합산)
+  });});
   TT_RETORT.forEach(function(rt){rt.segs=[];});
   var nret=STAGES[TT_STAGE].ret, lines=[]; TT_RETORT.forEach(function(rt,i){if(i<nret)lines.push(rt);});
   if(lines.length===0)return;
   var rtFree={}; lines.forEach(function(l){rtFree[l.line]=0;});
-  var jobs=[]; // 회전 1개 단위 작업
+  var jobs=[]; // 회전 1개 단위, ready = 그 회전분 포장 완료 시점
   TT_PROD.forEach(function(name){
-    var p=prod(name), ea=(TT_DEFAULT[name]||0)*p.units; if(ea<=0)return; // 봉수 환산 (팩 × units)
+    var p=prod(name), ea=(TT_DEFAULT[name]||0)*p.units; if(ea<=0)return;
     var cycles=Math.ceil(ea/p.rPerCycle);
-    for(var c=0;c<cycles;c++) jobs.push({prod:name, rHr:p.rHr, ready:packEnd[name]||0});
+    var ps=(packStart[name]!=null?packStart[name]:0), pr=packRate[name]||(36*60);
+    for(var c=0;c<cycles;c++){ jobs.push({prod:name, rHr:p.rHr, ready:ps+(c+1)*p.rPerCycle/pr}); } // (c+1)회전분 포장되면 레토 투입
   });
-  jobs.sort(function(a,b){return a.ready-b.ready;}); // 내포장 빨리 끝난 것부터
+  jobs.sort(function(a,b){return a.ready-b.ready;});
   jobs.forEach(function(job){
     var best=lines[0]; lines.forEach(function(l){if(rtFree[l.line]<rtFree[best.line])best=l;}); // 가장 빨리 비는 레토
     var bi=-1; for(var k=0;k<TT_RETORT.length;k++){if(TT_RETORT[k].line===best.line){bi=k;break;}}
-    var s=Math.max(job.ready, rtFree[best.line]); // 내포장 종료 후 + 레토 가용 후 (선후)
+    var s=Math.max(job.ready, rtFree[best.line]); // 포장 1회전분 완료 후 + 레토 가용 후
     var segs=TT_RETORT[bi].segs, last=segs[segs.length-1];
-    if(last && last.prod===job.prod && Math.abs((last.start+last.cycles*job.rHr)-s)<0.01){ last.cycles++; } // 연속 같은 제품 병합
+    if(last && last.prod===job.prod && Math.abs((last.start+last.cycles*job.rHr)-s)<0.01){ last.cycles++; }
     else { segs.push({prod:job.prod, cycles:1, start:+s.toFixed(2)}); }
     rtFree[best.line]=s+job.rHr;
   });
