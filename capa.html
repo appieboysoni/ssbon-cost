@@ -76,9 +76,10 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
       <option value="코스트코 170g">코스트코 170g (단독)</option>
       <option value="트레이더스 460g">트레이더스 460g (단독)</option>
       <option value="FC 3kg">FC 3kg (단독)</option>
-      <option value="" disabled>혼합 · FC+시그130g (예정)</option>
-      <option value="" disabled>혼합 · FC+미니70g (예정)</option>
-      <option value="" disabled>전 제품 동시 (예정)</option>
+      <option value="혼합 FC+시그130">혼합 · FC+시그130g</option>
+      <option value="혼합 FC+코스트170">혼합 · FC+코스트170g</option>
+      <option value="혼합 FC+미니70">혼합 · FC+미니70g</option>
+      <option value="혼합 FC+메추리알180">혼합 · FC+메추리알180g</option>
     </select>
   </div>
   <div class="grid2">
@@ -88,7 +89,13 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
   <div class="section"><div class="sec-hdr">👥 필요 인원 (설비 풀가동 기준)</div><div class="sec-body"><div class="kpi-row" id="cap-staff"></div></div></div>
 </div>
 
-<div id="page-max" class="page"><div class="alert info">투자 사다리 요약(탭2)은 탭1 확정 후 작성 예정입니다.</div></div>
+<div id="page-max" class="page">
+  <div class="alert info">현재 → 최대3까지 <strong>4단계 투자 사다리</strong>입니다. 각 단계는 누적(앞 단계 포함)이며, 아래 생산량은 탭1 공정 능력 엔진으로 단독 생산 기준 자동 계산됩니다. (혼합 동시생산은 엔진 확장 후 반영)</div>
+  <div class="section"><div class="sec-hdr">🪜 단계별 추가 투자 (누적)</div><div class="sec-body" id="m-ladder"></div></div>
+  <div class="section"><div class="sec-hdr">📈 제품별 최대 생산량 (단독 · t/일) · 병목</div><div class="sec-body"><div style="overflow-x:auto"><table class="tbl" id="m-grid"></table></div>
+    <div style="font-size:10px;color:var(--sub);margin-top:6px">셀 = 하루 최대 생산(t) · 작은 글씨 = 병목 공정. 배수 = 최대3 ÷ 현재.</div></div></div>
+  <div class="section"><div class="sec-hdr">🎯 병목 이동</div><div class="sec-body" id="m-bottleneck"></div></div>
+</div>
 <div id="page-tt" class="page">
   <div class="alert info">그날 생산할 제품·봉수를 입력하면 <strong>원육 총량</strong>이 환산되고, 각 공정의 인원·설비를 조절하면 <strong>처리시간(막대 길이)</strong>이 자동 계산됩니다. <strong>시작 시각은 직접 입력</strong>해 배치하세요. 투입 마감 20:30 기준.</div>
   <div class="section"><div class="sec-hdr">💾 시나리오 저장·불러오기</div><div class="sec-body">
@@ -101,6 +108,23 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     </div>
     <div id="tt-saveinfo" style="font-size:11px;color:var(--sub);margin-top:8px">현재 설정을 이름 붙여 저장하거나 불러오세요. (제조원가 사이트와 같은 클라우드)</div>
   </div></div>
+  <div class="section"><div class="sec-hdr">🏭 단계·물량 프리셋 <span style="font-weight:400;font-size:10px;color:var(--sub)">(탭1 공정능력 연동 · 골격 자동, 봉수·시작시각 수동)</span></div><div class="sec-body">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <span style="font-size:11px;font-weight:600;min-width:62px">투자 단계</span>
+      <div id="tt-stage-btns" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:600;min-width:62px">물량 세트</span>
+      <select id="tt-volset" onchange="ttApplyVolume(this.value)" style="padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit">
+        <option value="수동">수동 입력</option>
+        <option value="이론_현재">이론 · 현재</option>
+        <option value="이론_최대">이론 · 최대</option>
+      </select>
+      <span style="font-size:10px;color:var(--sub)">선택한 품목의 봉수를 세트값으로 채웁니다 (이후 직접 수정 가능)</span>
+    </div>
+    <div style="margin-top:10px"><button onclick="ttAutoCook()" style="padding:7px 16px;border:1px solid var(--p);background:var(--p);color:#fff;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🤖 자숙 자동 배치</button> <span style="font-size:10px;color:var(--sub)">전처리 공급 시점 기준 + 종료 빠른 탱크 우선 (가압 선호). 결과는 수동 편집 가능</span></div>
+    <div id="tt-preset-info" style="font-size:11px;color:var(--mid);margin-top:8px"></div>
+  </div></div>
   <div class="grid2">
     <div class="section"><div class="sec-hdr">📦 그날 생산 (제품·봉수, 최대 3품목)</div><div class="sec-body">
       <table class="tbl"><thead><tr><th>제품</th><th class="c">부위</th><th class="r">봉수</th><th class="r">원육(kg)</th></tr></thead><tbody id="tt-prod"></tbody></table>
@@ -112,7 +136,25 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
-<div id="page-data" class="page"><div class="alert info">물량·기준 데이터 탭은 다음 단계에서 작성합니다.</div></div>
+<div id="page-data" class="page">
+  <div class="alert info">제품 마스터·수율·물량 세트를 관리합니다. 수율·봉당 원육을 바꾸면 <strong>적용</strong> 버튼으로 탭1·타임테이블에 반영됩니다. 26년 12월 영업팀 물량이 나오면 <strong>실수요 세트</strong>를 추가해 같은 엔진으로 돌립니다.</div>
+  <div class="section"><div class="sec-hdr">📦 제품 5종 마스터</div><div class="sec-body">
+    <table class="tbl"><thead><tr><th>제품</th><th class="r">봉당 원육(g)</th><th class="c">units</th><th class="c">부위</th><th class="c">주 포장라인</th><th class="r">레토 1회전</th></tr></thead><tbody id="d-prod"></tbody></table>
+    <div style="font-size:10px;color:var(--sub);margin-top:6px">units=봉/팩 (코스트코 4봉=1팩). 봉당 원육만 편집, 수율은 아래에서.</div>
+  </div></div>
+  <div class="section"><div class="sec-hdr">📐 부위별 수율 (편집 가능)</div><div class="sec-body">
+    <table class="tbl"><thead><tr><th>부위</th><th class="r">전처리수율%</th><th class="r">자숙수율%</th><th class="r">파쇄수율%</th><th class="r">봉→원육 환산</th></tr></thead><tbody id="d-yield"></tbody></table>
+    <button onclick="applyData()" style="background:var(--p);color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:10px">적용 + 재계산</button>
+  </div></div>
+  <div class="section"><div class="sec-hdr">📊 물량 세트 (봉수)</div><div class="sec-body">
+    <table class="tbl"><thead><tr><th>제품</th><th class="r">이론_현재</th><th class="r">이론_최대</th><th class="r">실수요_2612</th></tr></thead><tbody id="d-vol"></tbody></table>
+    <div style="font-size:10px;color:var(--sub);margin-top:6px">이론 세트 = v3 §6. 실수요_2612는 영업팀 물량 확정 시 입력.</div>
+  </div></div>
+  <div class="grid2">
+    <div class="section"><div class="sec-hdr">🍲 자숙 설비</div><div class="sec-body" style="font-size:11px;line-height:1.9"><strong>6탱크 × 800kg</strong><br>가압 2기(상압 4.5h ↔ 가압 2.5h 전환)<br>상압 4기(4.5h)<br>최대3: 가압 7번 신규(가압 3기)<br><span style="color:var(--sub)">정시 6,400kg · 최대3 7,200kg</span></div></div>
+    <div class="section"><div class="sec-hdr">🏭 공정 기준</div><div class="sec-body" style="font-size:11px;line-height:1.9"><strong>전처리</strong> 60 kg/인시 (슬라이서 80)<br><strong>파쇄</strong> 라인당 300 kg/h(자숙후) · 라인당 13명<br><strong>내포장</strong> 가동률 90% · 호기 속도 탭1에서 조정<br><strong>레토</strong> FC 384봉/2.5h · FP 4,096~5,120봉/1.25h</div></div>
+  </div>
+</div>
 
 <script>
 // ===== 데이터 레이어 (v3) =====
@@ -122,13 +164,14 @@ var PRODUCTS=[
   {name:'시그니처 130g',meat:25,units:1,part:'설도',rPerCycle:4096,rHr:1.25},
   {name:'코스트코 170g',meat:54,units:4,part:'우둔',rPerCycle:4096,rHr:1.25},
   {name:'트레이더스 460g',meat:147.2,units:1,part:'설도',rPerCycle:1520,rHr:1.25},
-  {name:'FC 3kg',meat:1350,units:1,part:'홍두깨',rPerCycle:384,rHr:2.5}
+  {name:'FC 3kg',meat:1350,units:1,part:'홍두깨',rPerCycle:384,rHr:2.5},
+  {name:'메추리알 180g',meat:0,units:1,part:'우둔',rPerCycle:4096,rHr:1.25,egg:true}
 ];
 function prod(name){return PRODUCTS.find(function(x){return x.name===name;});}
 var STAGES={'현재':{frag:1,ret:3,slicer:false,cook:6400},'최대1':{frag:2,ret:3,slicer:true,cook:6400},'최대2':{frag:2,ret:4,slicer:true,cook:6400},'최대3':{frag:2,ret:4,slicer:true,cook:7200}};
 var STAGE_KEYS=['현재','최대1','최대2','최대3'];
-var SPD_DEFAULT={'미니 70g':{'1호기':55,'3호기':36,'4호기':36,'5호기':36},'시그니처 130g':{'3호기':36,'4호기':36,'5호기':36,'2호기':15},'코스트코 170g':{'3호기':36,'4호기':36,'5호기':36,'2호기':15},'트레이더스 460g':{'3호기':26,'4호기':26,'2호기':15},'FC 3kg':{'2호기':15}};
-var PD={'미니 70g':{'현재':['1호기'],'최대1':['1호기','3호기','4호기'],'최대2':['1호기','3호기','4호기','5호기'],'최대3':['1호기','3호기','4호기','5호기']},'시그니처 130g':{'현재':['3호기','4호기'],'최대1':['3호기','4호기'],'최대2':['3호기','4호기','5호기'],'최대3':['3호기','4호기','5호기']},'코스트코 170g':{'현재':['3호기','4호기'],'최대1':['3호기','4호기'],'최대2':['3호기','4호기','5호기'],'최대3':['3호기','4호기','5호기']},'트레이더스 460g':{'현재':['3호기','4호기'],'최대1':['3호기','4호기'],'최대2':['3호기','4호기'],'최대3':['3호기','4호기']},'FC 3kg':{'현재':['2호기'],'최대1':['2호기'],'최대2':['2호기'],'최대3':['2호기']}};
+var SPD_DEFAULT={'미니 70g':{'1호기':55,'3호기':36,'4호기':36,'5호기':36},'시그니처 130g':{'3호기':36,'4호기':36,'5호기':36,'2호기':15},'코스트코 170g':{'3호기':36,'4호기':36,'5호기':36,'2호기':15},'트레이더스 460g':{'3호기':26,'4호기':26,'2호기':15},'FC 3kg':{'2호기':15},'메추리알 180g':{'3호기':30,'4호기':30}};
+var PD={'미니 70g':{'현재':['1호기'],'최대1':['1호기','3호기','4호기'],'최대2':['1호기','3호기','4호기','5호기'],'최대3':['1호기','3호기','4호기','5호기']},'시그니처 130g':{'현재':['3호기','4호기'],'최대1':['3호기','4호기'],'최대2':['3호기','4호기','5호기'],'최대3':['3호기','4호기','5호기']},'코스트코 170g':{'현재':['3호기','4호기'],'최대1':['3호기','4호기'],'최대2':['3호기','4호기','5호기'],'최대3':['3호기','4호기','5호기']},'트레이더스 460g':{'현재':['3호기','4호기'],'최대1':['3호기','4호기'],'최대2':['3호기','4호기'],'최대3':['3호기','4호기']},'FC 3kg':{'현재':['2호기'],'최대1':['2호기'],'최대2':['2호기'],'최대3':['2호기']},'메추리알 180g':{'현재':['3호기','4호기'],'최대1':['3호기','4호기'],'최대2':['3호기','4호기'],'최대3':['3호기','4호기']}};
 var PLABOR={'미니 70g':6,'시그니처 130g':5,'코스트코 170g':4,'트레이더스 460g':4,'FC 3kg':6};
 // 물량 세트 (봉수). 12월 실수요는 추후 주입
 var VOLUME={'이론_현재':{'미니 70g':14115,'시그니처 130g':16252,'코스트코 170g':14537,'트레이더스 460g':4871,'FC 3kg':1094},'이론_최대':{'미니 70g':42525,'시그니처 130g':35235,'코스트코 170g':35235,'트레이더스 460g':23381,'FC 3kg':2626}};
@@ -141,6 +184,7 @@ function availHogi(name,st){return Object.keys(SPD_DEFAULT[name]).filter(functio
 // ===== 탭1 상태 =====
 var capStage='현재', capScen='미니 70g', capSpd={}, capHogi={}, capPreW=null;
 function capResetDefaults(){
+  if(MIX[capScen])return;
   capSpd={}; capHogi={}; capPreW=null;
   availHogi(capScen,capStage).forEach(function(h){
     capSpd[h]=SPD_DEFAULT[capScen][h];
@@ -176,8 +220,8 @@ function capRenderStageBtns(){
   var h=''; STAGE_KEYS.forEach(function(s){ h+='<button class="'+(s===capStage?'active':'')+'" onclick="capSetStage(\''+s+'\')">'+s+'</button>'; });
   document.getElementById('cap-stage').innerHTML=h;
 }
-function capSetStage(s){capStage=s;capResetDefaults();capRender();}
-function capScenChange(){var v=document.getElementById('cap-scen').value;if(!v)return;capScen=v;capResetDefaults();capRender();}
+function capSetStage(s){capStage=s;if(MIX[capScen]){mixRatio=null;mixPreW=null;mixRender();}else{capResetDefaults();capRender();}}
+function capScenChange(){var v=document.getElementById('cap-scen').value;if(!v)return;capScen=v;if(MIX[v]){mixRatio=null;mixPreW=null;mixRender();}else{capResetDefaults();capRender();}}
 function capRenderAdjust(maxKg){
   var hs=availHogi(capScen,capStage);
   var h='<div style="font-size:10px;color:var(--sub);margin-bottom:4px">사용 호기 / 속도(ea/min)</div>';
@@ -192,6 +236,7 @@ function capToggleHogi(h,v){capHogi[h]=v;capRender();}
 function capSetSpd(h,v){capSpd[h]=+v||0;capRender();}
 function capSetPreW(v){capPreW=+v||1;capRender();}
 function capRender(){
+  if(MIX[capScen]){mixRender();return;}
   capRenderStageBtns();
   var e=capEngine();
   var order=['전처리','자숙','파쇄','내포장','레토르트'];
@@ -227,9 +272,11 @@ function goPage(name,btn){
   document.getElementById('page-'+name).classList.add('active');
   btn.classList.add('active');
   if(name==='cap')capRender();
-  if(name==='tt'){renderTTProd();renderTTControls();runTT();loadTTScenarioList();}
+  if(name==='max')renderMax();
+  if(name==='tt'){renderTTStageBtns();renderTTProd();renderTTControls();runTT();loadTTScenarioList();}
+  if(name==='data')renderData();
 }
-window.addEventListener('DOMContentLoaded',function(){ capResetDefaults(); capRender(); });
+document.addEventListener('DOMContentLoaded',function(){ capResetDefaults(); capRender(); });
 </script>
 <script>
 
@@ -258,6 +305,7 @@ function buildTT(canvasId, lanes, timeStart, timeEnd, height){
     });
   });
 }
+var TT_STAGE='현재';
 var TT_PROD=['FC 3kg','코스트코 170g','미니 70g'];
 var TT_DEFAULT={'FC 3kg':1461,'코스트코 170g':3539,'미니 70g':0,'시그니처 130g':0,'트레이더스 460g':0};
 var TT_START={pre:5.0}; var TT_WORK={pre:10};
@@ -267,7 +315,7 @@ var TT_LABOR={cook:3,retort:2};
 var FRAG_PROD={'홍두깨':23.0,'설도':30.0,'우둔':21.4};
 var TT_FRAG=[{line:1,workers:13,use:true,segs:[{part:'홍두깨',start:9.0,end:14.0}]},{line:2,workers:10,use:true,segs:[{part:'우둔',start:9.5,end:14.0}]}];
 var FRAG_PERLINE_MAX=13;
-var TT_PACK=[{line:'1호기',speed:55,labor:3,use:true,segs:[{prod:'미니 70g',ea:0,start:9.5}]},{line:'2호기',speed:15,labor:3,use:true,segs:[{prod:'FC 3kg',ea:0,start:9.5}]},{line:'3호기',speed:36,labor:3,use:true,segs:[{prod:'코스트코 170g',ea:0,start:9.5}]},{line:'4호기',speed:36,labor:3,use:true,segs:[{prod:'코스트코 170g',ea:0,start:9.5}]}];
+var TT_PACK=[{line:'1호기',speed:55,labor:3,use:true,segs:[{prod:'미니 70g',ea:0,start:9.5}]},{line:'2호기',speed:15,labor:3,use:true,segs:[{prod:'FC 3kg',ea:0,start:9.5}]},{line:'3호기',speed:36,labor:3,use:true,segs:[{prod:'코스트코 170g',ea:0,start:9.5}]},{line:'4호기',speed:36,labor:3,use:true,segs:[{prod:'코스트코 170g',ea:0,start:9.5}]},{line:'5호기',speed:36,labor:3,use:false,segs:[{prod:'미니 70g',ea:0,start:9.5}]}];
 var TT_RETORT=[{line:'레토르트1',use:true,segs:[{prod:'FC 3kg',cycles:1,start:11.0}]},{line:'레토르트2',use:true,segs:[{prod:'FC 3kg',cycles:1,start:11.5}]},{line:'레토르트3',use:true,segs:[{prod:'코스트코 170g',cycles:1,start:11.0}]},{line:'레토르트4',use:false,segs:[{prod:'FC 3kg',cycles:1,start:11.0}]}];
 function ttDayRaw(){
   var parts={},total=0,byProd=[];
@@ -280,14 +328,75 @@ function ttDayRaw(){
 function renderTTProd(){
   var h='';
   TT_PROD.forEach(function(name){var p=prod(name),def=TT_DEFAULT[name]||0;
-    h+='<tr><td>'+name+'</td><td class="c">'+p.part+'</td><td class="r"><input type="text" value="'+def.toLocaleString()+'" data-ttp="'+name+'" oninput="runTT()" style="width:90px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td><td class="r" id="ttraw-'+name.replace(/[^a-zA-Z0-9]/g,'')+'">-</td></tr>';});
+    h+='<tr><td>'+name+(p.egg?' <span style="font-size:9px;color:var(--sub)">(상류 0)</span>':'')+'</td><td class="c">'+(p.egg?'—':p.part)+'</td><td class="r"><input type="text" value="'+def.toLocaleString()+'" data-ttp="'+name+'" oninput="runTT()" style="width:90px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td><td class="r" id="ttraw-'+name.replace(/[^a-zA-Z0-9]/g,'')+'">-</td></tr>';});
   h+='<tr><td colspan="4" style="font-size:10px;color:var(--sub);padding-top:8px">품목 변경: '+PRODUCTS.map(function(p){return '<label style="margin-right:10px;cursor:pointer"><input type="checkbox" '+(TT_PROD.indexOf(p.name)>=0?'checked':'')+' onchange="toggleTTProd(\''+p.name+'\')"> '+p.name+'</label>';}).join('')+' <span style="color:var(--bad)">(최대 3품목)</span></td></tr>';
   document.getElementById('tt-prod').innerHTML=h;
 }
 function toggleTTProd(name){var i=TT_PROD.indexOf(name);if(i>=0){TT_PROD.splice(i,1);}else{if(TT_PROD.length>=3){alert('최대 3품목');return;}TT_PROD.push(name);}renderTTProd();runTT();}
+
+function renderTTStageBtns(){
+  var el=document.getElementById('tt-stage-btns'); if(!el)return;
+  var h=''; ['현재','최대1','최대2','최대3'].forEach(function(s){
+    var on=(s===TT_STAGE);
+    h+='<button onclick="ttApplyStage(\''+s+'\')" style="padding:5px 12px;border:1px solid '+(on?'var(--p)':'var(--border)')+';background:'+(on?'var(--p)':'var(--card)')+';color:'+(on?'#fff':'#333')+';border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">'+s+'</button>';
+  });
+  el.innerHTML=h;
+  var st=STAGES[TT_STAGE], info=document.getElementById('tt-preset-info');
+  if(info)info.innerHTML='단계 <strong>'+TT_STAGE+'</strong> → 파쇄 <strong>'+st.frag+'라인</strong> · 레토 <strong>'+st.ret+'대</strong>'+(st.slicer?' · 슬라이서':'')+' · 자숙 '+(st.cook===7200?'가압3':'가압2')+'+상압4 <span style="color:var(--sub)">(파쇄·레토는 자동 적용됨 / 내포장 호기·자숙 탱크는 아래에서 조정)</span>';
+}
+function ttApplyStage(stage){
+  if(!STAGES[stage])return;
+  syncFragFromDOM(); syncPackFromDOM(); syncRtFromDOM();
+  TT_STAGE=stage;
+  var nf=STAGES[stage].frag, nr=STAGES[stage].ret;
+  TT_FRAG.forEach(function(f,i){ f.use=(i<nf); });
+  TT_RETORT.forEach(function(rt,i){ rt.use=(i<nr); });
+  // 자숙: 최대3 = 가압 신규 1대 도입(7탱크), 그 외 기존 6탱크 (기존 탱크 가압 전환 불가)
+  if(stage==='최대3'){ if(!TT_COOK.some(function(c){return c.tank===7;})) TT_COOK.push({tank:7,mode:'가압',use:true,starts:[8.5]}); }
+  else { TT_COOK=TT_COOK.filter(function(c){return c.tank!==7;}); }
+  // 내포장 호기: 선택 품목의 단계별 호기(PD) 합집합만 use
+  var hset={}; TT_PROD.forEach(function(name){ if(PD[name]&&PD[name][stage]) PD[name][stage].forEach(function(h){ hset[h]=true; }); });
+  TT_PACK.forEach(function(pk){ pk.use=!!hset[pk.line]; });
+  renderTTStageBtns(); renderTTControls(); runTT();
+}
+function ttApplyVolume(set){
+  if(set==='수동'||!VOLUME[set])return;
+  var v=VOLUME[set];
+  TT_PROD.forEach(function(name){ if(v[name]!=null) TT_DEFAULT[name]=v[name]; });
+  renderTTProd(); runTT();
+}
+function ttAutoCook(){
+  var d=ttDayRaw(); var total=d.total;
+  if(total<=0){alert('제품 봉수를 먼저 입력하세요');return;}
+  var preStart=+document.getElementById('tt-pres').value||5;
+  var prew=+document.getElementById('tt-prew').value||1;
+  var rate=(prew+(STAGES[TT_STAGE]&&STAGES[TT_STAGE].slicer?4:0))*60; // 전처리 kg/h
+  var batches=Math.ceil(total/800);
+  // 자숙 전체 탱크를 후보로 복원·초기화 (자동배치가 자숙 use·starts 전관리)
+  TT_COOK.forEach(function(c){c.use=true;c.starts=[];});
+  var tanks=TT_COOK.slice();
+  tanks.sort(function(a,b){return (a.mode==='가압'?0:1)-(b.mode==='가압'?0:1);}); // tie-break: 가압 우선(회전 빠름)
+  var nextFree={}; tanks.forEach(function(t){nextFree[t.tank]=preStart;});
+  for(var b=0;b<batches;b++){
+    var supplyT=preStart+(b+1)*800/rate; // (b+1)번째 800kg 공급 완료 = 선행(전처리) 제약
+    var best=null,bestStart=Infinity;
+    tanks.forEach(function(t){var s=Math.max(supplyT,nextFree[t.tank]);if(s<bestStart-1e-9){bestStart=s;best=t;}}); // 가장 빨리 투입가능한 탱크
+    best.starts.push(+bestStart.toFixed(2));
+    nextFree[best.tank]=bestStart+COOK_HR[best.mode];
+  }
+  var maxEnd=0; TT_COOK.forEach(function(c){c.use=c.starts.length>0; if(c.use)maxEnd=Math.max(maxEnd,nextFree[c.tank]);}); // 안 쓴 탱크 use=false
+  renderTTControls(); runTT();
+  var info=document.getElementById('tt-preset-info');
+  if(info){
+    var msg = maxEnd>15
+      ? '<div style="color:var(--bad);font-weight:600;font-size:11px;margin-top:6px">⚠ 자숙 자동: '+batches+'배치, 종료 '+fmtH(maxEnd)+' — 15시 초과(capa 부족). 양·탱크·단계를 조정하세요</div>'
+      : '<div style="color:var(--ok);font-weight:600;font-size:11px;margin-top:6px">✓ 자숙 자동: '+batches+'배치, 종료 '+fmtH(maxEnd)+' (15시 이내)</div>';
+    info.insertAdjacentHTML('beforeend', msg);
+  }
+}
 function renderTTControls(){
   var h='<table class="tbl"><thead><tr><th>공정</th><th class="c">인원/설비</th><th class="c">시작시각</th><th class="r">처리시간</th><th class="r">종료</th></tr></thead><tbody>';
-  h+='<tr><td>전처리</td><td class="c"><input type="number" id="tt-prew" value="'+TT_WORK.pre+'" min="1" max="20" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명</td><td class="c"><input type="number" id="tt-pres" value="'+TT_START.pre+'" min="0" max="23" step="0.5" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td><td class="r" id="tt-pretime">-</td><td class="r" id="tt-preend">-</td></tr>';
+  h+='<tr><td>전처리</td><td class="c"><input type="number" id="tt-prew" value="'+TT_WORK.pre+'" min="1" max="20" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명'+(STAGES[TT_STAGE]&&STAGES[TT_STAGE].slicer?' <span style="font-size:9px;color:var(--p);font-weight:600">+슬라이서</span>':'')+'</td><td class="c"><input type="number" id="tt-pres" value="'+TT_START.pre+'" min="0" max="23" step="0.5" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td><td class="r" id="tt-pretime">-</td><td class="r" id="tt-preend">-</td></tr>';
   h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">자숙 탱크 (1~4 상압 / 5·6 가압·상압 선택) · 800kg/탱크 · 인원 <input type="number" id="tt-cooklabor" value="'+TT_LABOR.cook+'" min="0" max="20" oninput="runTT()" style="width:42px;padding:2px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명</td></tr>';
   TT_COOK.forEach(function(c,i){
     var selectable=(c.tank>=5);
@@ -335,13 +444,14 @@ function fmtH(h){var hh=Math.floor(h),mm=Math.round((h-hh)*60);return (hh%24)+':
 function shade(hex,k){var pal={'#8064A2':['#5E4781','#8064A2','#A38BC0','#C4B4D9'],'#1D9E75':['#137A59','#1D9E75','#46BD97','#7FD3BC'],'#ED7D31':['#C75E16','#ED7D31','#F3A065','#F7C29C'],'#C00000':['#900000','#C00000','#D94545','#E88080']};var arr=pal[hex];if(!arr)return hex;return arr[Math.min(k,arr.length-1)];}
 function runTT(){
   var d=ttDayRaw();
-  d.byProd.forEach(function(it){var el=document.getElementById('ttraw-'+it.name.replace(/[^a-zA-Z0-9]/g,''));if(el)el.textContent=Math.round(it.raw).toLocaleString();});
+  d.byProd.forEach(function(it){var el=document.getElementById('ttraw-'+it.name.replace(/[^a-zA-Z0-9]/g,''));if(el){var pp=prod(it.name);el.textContent=pp.egg?'상류無':Math.round(it.raw).toLocaleString();}});
   TT_PROD.forEach(function(name){if(!d.byProd.find(function(x){return x.name===name;})){var el=document.getElementById('ttraw-'+name.replace(/[^a-zA-Z0-9]/g,''));if(el)el.textContent='-';}});
   var sum='<div class="kpi-row" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="kl">총 투입 원육</div><div class="kv">'+Math.round(d.total).toLocaleString()+'</div><div class="ks">kg</div></div>';
   Object.keys(d.parts).forEach(function(part){sum+='<div class="kpi"><div class="kl">'+part+'</div><div class="kv" style="font-size:16px">'+Math.round(d.parts[part]).toLocaleString()+'</div><div class="ks">kg</div></div>';});
   sum+='</div>'; document.getElementById('tt-rawsum').innerHTML=sum;
   var prew=+document.getElementById('tt-prew').value||1, preStart=+document.getElementById('tt-pres').value||0, preTime=0;
-  Object.keys(d.parts).forEach(function(part){preTime+=d.parts[part]/(prew*YIELD[part].pre?YIELD[part].pre:60);});
+  var preWorkersEff=prew+(STAGES[TT_STAGE]&&STAGES[TT_STAGE].slicer?4:0);
+  Object.keys(d.parts).forEach(function(part){preTime+=d.parts[part]/(preWorkersEff*60);});
   var preEnd=preStart+preTime;
   document.getElementById('tt-pretime').textContent=preTime.toFixed(1)+'h'; document.getElementById('tt-preend').textContent=fmtH(preEnd);
   TT_WORK.pre=prew; TT_START.pre=preStart;
@@ -351,7 +461,7 @@ function runTT(){
   lanes.push({label:'<strong>자숙 ('+TT_LABOR.cook+'명)</strong>',bars:[]});
   TT_COOK.forEach(function(c,i){
     var useEl=document.getElementById('tt-cookuse-'+i),use=useEl?useEl.checked:c.use;
-    var cycEl=document.getElementById('tt-cookcyc-'+i),cyc=cycEl?(+cycEl.value||1):c.starts.length, mode=c.mode;
+    var cycEl=document.getElementById('tt-cookcyc-'+i),cyc=use?(cycEl?(+cycEl.value||1):c.starts.length):0, mode=c.mode;
     if(c.tank>=5){var me=document.getElementById('tt-cookmode-'+i);if(me&&me.value)mode=me.value;}else{mode='상압';}
     if(mode!=='상압'&&mode!=='가압')mode='상압';
     var hr=COOK_HR[mode],starts=[];
@@ -437,6 +547,142 @@ function saveTTScenario(){var name=(document.getElementById('tt-scenname').value
 function loadTTScenarioList(){var db=initFB();if(!db)return;db.collection('capa_timetable').orderBy('updated','desc').get().then(function(snap){var sel=document.getElementById('tt-scenlist'),cur=sel.value,h='<option value="">— 저장된 시나리오 —</option>';snap.forEach(function(doc){var d=doc.data();h+='<option value="'+doc.id+'">'+(d.name||doc.id)+'</option>';});sel.innerHTML=h;if(cur)sel.value=cur;}).catch(function(e){console.warn('목록',e);});}
 function loadTTScenario(){var name=document.getElementById('tt-scenlist').value,info=document.getElementById('tt-saveinfo');if(!name){alert('선택');return;}var db=initFB();if(!db){info.innerHTML='<span style="color:var(--bad)">연결 실패</span>';return;}info.textContent='불러오는 중...';db.collection('capa_timetable').doc(name).get().then(function(doc){if(!doc.exists){info.innerHTML='<span style="color:var(--bad)">없음</span>';return;}applyTTState(doc.data().state);document.getElementById('tt-scenname').value=doc.data().name||name;info.innerHTML='<span style="color:var(--ok)">✓ "'+(doc.data().name||name)+'" 불러옴</span>';}).catch(function(e){info.innerHTML='<span style="color:var(--bad)">실패: '+e.message+'</span>';});}
 function deleteTTScenario(){var name=document.getElementById('tt-scenlist').value,info=document.getElementById('tt-saveinfo');if(!name){alert('선택');return;}if(!confirm('"'+name+'" 삭제?'))return;var db=initFB();if(!db){info.innerHTML='<span style="color:var(--bad)">연결 실패</span>';return;}db.collection('capa_timetable').doc(name).delete().then(function(){info.innerHTML='<span style="color:var(--sub)">"'+name+'" 삭제됨</span>';loadTTScenarioList();}).catch(function(e){info.innerHTML='<span style="color:var(--bad)">실패: '+e.message+'</span>';});}
+
+
+function renderData(){
+  var ph='';
+  PRODUCTS.filter(function(p){return !p.egg;}).forEach(function(p,i){
+    var line=Object.keys(SPD_DEFAULT[p.name])[0];
+    ph+='<tr><td>'+p.name+'</td><td class="r"><input type="number" value="'+p.meat+'" step="0.1" min="0" data-pi="'+i+'" oninput="onProdMeat(this)" style="width:72px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right"></td><td class="c">'+p.units+'</td><td class="c">'+p.part+'</td><td class="c">'+line+'</td><td class="r">'+p.rPerCycle.toLocaleString()+'봉/'+p.rHr+'h</td></tr>';
+  });
+  document.getElementById('d-prod').innerHTML=ph;
+  var yh='';
+  ['설도','우둔','홍두깨'].forEach(function(part){var y=YIELD[part];var ist='width:64px;padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:right';
+    var rpe=1/(y.fragY*y.cook*y.preY);
+    yh+='<tr><td><strong>'+part+'</strong></td><td class="r"><input type="number" step="0.1" value="'+(y.preY*100).toFixed(1)+'" data-yp="'+part+'" data-yk="preY" style="'+ist+'"></td><td class="r"><input type="number" step="0.1" value="'+(y.cook*100).toFixed(1)+'" data-yp="'+part+'" data-yk="cook" style="'+ist+'"></td><td class="r"><input type="number" step="0.1" value="'+(y.fragY*100).toFixed(1)+'" data-yp="'+part+'" data-yk="fragY" style="'+ist+'"></td><td class="r" style="color:var(--sub)">×'+rpe.toFixed(2)+'</td></tr>';
+  });
+  document.getElementById('d-yield').innerHTML=yh;
+  var vh='';
+  PRODUCTS.filter(function(p){return !p.egg;}).forEach(function(p){var cur=VOLUME['이론_현재'][p.name]||0,mx=VOLUME['이론_최대'][p.name]||0,re=(VOLUME['실수요_2612']||{})[p.name];
+    vh+='<tr><td>'+p.name+'</td><td class="r">'+cur.toLocaleString()+'</td><td class="r">'+mx.toLocaleString()+'</td><td class="r" style="color:var(--sub)">'+(re!=null?re.toLocaleString():'—')+'</td></tr>';
+  });
+  document.getElementById('d-vol').innerHTML=vh;
+}
+function onProdMeat(inp){var i=+inp.dataset.pi;PRODUCTS[i].meat=parseFloat(inp.value)||0;}
+function applyData(){
+  document.querySelectorAll('#d-yield input').forEach(function(inp){var part=inp.dataset.yp,k=inp.dataset.yk,v=parseFloat(inp.value)||0;YIELD[part][k]=v/100;});
+  renderData(); capRender(); try{runTT();}catch(e){}
+  alert('적용되었습니다. 탭1·타임테이블에 반영됩니다.');
+}
+
+
+var LADDER=[
+ {stage:'현재',inv:'기존 설비',detail:'파쇄 1라인 · 레토르트 3대 · 포장 4호기(1·2·3·4) · 가압2/상압4 · 슬라이서 없음'},
+ {stage:'최대1',inv:'＋파쇄 2라인 · ＋슬라이서',detail:'대형 파쇄 병목 완화 + 슬라이서로 전처리 인건비 절감(인원 −25%). 생산량 증가는 파쇄에서만.'},
+ {stage:'최대2',inv:'＋레토르트 4번 · ＋포장 5호기',detail:'레토·내포장 capa 확대 → 소형 내포장 병목 완화'},
+ {stage:'최대3',inv:'＋자숙 가압 7번(가압 3기)',detail:'자숙 6,400 → 7,200kg → 대형(FC·트레) 자숙 병목 상향'}
+];
+var MAX_SCENS=['미니 70g','시그니처 130g','코스트코 170g','트레이더스 460g','FC 3kg'];
+var MAX_SHORT={'미니 70g':'미니70','시그니처 130g':'시그130','코스트코 170g':'코스트170','트레이더스 460g':'트레460','FC 3kg':'FC3kg'};
+function renderMax(){
+  var sScen=capScen,sStage=capStage,sPre=capPreW,sHogi=Object.assign({},capHogi),sSpd=Object.assign({},capSpd);
+  var stages=['현재','최대1','최대2','최대3'];
+  var grid={};
+  stages.forEach(function(st){grid[st]={};MAX_SCENS.forEach(function(sc){capScen=sc;capStage=st;capResetDefaults();var e=capEngine();var sf=capStaff(e.maxKg);grid[st][sc]={t:e.maxKg/1000,bn:e.bn,staff:sf.총원};});});
+  capScen=sScen;capStage=sStage;capPreW=sPre;capHogi=sHogi;capSpd=sSpd;
+  // 사다리
+  var lh='';
+  LADDER.forEach(function(L,i){var act=(L.stage===sStage);
+    lh+='<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:6px;margin-bottom:6px;background:'+(act?'#eef2fb':'var(--light)')+';border:1px solid '+(act?'var(--p)':'var(--border)')+'">'+
+      '<div style="flex:0 0 64px;font-weight:700;color:var(--p);font-size:12px">'+L.stage+'</div>'+
+      '<div style="flex:1"><div style="font-weight:600;font-size:12px">'+L.inv+'</div><div style="font-size:11px;color:var(--sub);margin-top:2px">'+L.detail+'</div></div></div>';
+  });
+  document.getElementById('m-ladder').innerHTML=lh;
+  // 생산량 그리드
+  var bnColor={'내포장':'#C00000','파쇄':'#8064A2','자숙':'#ED7D31','레토르트':'#0D7377','전처리':'#2F5496'};
+  var gh='<thead><tr><th>제품</th>'+stages.map(function(s){return '<th class="r">'+s+'</th>';}).join('')+'<th class="r">배수</th></tr></thead><tbody>';
+  MAX_SCENS.forEach(function(sc){
+    var cur=grid['현재'][sc].t,mx=grid['최대3'][sc].t,mult=cur>0?(mx/cur):0;
+    gh+='<tr><td><strong>'+MAX_SHORT[sc]+'</strong></td>';
+    stages.forEach(function(st){var c=grid[st][sc];gh+='<td class="r">'+c.t.toFixed(2)+'t<br><span style="font-size:9px;color:'+(bnColor[c.bn]||'#999')+'">'+c.bn+'</span></td>';});
+    gh+='<td class="r"><strong style="color:var(--p)">×'+mult.toFixed(1)+'</strong></td></tr>';
+  });
+  gh+='</tbody>';
+  document.getElementById('m-grid').innerHTML=gh;
+  // 병목 이동
+  var bh='<table class="tbl"><thead><tr><th>제품</th><th class="c">현재 병목</th><th class="c">→ 최대3 병목</th><th>해석</th></tr></thead><tbody>';
+  MAX_SCENS.forEach(function(sc){
+    var b0=grid['현재'][sc].bn,b3=grid['최대3'][sc].bn;
+    var note=(b0===b3)?'동일 — 추가 투자로 capa만 상향':'병목 이동 — '+b0+' 완화 후 '+b3+'(이)가 새 한계';
+    bh+='<tr><td>'+MAX_SHORT[sc]+'</td><td class="c">'+b0+'</td><td class="c">'+b3+'</td><td style="font-size:10px;color:var(--sub)">'+note+'</td></tr>';
+  });
+  bh+='</tbody></table><div style="font-size:11px;color:var(--sub);margin-top:8px">소형(미니·시그)은 <strong>내포장</strong>이, 대형(코스트코·트레·FC)은 <strong>파쇄→자숙</strong>이 한계를 좌우합니다.</div>';
+  document.getElementById('m-bottleneck').innerHTML=bh;
+}
+
+
+var MIX={'혼합 FC+시그130':{A:'FC 3kg',B:'시그니처 130g'},'혼합 FC+코스트170':{A:'FC 3kg',B:'코스트코 170g'},'혼합 FC+미니70':{A:'FC 3kg',B:'미니 70g'},'혼합 FC+메추리알180':{A:'FC 3kg',B:'메추리알 180g',eggOnly:true}};
+function mixPackKg(name,stage){var p=prod(name),sum=0;PD[name][stage].forEach(function(h){if(h!=='5호기'||stage==='최대2'||stage==='최대3')sum+=SPD_DEFAULT[name][h];});return sum*480*0.9/p.units*rawPerEa(name)/1000;}
+var mixRatio=null, mixPreW=null, mixEgg=false, mixEggBong=4000;
+function mixDefaultRatio(mix,stage){var M=MIX[mix];if(prod(M.B).egg)return 1;var packB=mixPackKg(M.B,stage);var r=1-packB/STAGES[stage].cook;return Math.max(0.1,Math.min(0.9,r));}
+function mixEngine(mixName,stage,rFC,preW,eggOn,eggBong){
+  var M=MIX[mixName],pA=prod(M.A),pB=prod(M.B),yA=YIELD[pA.part],yB=YIELD[pB.part],bEgg=pB.egg;
+  var cook=STAGES[stage].cook, rawA=cook*rFC, rawB=bEgg?0:cook*(1-rFC);
+  var packA=mixPackKg(M.A,stage), packB=bEgg?0:mixPackKg(M.B,stage);
+  var prodA=Math.min(rawA,packA), prodB=bEgg?0:Math.min(rawB,packB);
+  var meatA=rawA*yA.preY*yA.cook, meatB=bEgg?0:rawB*yB.preY*yB.cook;
+  var loadFrag=(meatA+meatB)/(STAGES[stage].frag*300*8);
+  var loadPackA=rawA/packA, loadPackB=bEgg?0:(packB>0?rawB/packB:0);
+  var bongA=prodA*1000/rawPerEa(M.A)*pA.units, bongB=bEgg?0:prodB*1000/rawPerEa(M.B)*pB.units;
+  var rtA=Math.ceil(bongA/pA.rPerCycle)*pA.rHr, rtB=bEgg?0:Math.ceil(bongB/pB.rPerCycle)*pB.rHr;
+  var rate=STAGES[stage].slicer?80:60;
+  var eggLoad=0, eggRt=0, eggShare=false, eb=(eggOn&&eggBong>0)?eggBong:0;
+  if(eb>0){ eggLoad=eb/(60*480*0.9); eggRt=Math.ceil(eb/4096)*1.25; eggShare=(PD[M.B][stage].indexOf('3호기')>=0||PD[M.B][stage].indexOf('4호기')>=0); }
+  var loadPackBeff=loadPackB+(eggShare?eggLoad:0);
+  var loadRt=(rtA+rtB+eggRt)/(STAGES[stage].ret*8);
+  var loadPre=preW?((rawA+rawB)/(preW*rate*7.5)):null;
+  return {A:M.A,B:M.B,rawA:rawA,rawB:rawB,prodA:prodA,prodB:prodB,wasteA:rawA-prodA,wasteB:rawB-prodB,loadFrag:loadFrag,loadPackA:loadPackA,loadPackB:loadPackB,loadPackBeff:loadPackBeff,loadRt:loadRt,loadPre:loadPre,bongA:Math.round(bongA),bongB:Math.round(bongB),eggLoad:eggLoad,eggShare:eggShare,eggBong:eb};
+}
+function mixSetRatio(v){mixRatio=+v/100;mixRender();}
+function mixSetPreW(v){mixPreW=+v||1;mixRender();}
+function mixToggleEgg(c){mixEgg=c;mixRender();}
+function mixSetEggBong(v){mixEggBong=parseInt(String(v).replace(/[^0-9]/g,''))||0;mixRender();}
+function mixRender(){
+  capRenderStageBtns();
+  var M=MIX[capScen], bEgg=prod(M.B).egg;
+  if(bEgg)mixEgg=true;
+  if(mixRatio===null)mixRatio=mixDefaultRatio(capScen,capStage);
+  var rate=STAGES[capStage].slicer?80:60;
+  var e0=mixEngine(capScen,capStage,mixRatio,null,mixEgg,mixEggBong);
+  if(mixPreW===null)mixPreW=Math.ceil((e0.rawA+e0.rawB)/(rate*7.5));
+  var e=mixEngine(capScen,capStage,mixRatio,mixPreW,mixEgg,mixEggBong);
+  var adj;
+  if(bEgg){
+    adj='<div style="font-size:11px;margin-bottom:8px">FC 3kg 자숙 100% + 메추리알180g (메추리알은 자숙 미사용)</div>'+
+      '<div class="adj-row"><label>전처리 인원'+(STAGES[capStage].slicer?' (슬라이서)':'')+'</label><input type="number" value="'+mixPreW+'" min="1" oninput="mixSetPreW(this.value)" style="width:64px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:center"> 명</div>'+
+      '<div class="adj-row" style="margin-top:6px"><label>메추리알180g 물량</label><input type="text" value="'+mixEggBong.toLocaleString()+'" oninput="mixSetEggBong(this.value)" style="width:84px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:right"> 봉</div>';
+  } else {
+    adj='<div style="font-size:11px;margin-bottom:8px">FC 자숙 점유 <strong>'+(mixRatio*100).toFixed(0)+'%</strong> / FP '+((1-mixRatio)*100).toFixed(0)+'%</div>'+
+    '<input type="range" min="10" max="90" value="'+(mixRatio*100).toFixed(0)+'" oninput="mixSetRatio(this.value)" style="width:100%">'+
+    '<div class="adj-row" style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px"><label>전처리 인원'+(STAGES[capStage].slicer?' (슬라이서)':'')+'</label><input type="number" value="'+mixPreW+'" min="1" oninput="mixSetPreW(this.value)" style="width:64px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:center"> 명</div>'+
+    '<div class="adj-row" style="margin-top:6px"><label><input type="checkbox" '+(mixEgg?'checked':'')+' onchange="mixToggleEgg(this.checked)"> 메추리알180g 추가</label><input type="text" value="'+mixEggBong.toLocaleString()+'" oninput="mixSetEggBong(this.value)" '+(mixEgg?'':'disabled')+' style="width:74px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:right;'+(mixEgg?'':'opacity:.4')+'"> 봉</div>'+
+    '<div style="font-size:10px;color:var(--sub);margin-top:6px">기본 비율 = 소형(FP) 내포장 100% 지점. 메추리알은 상류 0, 내포장 3·4호기·레토만.</div>';
+  }
+  document.getElementById('cap-adjust').innerHTML=adj;
+  function ld(label,load,note){if(load==null)return '';var pct=load*100,w=Math.min(pct,180),over=load>1.001;
+    return '<div class="proc-row"><div class="proc-hd"><span class="nm">'+label+(note?' <span style="color:var(--sub);font-weight:400">'+note+'</span>':'')+'</span><span style="font-weight:600;'+(over?'color:var(--bad)':'color:var(--ok)')+'">'+pct.toFixed(0)+'%'+(over?' ⚠잔업':'')+'</span></div><div class="cap-bar" style="position:relative"><div class="cap-fill" style="width:'+w+'%;background:'+(over?'#C00000':'var(--mid)')+'"></div><div style="position:absolute;left:55.6%;top:-2px;bottom:-2px;width:2px;background:#333"></div></div></div>';}
+  var bars='<div class="kpi-row" style="grid-template-columns:'+(bEgg?'1fr':'1fr 1fr')+';margin-bottom:12px">'+
+    '<div class="kpi"><div class="kl">'+M.A.slice(0,5)+' 실생산</div><div class="kv" style="font-size:16px">'+(e.prodA/1000).toFixed(2)+'t</div><div class="ks">자숙배분 '+(e.rawA/1000).toFixed(1)+'t'+(e.wasteA>50?' · 낭비 '+(e.wasteA/1000).toFixed(1)+'t':'')+'<br>'+e.bongA.toLocaleString()+'봉</div></div>'+
+    (bEgg?'':'<div class="kpi"><div class="kl">'+M.B.slice(0,6)+' 실생산</div><div class="kv" style="font-size:16px">'+(e.prodB/1000).toFixed(2)+'t</div><div class="ks">자숙배분 '+(e.rawB/1000).toFixed(1)+'t'+(e.wasteB>50?' · 낭비 '+(e.wasteB/1000).toFixed(1)+'t':'')+'<br>'+e.bongB.toLocaleString()+'봉</div></div>')+'</div>';
+  if(mixEgg&&e.eggBong>0){bars+='<div class="kpi-row" style="grid-template-columns:1fr;margin-bottom:12px"><div class="kpi"><div class="kl">메추리알180g</div><div class="kv" style="font-size:16px">'+e.eggBong.toLocaleString()+'봉</div><div class="ks">상류 0 · 내포장 3·4호기'+((!bEgg&&e.eggShare)?' (FP와 호기 공유)':' (단독 점유)')+' · 레토 포함</div></div></div>';}
+  bars+='<div style="font-size:11px;font-weight:600;margin-bottom:6px">공정 부하율 <span style="color:var(--sub);font-weight:400">(검정선=100% 정시 한계)</span></div>';
+  bars+=ld('자숙 (공유·기준)',1.0,'')+ld('전처리 (공유·'+mixPreW+'명)',e.loadPre,'')+ld('파쇄 (공유)',e.loadFrag,STAGES[capStage].frag+'라인')+ld('내포장 '+M.A.slice(0,2),e.loadPackA,'분리')+(bEgg?ld('내포장 메추리알',e.loadPackBeff,'3·4호기'):ld('내포장 '+M.B.slice(0,2),(mixEgg&&e.eggShare)?e.loadPackBeff:e.loadPackB,(mixEgg&&e.eggShare)?'+메추리알':'분리'))+((mixEgg&&!e.eggShare&&e.eggBong>0)?ld('내포장 메추리알',e.eggLoad,'3·4호기 단독'):'')+ld('레토르트 (공유)',e.loadRt,STAGES[capStage].ret+'대');
+  document.getElementById('cap-bars').innerHTML=bars;
+  var loads={'파쇄':e.loadFrag,'내포장A':e.loadPackA,'내포장B':(mixEgg&&e.eggShare)?e.loadPackBeff:e.loadPackB,'레토':e.loadRt,'전처리':e.loadPre||0};
+  if(mixEgg&&!e.eggShare&&e.eggBong>0)loads['메추리알포장']=e.eggLoad;
+  var mx=0,mn=''; Object.keys(loads).forEach(function(k){if(loads[k]>mx){mx=loads[k];mn=k;}});
+  document.getElementById('cap-staff').innerHTML='<div class="kpi"><div class="kl">합계 실생산(장조림)</div><div class="kv">'+((e.prodA+e.prodB)/1000).toFixed(2)+'</div><div class="ks">t/일 · 내포장 병목 반영</div></div><div class="kpi"><div class="kl">최대 부하 공정</div><div class="kv" style="font-size:15px;'+(mx>1?'color:var(--bad)':'')+'">'+mn+'</div><div class="ks">'+(mx*100).toFixed(0)+'%'+(mx>1?' · 잔업 필요':' · 정시 가능')+'</div></div>';
+}
 
 </script>
 </body>
