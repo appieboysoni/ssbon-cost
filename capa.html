@@ -122,7 +122,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
       </select>
       <span style="font-size:10px;color:var(--sub)">선택한 품목의 봉수를 세트값으로 채웁니다 (이후 직접 수정 가능)</span>
     </div>
-    <div style="margin-top:10px"><button onclick="ttAutoCook()" style="padding:7px 16px;border:1px solid var(--p);background:var(--p);color:#fff;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🤖 자숙 자동 배치</button> <span style="font-size:10px;color:var(--sub)">전처리 공급 시점 기준 + 종료 빠른 탱크 우선 (가압 선호). 결과는 수동 편집 가능</span></div>
+    <div style="margin-top:10px"><button onclick="ttAutoCook()" style="padding:7px 16px;border:1px solid var(--p);background:var(--p);color:#fff;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🤖 자동 배치 (자숙·파쇄)</button> <span style="font-size:10px;color:var(--sub)">전처리 공급→자숙→파쇄 선후관계 반영. 결과는 수동 편집 가능</span></div>
     <div id="tt-preset-info" style="font-size:11px;color:var(--mid);margin-top:8px"></div>
   </div></div>
   <div class="grid2">
@@ -385,6 +385,7 @@ function ttAutoCook(){
     nextFree[best.tank]=bestStart+COOK_HR[best.mode];
   }
   var maxEnd=0; TT_COOK.forEach(function(c){c.use=c.starts.length>0; if(c.use)maxEnd=Math.max(maxEnd,nextFree[c.tank]);}); // 안 쓴 탱크 use=false
+  ttAutoFrag();
   renderTTControls(); runTT();
   var info=document.getElementById('tt-preset-info');
   if(info){
@@ -393,6 +394,33 @@ function ttAutoCook(){
       : '<div style="color:var(--ok);font-weight:600;font-size:11px;margin-top:6px">✓ 자숙 자동: '+batches+'배치, 종료 '+fmtH(maxEnd)+' (15시 이내)</div>';
     info.insertAdjacentHTML('beforeend', msg);
   }
+}
+function ttAutoFrag(){
+  var d=ttDayRaw();
+  var cookMeat={}; Object.keys(d.parts).forEach(function(p){cookMeat[p]=d.parts[p]*YIELD[p].preY*YIELD[p].cook;});
+  var parts=Object.keys(cookMeat).filter(function(p){return cookMeat[p]>0;});
+  var cookEnds=[]; TT_COOK.forEach(function(c){if(c.use){var hr=COOK_HR[c.mode];c.starts.forEach(function(s){cookEnds.push(s+hr);});}});
+  if(cookEnds.length===0||parts.length===0)return;
+  var firstCook=Math.min.apply(null,cookEnds), lastCook=Math.max.apply(null,cookEnds);
+  var lines=TT_FRAG.filter(function(f){return f.use;});
+  if(lines.length===0)return;
+  parts.sort(function(a,b){return cookMeat[b]-cookMeat[a];}); // 양 많은 부위 우선
+  TT_FRAG.forEach(function(f){f.segs=[];});
+  var lineEnd={}; lines.forEach(function(l){lineEnd[l.line]=firstCook;});
+  parts.forEach(function(part){
+    // 가장 빨리 비는 라인 (부위>라인이면 한 라인에 순차 누적)
+    var ln=lines.reduce(function(best,l){return lineEnd[l.line]<lineEnd[best.line]?l:best;}, lines[0]);
+    var workers=13, pr=FRAG_PROD[part]||23;
+    var dur=cookMeat[part]/(workers*pr);
+    var start=Math.max(firstCook, lineEnd[ln.line]);
+    // 선후관계: 파쇄가 자숙보다 빠르면 시작을 늦춰 종료를 자숙 종료에 맞춤 (파쇄 종료 >= 자숙 종료)
+    if(start+dur<lastCook) start=Math.max(firstCook, lastCook-dur);
+    var end=start+dur;
+    var fi=TT_FRAG.indexOf(ln);
+    TT_FRAG[fi].segs.push({part:part,start:+start.toFixed(2),end:+end.toFixed(2)});
+    TT_FRAG[fi].workers=workers;
+    lineEnd[ln.line]=end;
+  });
 }
 function renderTTControls(){
   var h='<table class="tbl"><thead><tr><th>공정</th><th class="c">인원/설비</th><th class="c">시작시각</th><th class="r">처리시간</th><th class="r">종료</th></tr></thead><tbody>';
