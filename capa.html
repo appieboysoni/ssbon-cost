@@ -122,7 +122,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
       </select>
       <span style="font-size:10px;color:var(--sub)">선택한 품목의 봉수를 세트값으로 채웁니다 (이후 직접 수정 가능)</span>
     </div>
-    <div style="margin-top:10px"><button onclick="ttAutoCook()" style="padding:7px 16px;border:1px solid var(--p);background:var(--p);color:#fff;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🤖 자동 배치 (자숙·파쇄)</button> <span style="font-size:10px;color:var(--sub)">전처리 공급→자숙→파쇄 선후관계 반영. 결과는 수동 편집 가능</span></div>
+    <div style="margin-top:10px"><button onclick="ttAutoCook()" style="padding:7px 16px;border:1px solid var(--p);background:var(--p);color:#fff;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🤖 자동 배치 (전체 공정)</button> <span style="font-size:10px;color:var(--sub)">전처리→자숙→파쇄→내포장→레토 선후관계 자동. 결과는 수동 편집 가능</span></div>
     <div id="tt-preset-info" style="font-size:11px;color:var(--mid);margin-top:8px"></div>
   </div></div>
   <div class="grid2">
@@ -385,7 +385,7 @@ function ttAutoCook(){
     nextFree[best.tank]=bestStart+COOK_HR[best.mode];
   }
   var maxEnd=0; TT_COOK.forEach(function(c){c.use=c.starts.length>0; if(c.use)maxEnd=Math.max(maxEnd,nextFree[c.tank]);}); // 안 쓴 탱크 use=false
-  ttAutoFrag();
+  ttAutoFrag(); ttAutoPack(); ttAutoRetort();
   renderTTControls(); runTT();
   var info=document.getElementById('tt-preset-info');
   if(info){
@@ -393,6 +393,8 @@ function ttAutoCook(){
       ? '<div style="color:var(--bad);font-weight:600;font-size:11px;margin-top:6px">⚠ 자숙 자동: '+batches+'배치, 종료 '+fmtH(maxEnd)+' — 15시 초과(capa 부족). 양·탱크·단계를 조정하세요</div>'
       : '<div style="color:var(--ok);font-weight:600;font-size:11px;margin-top:6px">✓ 자숙 자동: '+batches+'배치, 종료 '+fmtH(maxEnd)+' (15시 이내)</div>';
     info.insertAdjacentHTML('beforeend', msg);
+    var rtEnd=0; TT_RETORT.forEach(function(c){if(c.use)c.segs.forEach(function(s){var pp=prod(s.prod);if(pp)rtEnd=Math.max(rtEnd,s.start+s.cycles*pp.rHr);});});
+    if(rtEnd>0){ var rm=(rtEnd>20.5)?'<div style="color:var(--bad);font-weight:600;font-size:11px;margin-top:4px">⚠ 레토르트 종료 '+fmtH(rtEnd)+' — 20:30 마감 초과</div>':'<div style="color:var(--ok);font-size:11px;margin-top:4px">레토르트 종료 '+fmtH(rtEnd)+' (20:30 이내)</div>'; info.insertAdjacentHTML('beforeend', rm); }
   }
 }
 function ttAutoFrag(){
@@ -422,6 +424,57 @@ function ttAutoFrag(){
     lineEnd[ln.line]=end;
   });
 }
+function ttAutoPack(){
+  var fragStart={}, fragEnd={};
+  TT_FRAG.forEach(function(f){if(f.use)f.segs.forEach(function(s){if(fragStart[s.part]==null||s.start<fragStart[s.part])fragStart[s.part]=s.start; if(fragEnd[s.part]==null||s.end>fragEnd[s.part])fragEnd[s.part]=s.end;});});
+  var preStart=+document.getElementById('tt-pres').value||5;
+  TT_PACK.forEach(function(pk){pk.segs=[];});
+  var packFree={};
+  TT_PROD.forEach(function(name){
+    var p=prod(name), ea=(TT_DEFAULT[name]||0)*p.units; if(ea<=0)return; // 봉수 환산 (팩 × units)
+    var hogis=(PD[name]&&PD[name][TT_STAGE])?PD[name][TT_STAGE].slice():[];
+    if(hogis.length===0)return;
+    var fStart = p.egg ? preStart : (fragStart[p.part]!=null?fragStart[p.part]:preStart); // 파쇄 시작부터(파이프라인)
+    var fEnd = p.egg ? preStart : (fragEnd[p.part]!=null?fragEnd[p.part]:preStart);
+    var eaPer=ea/hogis.length; // 호기 균등 분배
+    hogis.forEach(function(h){
+      var pi=-1; for(var k=0;k<TT_PACK.length;k++){if(TT_PACK[k].line===h){pi=k;break;}}
+      if(pi<0)return;
+      var spd=TT_PACK[pi].speed||36;
+      var time=eaPer/(spd*60);
+      var start=Math.max(fStart, packFree[h]||0);
+      if(start+time<fEnd) start=Math.max(fStart, fEnd-time); // 포장 종료 >= 파쇄 종료 (선후)
+      start=Math.max(start, packFree[h]||0);
+      TT_PACK[pi].segs.push({prod:name,ea:Math.round(eaPer),start:+start.toFixed(2)});
+      packFree[h]=start+time;
+    });
+  });
+  TT_PACK.forEach(function(pk){pk.use=pk.segs.length>0;});
+}
+function ttAutoRetort(){
+  var packEnd={}; TT_PACK.forEach(function(pk){if(pk.use)pk.segs.forEach(function(s){var t=s.start+s.ea/((pk.speed||36)*60);packEnd[s.prod]=Math.max(packEnd[s.prod]||0,t);});});
+  TT_RETORT.forEach(function(rt){rt.segs=[];});
+  var nret=STAGES[TT_STAGE].ret, lines=[]; TT_RETORT.forEach(function(rt,i){if(i<nret)lines.push(rt);});
+  if(lines.length===0)return;
+  var rtFree={}; lines.forEach(function(l){rtFree[l.line]=0;});
+  var jobs=[]; // 회전 1개 단위 작업
+  TT_PROD.forEach(function(name){
+    var p=prod(name), ea=(TT_DEFAULT[name]||0)*p.units; if(ea<=0)return; // 봉수 환산 (팩 × units)
+    var cycles=Math.ceil(ea/p.rPerCycle);
+    for(var c=0;c<cycles;c++) jobs.push({prod:name, rHr:p.rHr, ready:packEnd[name]||0});
+  });
+  jobs.sort(function(a,b){return a.ready-b.ready;}); // 내포장 빨리 끝난 것부터
+  jobs.forEach(function(job){
+    var best=lines[0]; lines.forEach(function(l){if(rtFree[l.line]<rtFree[best.line])best=l;}); // 가장 빨리 비는 레토
+    var bi=-1; for(var k=0;k<TT_RETORT.length;k++){if(TT_RETORT[k].line===best.line){bi=k;break;}}
+    var s=Math.max(job.ready, rtFree[best.line]); // 내포장 종료 후 + 레토 가용 후 (선후)
+    var segs=TT_RETORT[bi].segs, last=segs[segs.length-1];
+    if(last && last.prod===job.prod && Math.abs((last.start+last.cycles*job.rHr)-s)<0.01){ last.cycles++; } // 연속 같은 제품 병합
+    else { segs.push({prod:job.prod, cycles:1, start:+s.toFixed(2)}); }
+    rtFree[best.line]=s+job.rHr;
+  });
+  TT_RETORT.forEach(function(rt){rt.use=rt.segs.length>0;});
+}
 function renderTTControls(){
   var h='<table class="tbl"><thead><tr><th>공정</th><th class="c">인원/설비</th><th class="c">시작시각</th><th class="r">처리시간</th><th class="r">종료</th></tr></thead><tbody>';
   h+='<tr><td>전처리</td><td class="c"><input type="number" id="tt-prew" value="'+TT_WORK.pre+'" min="1" max="20" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명'+(STAGES[TT_STAGE]&&STAGES[TT_STAGE].slicer?' <span style="font-size:9px;color:var(--p);font-weight:600">+슬라이서</span>':'')+'</td><td class="c"><input type="number" id="tt-pres" value="'+TT_START.pre+'" min="0" max="23" step="0.5" oninput="runTT()" style="width:60px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td><td class="r" id="tt-pretime">-</td><td class="r" id="tt-preend">-</td></tr>';
@@ -435,7 +488,7 @@ function renderTTControls(){
   });
   h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">파쇄 (라인당 최대 13명 · 자숙육 처리) · 구간 추가 가능</td></tr>';
   TT_FRAG.forEach(function(f,i){
-    h+='<tr><td>파쇄 '+f.line+'라인</td><td class="c"><input type="number" id="tt-fragw-'+i+'" value="'+f.workers+'" min="1" max="13" oninput="runTT()" style="width:46px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명</td><td class="c"><label style="font-size:9px"><input type="checkbox" id="tt-fraguse-'+i+'" '+(f.use?'checked':'')+' onchange="runTT()">사용</label> <button onclick="addFragSeg('+i+')" style="font-size:10px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer;font-family:inherit">+구간</button></td><td class="r" id="tt-fragtime-'+i+'" colspan="2">-</td></tr>';
+    h+='<tr><td>파쇄 '+f.line+'라인</td><td class="c"><input type="number" id="tt-fragw-'+i+'" value="'+f.workers+'" min="1" max="13" oninput="runTT()" style="width:46px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명</td><td class="c"><label style="font-size:9px"><input type="checkbox" id="tt-fraguse-'+i+'" '+((f.use&&i<STAGES[TT_STAGE].frag)?'checked':'')+' '+(i>=STAGES[TT_STAGE].frag?'disabled':'')+' onchange="runTT()">사용'+(i>=STAGES[TT_STAGE].frag?' <span style="color:var(--sub);font-size:8px">(단계 미투자)</span>':'')+'</label> <button onclick="addFragSeg('+i+')" style="font-size:10px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer;font-family:inherit">+구간</button></td><td class="r" id="tt-fragtime-'+i+'" colspan="2">-</td></tr>';
     f.segs.forEach(function(sg,j){var partOpts=['홍두깨','설도','우둔'].map(function(pt){return '<option value="'+pt+'"'+(sg.part===pt?' selected':'')+'>'+pt+'</option>';}).join('');
       h+='<tr style="background:#fafbff"><td style="padding-left:18px;font-size:10px;color:var(--sub)">└ 구간 '+(j+1)+'</td><td class="c"><select id="tt-fragseg-part-'+i+'-'+j+'" onchange="runTT()" style="padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit">'+partOpts+'</select></td><td class="c"><input type="number" id="tt-fragseg-start-'+i+'-'+j+'" value="'+sg.start+'" min="0" max="23" step="0.5" oninput="runTT()" style="width:46px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">~<input type="number" id="tt-fragseg-end-'+i+'-'+j+'" value="'+(sg.end||sg.start+4)+'" min="0" max="24" step="0.25" oninput="runTT()" style="width:46px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td><td class="r" id="tt-fragseg-kg-'+i+'-'+j+'" style="font-size:10px;color:var(--sub)">-</td><td class="r" id="tt-fragseg-time-'+i+'-'+j+'">'+(f.segs.length>1?'<button onclick="delFragSeg('+i+','+j+')" style="font-size:9px;padding:1px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer">삭제</button>':'')+'</td></tr>';});
   });
@@ -450,7 +503,7 @@ function renderTTControls(){
   h+='<tr><td colspan="5" id="tt-packbalance" style="padding:6px 8px;font-size:10px;color:var(--sub)"></td></tr>';
   h+='<tr><td colspan="5" style="background:var(--light);font-size:10px;color:var(--sub);font-weight:600;padding:4px 8px">레토르트 (기본 3대 · 4호기 증설용) · 1기 봉수/회전시간 제품 기준 · 인원 <input type="number" id="tt-rtlabor" value="'+TT_LABOR.retort+'" min="0" max="20" oninput="runTT()" style="width:42px;padding:2px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">명</td></tr>';
   TT_RETORT.forEach(function(rt,i){
-    h+='<tr><td>'+rt.line+'</td><td class="c"><label style="font-size:9px"><input type="checkbox" id="tt-rtuse-'+i+'" '+(rt.use?'checked':'')+' onchange="runTT()">사용</label></td><td class="c"><button onclick="addRtSeg('+i+')" style="font-size:10px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer;font-family:inherit">+구간</button></td><td class="r" id="tt-rttime-'+i+'" colspan="2">-</td></tr>';
+    h+='<tr><td>'+rt.line+'</td><td class="c"><label style="font-size:9px"><input type="checkbox" id="tt-rtuse-'+i+'" '+((rt.use&&i<STAGES[TT_STAGE].ret)?'checked':'')+' '+(i>=STAGES[TT_STAGE].ret?'disabled':'')+' onchange="runTT()">사용'+(i>=STAGES[TT_STAGE].ret?' <span style="color:var(--sub);font-size:8px">(단계 미투자)</span>':'')+'</label></td><td class="c"><button onclick="addRtSeg('+i+')" style="font-size:10px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer;font-family:inherit">+구간</button></td><td class="r" id="tt-rttime-'+i+'" colspan="2">-</td></tr>';
     rt.segs.forEach(function(sg,j){var prodOpts=PRODUCTS.map(function(p){return '<option value="'+p.name+'"'+(sg.prod===p.name?' selected':'')+'>'+p.name+'</option>';}).join('');
       h+='<tr style="background:#fafbff"><td style="padding-left:18px;font-size:10px;color:var(--sub)">└ 구간 '+(j+1)+'</td><td class="c"><select id="tt-rtseg-prod-'+i+'-'+j+'" onchange="runTT()" style="padding:3px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit">'+prodOpts+'</select></td><td class="c"><input type="number" id="tt-rtseg-start-'+i+'-'+j+'" value="'+sg.start+'" min="0" max="24" step="0.25" oninput="runTT()" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">시</td><td class="r"><input type="number" id="tt-rtseg-cyc-'+i+'-'+j+'" value="'+(sg.cycles||1)+'" min="1" max="6" oninput="runTT()" style="width:46px;padding:4px;border:1px solid var(--border);border-radius:4px;font-size:11px;text-align:center">기</td><td class="r" id="tt-rtseg-time-'+i+'-'+j+'">'+(rt.segs.length>1?'<button onclick="delRtSeg('+i+','+j+')" style="font-size:9px;padding:1px 6px;border:1px solid var(--border);border-radius:4px;background:var(--card);cursor:pointer">삭제</button>':'')+'</td></tr>';});
   });
@@ -504,7 +557,7 @@ function runTT(){
   var cookMeat={}; Object.keys(d.parts).forEach(function(part){cookMeat[part]=d.parts[part]*YIELD[part].preY*YIELD[part].cook;});
   var allocated={};
   TT_FRAG.forEach(function(f,i){
-    var useEl=document.getElementById('tt-fraguse-'+i),use=useEl?useEl.checked:f.use;
+    var useEl=document.getElementById('tt-fraguse-'+i),use=(useEl?useEl.checked:f.use)&&(i<STAGES[TT_STAGE].frag);
     var wEl=document.getElementById('tt-fragw-'+i),workers=wEl?(+wEl.value||1):f.workers,capped=Math.min(workers,FRAG_PERLINE_MAX);
     var bars=[],lineInfo=[];
     f.segs.forEach(function(sg,j){
@@ -547,7 +600,7 @@ function runTT(){
   var rtMaxEnd=0; var rtLabor=document.getElementById('tt-rtlabor');TT_LABOR.retort=rtLabor?(+rtLabor.value||0):TT_LABOR.retort;
   lanes.push({label:'<strong>레토르트 ('+TT_LABOR.retort+'명)</strong>',bars:[]});
   TT_RETORT.forEach(function(rt,i){
-    var useEl=document.getElementById('tt-rtuse-'+i),use=useEl?useEl.checked:rt.use; rt.use=use; var bars=[],lineInfo=[];
+    var useEl=document.getElementById('tt-rtuse-'+i),use=(useEl?useEl.checked:rt.use)&&(i<STAGES[TT_STAGE].ret); rt.use=use; var bars=[],lineInfo=[];
     rt.segs.forEach(function(sg,j){
       var pe=document.getElementById('tt-rtseg-prod-'+i+'-'+j),prd=pe&&pe.value?pe.value:sg.prod;
       var se=document.getElementById('tt-rtseg-start-'+i+'-'+j),start=se?(+se.value||0):sg.start;
