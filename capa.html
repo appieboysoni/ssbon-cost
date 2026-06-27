@@ -122,7 +122,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
       </select>
       <span style="font-size:10px;color:var(--sub)">선택한 품목의 봉수를 세트값으로 채웁니다 (이후 직접 수정 가능)</span>
     </div>
-    <div style="margin-top:10px"><button onclick="ttAutoCook()" style="padding:7px 16px;border:1px solid var(--p);background:var(--p);color:#fff;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🤖 자동 배치 (전체 공정)</button> <span style="font-size:10px;color:var(--sub)">전처리→자숙→파쇄→내포장→레토 선후관계 자동. 결과는 수동 편집 가능</span></div>
+    <div style="margin-top:10px"><button onclick="ttAutoCook()" style="padding:7px 16px;border:1px solid var(--p);background:var(--p);color:#fff;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🤖 자동 배치 (전체 공정)</button> <span style="font-size:11px;font-weight:600;margin-left:10px">주간조 출근</span> <input type="number" id="tt-dayshift" value="9" min="0" max="23" step="0.5" oninput="runTT()" style="width:54px;padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;font-family:inherit">시 <span style="font-size:10px;color:var(--sub)">전처리·자숙은 전처리 시작시각(조기조), 파쇄·내포장·레토는 이 시각 이후 시작</span></div>
     <div id="tt-preset-info" style="font-size:11px;color:var(--mid);margin-top:8px"></div>
   </div></div>
   <div class="grid2">
@@ -132,7 +132,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-27</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-27c</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -308,7 +308,7 @@ function buildTT(canvasId, lanes, timeStart, timeEnd, height){
 var TT_STAGE='현재';
 var TT_PROD=['FC 3kg','코스트코 170g','미니 70g'];
 var TT_DEFAULT={'FC 3kg':1461,'코스트코 170g':3539,'미니 70g':0,'시그니처 130g':0,'트레이더스 460g':0};
-var TT_START={pre:5.0}; var TT_WORK={pre:10};
+var TT_START={pre:5.0, day:9.0}; var TT_WORK={pre:10};
 var TT_COOK=[{tank:1,mode:'상압',use:true,starts:[5.5]},{tank:2,mode:'상압',use:true,starts:[6.0]},{tank:3,mode:'상압',use:true,starts:[6.5]},{tank:4,mode:'상압',use:true,starts:[7.0]},{tank:5,mode:'가압',use:true,starts:[7.5]},{tank:6,mode:'가압',use:true,starts:[8.0]}];
 var COOK_HR={'상압':4.5,'가압':2.5};
 var TT_LABOR={cook:3,retort:2};
@@ -408,22 +408,31 @@ function ttAutoFrag(){
   var d=ttDayRaw();
   var cookMeat={}; Object.keys(d.parts).forEach(function(p){cookMeat[p]=d.parts[p]*YIELD[p].preY*YIELD[p].cook;});
   var parts=Object.keys(cookMeat).filter(function(p){return cookMeat[p]>0;});
-  var cookEnds=[]; TT_COOK.forEach(function(c){if(c.use){var hr=COOK_HR[c.mode];c.starts.forEach(function(s){cookEnds.push(s+hr);});}});
-  if(cookEnds.length===0||parts.length===0)return;
-  var firstCook=Math.min.apply(null,cookEnds), lastCook=Math.max.apply(null,cookEnds);
+  // 부위별 자숙 첫/마지막 완료 시각 (부위 정보 있으면 부위별, 없으면 전체로 폴백)
+  var cStart={}, cEnd={}, allEnds=[];
+  TT_COOK.forEach(function(c){if(c.use)c.starts.forEach(function(s,k){
+    var done=s+COOK_HR[c.mode]; allEnds.push(done);
+    var part=(c.cookParts&&c.cookParts[k])?c.cookParts[k]:null;
+    if(part){ if(cStart[part]==null||done<cStart[part])cStart[part]=done; if(cEnd[part]==null||done>cEnd[part])cEnd[part]=done; }
+  });});
+  if(allEnds.length===0||parts.length===0)return;
+  var globalFirst=Math.min.apply(null,allEnds), globalLast=Math.max.apply(null,allEnds);
   var lines=TT_FRAG.filter(function(f){return f.use;});
   if(lines.length===0)return;
   parts.sort(function(a,b){return cookMeat[b]-cookMeat[a];}); // 양 많은 부위 우선
+  var FRAG_START_MIN=+(document.getElementById('tt-dayshift')||{}).value||TT_START.day||9; // 주간조 출근 (입력칸)
   TT_FRAG.forEach(function(f){f.segs=[];});
-  var lineEnd={}; lines.forEach(function(l){lineEnd[l.line]=firstCook;});
+  var lineEnd={}; lines.forEach(function(l){lineEnd[l.line]=Math.max(globalFirst,FRAG_START_MIN);});
   parts.forEach(function(part){
     // 가장 빨리 비는 라인 (부위>라인이면 한 라인에 순차 누적)
     var ln=lines.reduce(function(best,l){return lineEnd[l.line]<lineEnd[best.line]?l:best;}, lines[0]);
     var workers=13, pr=FRAG_PROD[part]||23;
     var dur=cookMeat[part]/(workers*pr);
-    var start=Math.max(firstCook, lineEnd[ln.line]);
-    // 선후관계: 파쇄가 자숙보다 빠르면 시작을 늦춰 종료를 자숙 종료에 맞춤 (파쇄 종료 >= 자숙 종료)
-    if(start+dur<lastCook) start=Math.max(firstCook, lastCook-dur);
+    var pStart=(cStart[part]!=null?cStart[part]:globalFirst); // 그 부위 자숙 첫 완료
+    var pEnd=(cEnd[part]!=null?cEnd[part]:globalLast);         // 그 부위 자숙 마지막 완료
+    var start=Math.max(pStart, lineEnd[ln.line], FRAG_START_MIN); // 출근 09시 하한
+    // 선후관계: 파쇄가 그 부위 자숙보다 빠르면 시작을 늦춰 종료를 자숙 종료에 맞춤 (단 09시 이후)
+    if(start+dur<pEnd) start=Math.max(pStart, FRAG_START_MIN, pEnd-dur);
     var end=start+dur;
     var fi=TT_FRAG.indexOf(ln);
     TT_FRAG[fi].segs.push({part:part,start:+start.toFixed(2),end:+end.toFixed(2)});
@@ -435,13 +444,14 @@ function ttAutoPack(){
   var fragStart={}, fragEnd={};
   TT_FRAG.forEach(function(f){if(f.use)f.segs.forEach(function(s){if(fragStart[s.part]==null||s.start<fragStart[s.part])fragStart[s.part]=s.start; if(fragEnd[s.part]==null||s.end>fragEnd[s.part])fragEnd[s.part]=s.end;});});
   var preStart=+document.getElementById('tt-pres').value||5;
+  var dayShift=+(document.getElementById('tt-dayshift')||{}).value||TT_START.day||9; // 주간조 출근
   TT_PACK.forEach(function(pk){pk.segs=[];});
   var packFree={};
   TT_PROD.forEach(function(name){
     var p=prod(name), ea=(TT_DEFAULT[name]||0)*p.units; if(ea<=0)return; // 봉수 환산 (팩 × units)
     var hogis=(PD[name]&&PD[name][TT_STAGE])?PD[name][TT_STAGE].slice():[];
     if(hogis.length===0)return;
-    var fStart = p.egg ? preStart : (fragStart[p.part]!=null?fragStart[p.part]:preStart); // 파쇄 시작부터(파이프라인)
+    var fStart = Math.max(dayShift, p.egg ? preStart : (fragStart[p.part]!=null?fragStart[p.part]:preStart)); // 주간조 출근 하한 (메추리알 등 상류0도 09시부터)
     var fEnd = p.egg ? preStart : (fragEnd[p.part]!=null?fragEnd[p.part]:preStart);
     var eaPer=ea/hogis.length; // 호기 균등 분배
     hogis.forEach(function(h){
@@ -469,6 +479,7 @@ function ttAutoRetort(){
   var nret=STAGES[TT_STAGE].ret, lines=[]; TT_RETORT.forEach(function(rt,i){if(i<nret)lines.push(rt);});
   if(lines.length===0)return;
   var rtFree={}; lines.forEach(function(l){rtFree[l.line]=0;});
+  var dayShift=+(document.getElementById('tt-dayshift')||{}).value||TT_START.day||9; // 주간조 출근
   var jobs=[]; // 회전 1개 단위, ready = 그 회전분 포장 완료 시점
   TT_PROD.forEach(function(name){
     var p=prod(name), ea=(TT_DEFAULT[name]||0)*p.units; if(ea<=0)return;
@@ -480,7 +491,7 @@ function ttAutoRetort(){
   jobs.forEach(function(job){
     var best=lines[0]; lines.forEach(function(l){if(rtFree[l.line]<rtFree[best.line])best=l;}); // 가장 빨리 비는 레토
     var bi=-1; for(var k=0;k<TT_RETORT.length;k++){if(TT_RETORT[k].line===best.line){bi=k;break;}}
-    var s=Math.max(job.ready, rtFree[best.line]); // 포장 1회전분 완료 후 + 레토 가용 후
+    var s=Math.max(job.ready, rtFree[best.line], dayShift); // 포장 1회전분 완료 후 + 레토 가용 후 + 주간조 출근 후
     var segs=TT_RETORT[bi].segs, last=segs[segs.length-1];
     if(last && last.prod===job.prod && Math.abs((last.start+last.cycles*job.rHr)-s)<0.01){ last.cycles++; }
     else { segs.push({prod:job.prod, cycles:1, start:+s.toFixed(2)}); }
@@ -635,8 +646,8 @@ function runTT(){
 }
 var FB_DB=null;
 function initFB(){try{if(FB_DB)return FB_DB;if(typeof firebase==='undefined')return null;var cfg={apiKey:"AIzaSyCw3KlYX6A-OMbAojirXdluNeU7g6286cM",authDomain:"ssbon-64b4f.firebaseapp.com",projectId:"ssbon-64b4f",storageBucket:"ssbon-64b4f.appspot.com"};if(!firebase.apps||!firebase.apps.length){firebase.initializeApp(cfg);}FB_DB=firebase.firestore();return FB_DB;}catch(e){console.warn('FB init',e);return null;}}
-function collectTTState(){syncFragFromDOM();syncPackFromDOM();syncRtFromDOM();var clEl=document.getElementById('tt-cooklabor');if(clEl)TT_LABOR.cook=+clEl.value||0;var rlEl=document.getElementById('tt-rtlabor');if(rlEl)TT_LABOR.retort=+rlEl.value||0;var prd={};document.querySelectorAll('#tt-prod input[data-ttp]').forEach(function(inp){prd[inp.dataset.ttp]=parseInt(String(inp.value).replace(/[^0-9]/g,''))||0;});return {v:1,products:TT_PROD.slice(),prodEa:prd,pre:{w:+document.getElementById('tt-prew').value||10,s:+document.getElementById('tt-pres').value||5},labor:JSON.parse(JSON.stringify(TT_LABOR)),cook:JSON.parse(JSON.stringify(TT_COOK)),frag:JSON.parse(JSON.stringify(TT_FRAG)),fragProd:JSON.parse(JSON.stringify(FRAG_PROD)),pack:JSON.parse(JSON.stringify(TT_PACK)),retort:JSON.parse(JSON.stringify(TT_RETORT))};}
-function applyTTState(st){if(!st)return;if(st.products){TT_PROD=st.products.slice();}if(st.prodEa){Object.keys(st.prodEa).forEach(function(k){TT_DEFAULT[k]=st.prodEa[k];});}if(st.cook)TT_COOK=st.cook;if(st.frag)TT_FRAG=st.frag;if(st.fragProd)FRAG_PROD=st.fragProd;if(st.pack)TT_PACK=st.pack;if(st.retort)TT_RETORT=st.retort;if(st.labor)TT_LABOR=st.labor;renderTTProd();renderTTControls();if(st.pre){var pw=document.getElementById('tt-prew');if(pw)pw.value=st.pre.w;var ps=document.getElementById('tt-pres');if(ps)ps.value=st.pre.s;}runTT();}
+function collectTTState(){syncFragFromDOM();syncPackFromDOM();syncRtFromDOM();var clEl=document.getElementById('tt-cooklabor');if(clEl)TT_LABOR.cook=+clEl.value||0;var rlEl=document.getElementById('tt-rtlabor');if(rlEl)TT_LABOR.retort=+rlEl.value||0;var prd={};document.querySelectorAll('#tt-prod input[data-ttp]').forEach(function(inp){prd[inp.dataset.ttp]=parseInt(String(inp.value).replace(/[^0-9]/g,''))||0;});return {v:1,products:TT_PROD.slice(),prodEa:prd,pre:{w:+document.getElementById('tt-prew').value||10,s:+document.getElementById('tt-pres').value||5},dayShift:+(document.getElementById('tt-dayshift')||{}).value||9,labor:JSON.parse(JSON.stringify(TT_LABOR)),cook:JSON.parse(JSON.stringify(TT_COOK)),frag:JSON.parse(JSON.stringify(TT_FRAG)),fragProd:JSON.parse(JSON.stringify(FRAG_PROD)),pack:JSON.parse(JSON.stringify(TT_PACK)),retort:JSON.parse(JSON.stringify(TT_RETORT))};}
+function applyTTState(st){if(!st)return;if(st.products){TT_PROD=st.products.slice();}if(st.prodEa){Object.keys(st.prodEa).forEach(function(k){TT_DEFAULT[k]=st.prodEa[k];});}if(st.cook)TT_COOK=st.cook;if(st.frag)TT_FRAG=st.frag;if(st.fragProd)FRAG_PROD=st.fragProd;if(st.pack)TT_PACK=st.pack;if(st.retort)TT_RETORT=st.retort;if(st.labor)TT_LABOR=st.labor;renderTTProd();renderTTControls();if(st.pre){var pw=document.getElementById('tt-prew');if(pw)pw.value=st.pre.w;var ps=document.getElementById('tt-pres');if(ps)ps.value=st.pre.s;}if(st.dayShift!=null){var dsEl=document.getElementById('tt-dayshift');if(dsEl)dsEl.value=st.dayShift;}runTT();}
 function saveTTScenario(){var name=(document.getElementById('tt-scenname').value||'').trim();if(!name){alert('이름 입력');return;}var db=initFB(),info=document.getElementById('tt-saveinfo');if(!db){info.innerHTML='<span style="color:var(--bad)">클라우드 연결 실패</span>';return;}var st=collectTTState();info.textContent='저장 중...';db.collection('capa_timetable').doc(name).set({name:name,state:st,updated:Date.now()}).then(function(){info.innerHTML='<span style="color:var(--ok)">✓ "'+name+'" 저장</span>';loadTTScenarioList();}).catch(function(e){info.innerHTML='<span style="color:var(--bad)">저장 실패: '+e.message+'</span>';});}
 function loadTTScenarioList(){var db=initFB();if(!db)return;db.collection('capa_timetable').orderBy('updated','desc').get().then(function(snap){var sel=document.getElementById('tt-scenlist'),cur=sel.value,h='<option value="">— 저장된 시나리오 —</option>';snap.forEach(function(doc){var d=doc.data();h+='<option value="'+doc.id+'">'+(d.name||doc.id)+'</option>';});sel.innerHTML=h;if(cur)sel.value=cur;}).catch(function(e){console.warn('목록',e);});}
 function loadTTScenario(){var name=document.getElementById('tt-scenlist').value,info=document.getElementById('tt-saveinfo');if(!name){alert('선택');return;}var db=initFB();if(!db){info.innerHTML='<span style="color:var(--bad)">연결 실패</span>';return;}info.textContent='불러오는 중...';db.collection('capa_timetable').doc(name).get().then(function(doc){if(!doc.exists){info.innerHTML='<span style="color:var(--bad)">없음</span>';return;}applyTTState(doc.data().state);document.getElementById('tt-scenname').value=doc.data().name||name;info.innerHTML='<span style="color:var(--ok)">✓ "'+(doc.data().name||name)+'" 불러옴</span>';}).catch(function(e){info.innerHTML='<span style="color:var(--bad)">실패: '+e.message+'</span>';});}
