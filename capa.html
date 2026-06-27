@@ -132,7 +132,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-27</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -371,19 +371,26 @@ function ttAutoCook(){
   var preStart=+document.getElementById('tt-pres').value||5;
   var prew=+document.getElementById('tt-prew').value||1;
   var rate=(prew+(STAGES[TT_STAGE]&&STAGES[TT_STAGE].slicer?4:0))*60; // 전처리 kg/h
-  var batches=Math.ceil(total/800);
+  // 부위별 배치 (탱크에 부위 섞지 않음 · 800kg 풀 배치 + 나머지)
+  var jobs=[];
+  Object.keys(d.parts).forEach(function(part){var raw=d.parts[part]; if(raw<=0)return; var rem=raw; while(rem>0.01){var kg=Math.min(800,rem); jobs.push({part:part,kg:Math.round(kg)}); rem-=kg;}});
+  var batches=jobs.length;
   // 자숙 전체 탱크를 후보로 복원·초기화 (자동배치가 자숙 use·starts 전관리)
-  TT_COOK.forEach(function(c){c.use=true;c.starts=[];});
+  TT_COOK.forEach(function(c){c.use=true;c.starts=[];c.cookParts=[];c.cookKg=[];});
   var tanks=TT_COOK.slice();
   tanks.sort(function(a,b){return (a.mode==='가압'?0:1)-(b.mode==='가압'?0:1);}); // tie-break: 가압 우선(회전 빠름)
   var nextFree={}; tanks.forEach(function(t){nextFree[t.tank]=preStart;});
-  for(var b=0;b<batches;b++){
-    var supplyT=preStart+(b+1)*800/rate; // (b+1)번째 800kg 공급 완료 = 선행(전처리) 제약
+  var cumKg=0;
+  jobs.forEach(function(job){
+    cumKg+=job.kg;
+    var supplyT=preStart+cumKg/rate; // 누적 전처리 공급 완료 = 선행(전처리) 제약
     var best=null,bestStart=Infinity;
     tanks.forEach(function(t){var s=Math.max(supplyT,nextFree[t.tank]);if(s<bestStart-1e-9){bestStart=s;best=t;}}); // 가장 빨리 투입가능한 탱크
     best.starts.push(+bestStart.toFixed(2));
+    best.cookParts.push(job.part);
+    best.cookKg.push(job.kg);
     nextFree[best.tank]=bestStart+COOK_HR[best.mode];
-  }
+  });
   var maxEnd=0; TT_COOK.forEach(function(c){c.use=c.starts.length>0; if(c.use)maxEnd=Math.max(maxEnd,nextFree[c.tank]);}); // 안 쓴 탱크 use=false
   ttAutoFrag(); ttAutoPack(); ttAutoRetort();
   renderTTControls(); runTT();
@@ -450,6 +457,7 @@ function ttAutoPack(){
     });
   });
   TT_PACK.forEach(function(pk){pk.use=pk.segs.length>0;});
+  try{console.log('[ttAutoPack '+TT_STAGE+'] '+TT_PACK.filter(function(p){return p.use;}).map(function(p){return p.line+':'+p.segs.map(function(s){return s.prod.slice(0,3)+'='+s.ea;}).join(',');}).join(' | '));}catch(e){}
 }
 function ttAutoRetort(){
   var packStart={}, packRate={};
@@ -552,11 +560,11 @@ function runTT(){
     if(mode!=='상압'&&mode!=='가압')mode='상압';
     var hr=COOK_HR[mode],starts=[];
     for(var k=0;k<cyc;k++){var el=document.getElementById('tt-cooks-'+i+'-'+k);starts.push(el?(+el.value||0):(c.starts[k]||0));}
-    TT_COOK[i]={tank:c.tank,mode:mode,use:use,starts:starts};
+    TT_COOK[i]={tank:c.tank,mode:mode,use:use,starts:starts,cookParts:(c.cookParts||[]).slice(0,cyc),cookKg:(c.cookKg||[]).slice(0,cyc)};
     var tEl=document.getElementById('tt-cooktime-'+i),eEl=document.getElementById('tt-cookend-'+i),lastEnd=0;
     if(use){starts.forEach(function(st){lastEnd=Math.max(lastEnd,st+hr);});if(tEl)tEl.textContent=hr.toFixed(1)+'h×'+cyc+' ('+mode+')';if(eEl)eEl.textContent=fmtH(lastEnd);maxEnd=Math.max(maxEnd,lastEnd);}else{if(tEl)tEl.textContent='미사용';if(eEl)eEl.textContent='-';}
     var color=(mode==='가압')?'#1D9E75':'#ED7D31',bars=[];
-    if(use){starts.forEach(function(st,k){bars.push({s:st*60,e:(st+hr)*60,color:shade(color,k),label:c.tank+'호기 '+mode+(cyc>1?' '+(k+1):''),note:'800kg'});});}
+    if(use){starts.forEach(function(st,k){bars.push({s:st*60,e:(st+hr)*60,color:shade(color,k),label:c.tank+'호기 '+mode+(cyc>1?' '+(k+1):'')+(c.cookParts&&c.cookParts[k]?' ('+c.cookParts[k]+')':''),note:(c.cookKg&&c.cookKg[k]?c.cookKg[k].toLocaleString()+'kg':'800kg')});});}
     lanes.push({label:'자숙 '+c.tank+'호기',bars:bars});
   });
   var cookMeat={}; Object.keys(d.parts).forEach(function(part){cookMeat[part]=d.parts[part]*YIELD[part].preY*YIELD[part].cook;});
