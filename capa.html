@@ -132,7 +132,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-27c</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-27d</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -371,9 +371,12 @@ function ttAutoCook(){
   var preStart=+document.getElementById('tt-pres').value||5;
   var prew=+document.getElementById('tt-prew').value||1;
   var rate=(prew+(STAGES[TT_STAGE]&&STAGES[TT_STAGE].slicer?4:0))*60; // 전처리 kg/h
-  // 부위별 배치 (탱크에 부위 섞지 않음 · 800kg 풀 배치 + 나머지)
-  var jobs=[];
-  Object.keys(d.parts).forEach(function(part){var raw=d.parts[part]; if(raw<=0)return; var rem=raw; while(rem>0.01){var kg=Math.min(800,rem); jobs.push({part:part,kg:Math.round(kg)}); rem-=kg;}});
+  // 부위별 배치 (탱크에 부위 섞지 않음 · 800kg 풀 배치 + 나머지) — 부위 교차(라운드로빈)로 전처리 공급
+  var byPart={};
+  Object.keys(d.parts).forEach(function(part){var raw=d.parts[part]; if(raw<=0)return; var arr=[],rem=raw; while(rem>0.01){var kg=Math.min(800,rem); arr.push(Math.round(kg)); rem-=kg;} byPart[part]=arr;});
+  var pkeys=Object.keys(byPart); pkeys.sort(function(a,b){return byPart[b].length-byPart[a].length;}); // 배치 많은 부위 우선
+  var jobs=[],pidx={}; pkeys.forEach(function(p){pidx[p]=0;});
+  var go=true; while(go){go=false; pkeys.forEach(function(p){if(pidx[p]<byPart[p].length){jobs.push({part:p,kg:byPart[p][pidx[p]]}); pidx[p]++; go=true;}});} // 홍·우·홍·우 교차
   var batches=jobs.length;
   // 자숙 전체 탱크를 후보로 복원·초기화 (자동배치가 자숙 use·starts 전관리)
   TT_COOK.forEach(function(c){c.use=true;c.starts=[];c.cookParts=[];c.cookKg=[];});
@@ -459,11 +462,10 @@ function ttAutoPack(){
       if(pi<0)return;
       var spd=TT_PACK[pi].speed||36;
       var time=eaPer/(spd*60);
-      var start=Math.max(fStart, packFree[h]||0);
-      if(start+time<fEnd) start=Math.max(fStart, fEnd-time); // 포장 종료 >= 파쇄 종료 (선후)
-      start=Math.max(start, packFree[h]||0);
-      TT_PACK[pi].segs.push({prod:name,ea:Math.round(eaPer),start:+start.toFixed(2)});
-      packFree[h]=start+time;
+      var start=Math.max(fStart, packFree[h]||0); // 파쇄 시작과 함께 일찍 시작
+      var end=Math.max(start+time, fEnd); // 파쇄 공급 앞지르지 않게: 종료는 파쇄 종료 이후
+      TT_PACK[pi].segs.push({prod:name,ea:Math.round(eaPer),start:+start.toFixed(2),minEnd:+fEnd.toFixed(2)});
+      packFree[h]=end;
     });
   });
   TT_PACK.forEach(function(pk){pk.use=pk.segs.length>0;});
@@ -610,8 +612,8 @@ function runTT(){
       var pe=document.getElementById('tt-packseg-prod-'+i+'-'+j),prd=pe&&pe.value?pe.value:sg.prod;
       var se=document.getElementById('tt-packseg-start-'+i+'-'+j),start=se?(+se.value||0):sg.start;
       var ee=document.getElementById('tt-packseg-ea-'+i+'-'+j),ea=ee?(parseInt(String(ee.value).replace(/[^0-9]/g,''))||0):(sg.ea||0);
-      pk.segs[j]={prod:prd,ea:ea,start:start}; packAlloc[prd]=(packAlloc[prd]||0)+ea;
-      var time=(ea>0&&speed>0)?ea/(speed*60):0,end=start+time;
+      pk.segs[j]={prod:prd,ea:ea,start:start,minEnd:sg.minEnd}; packAlloc[prd]=(packAlloc[prd]||0)+ea;
+      var time=(ea>0&&speed>0)?ea/(speed*60):0,end=Math.max(start+time, sg.minEnd||0);
       if(use&&ea>0){bars.push({s:start*60,e:end*60,color:shade('#C00000',j),label:prd.slice(0,5)+' '+time.toFixed(1)+'h',note:ea.toLocaleString()+'봉'});lineInfo.push(prd.slice(0,5)+' '+time.toFixed(1)+'h');maxEnd=Math.max(maxEnd,end);}
     });
     var tEl=document.getElementById('tt-packtime-'+i);if(tEl){tEl.innerHTML=(use&&lineInfo.length)?lineInfo.join(' → '):(use?'봉수 미입력':'미사용');}
