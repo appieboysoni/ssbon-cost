@@ -133,7 +133,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28a</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28c</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -179,7 +179,21 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
         <tfoot id="mo-tfoot"></tfoot>
       </table>
       <div id="mo-verdict" style="margin-top:14px;padding:12px;border-radius:8px;font-size:13px;font-weight:600"></div>
-      <div style="margin-top:8px;font-size:11px;color:var(--sub)">※ 단독 생산 기준입니다. 단독 합계가 생산일수를 넘으면, 다음 단계에서 혼합 생산으로 압축해 일수를 줄입니다.</div>
+      <div style="margin-top:8px;font-size:11px;color:var(--sub)">※ 단독 생산 기준입니다. 단독 합계가 생산일수를 넘으면, 아래 2단계에서 혼합 생산으로 압축합니다.</div>
+      <div style="margin-top:20px;border-top:2px solid var(--border);padding-top:16px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:2px">2단계 · 혼합 블록 구성 <span style="font-weight:400;font-size:11px;color:var(--sub);margin-left:6px">FC를 동반제품과 묶어 일수를 압축 · 하루 생산량은 혼합 엔진 자동</span></div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px">
+          <thead><tr style="background:var(--mid);color:#fff">
+            <th style="padding:6px;text-align:left">블록 구성</th>
+            <th style="padding:6px;text-align:center;width:70px">일수</th>
+            <th style="padding:6px;text-align:left">하루 생산 (제품별 ea)</th>
+            <th style="padding:6px;text-align:center;width:50px"></th>
+          </tr></thead>
+          <tbody id="mo-blocks"></tbody>
+        </table>
+        <button onclick="moAddBlock()" style="margin-top:8px;padding:5px 13px;border:1px solid var(--p);background:var(--card);color:var(--p);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ 블록 추가</button>
+        <div id="mo-block-result" style="margin-top:16px"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -190,9 +204,12 @@ var MO_VOL={'미니 70g':165029,'시그니처 130g':100000,'코스트코 170g':9
 var MO_CAP={}; // 사용자 수정 일생산량 (없으면 자동)
 function renderMonthStageBtns(){
   var box=document.getElementById('mo-stage-btns'); if(!box)return;
+  var desc={'현재':'파쇄1·레토3','최대1':'+파쇄2라인·슬라이서','최대2':'+레토 4호기','최대3':'+자숙 가압증설'};
   box.innerHTML=['현재','최대1','최대2','최대3'].map(function(s){
     var on=(s===MO_STAGE);
-    return '<button onclick="moApplyStage(\''+s+'\')" style="padding:4px 11px;margin-right:4px;border:1px solid '+(on?'var(--p)':'var(--border)')+';background:'+(on?'var(--p)':'var(--card)')+';color:'+(on?'#fff':'var(--mid)')+';border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">'+s+'</button>';
+    return '<span style="display:inline-block;text-align:center;margin-right:6px;vertical-align:top">'
+      +'<button onclick="moApplyStage(\''+s+'\')" style="display:block;padding:4px 11px;border:1px solid '+(on?'var(--p)':'var(--border)')+';background:'+(on?'var(--p)':'var(--card)')+';color:'+(on?'#fff':'var(--mid)')+';border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;min-width:50px">'+s+'</button>'
+      +'<span style="display:block;font-size:8.5px;color:var(--sub);margin-top:2px;max-width:80px;line-height:1.2">'+desc[s]+'</span></span>';
   }).join('');
 }
 function moApplyStage(s){ MO_STAGE=s; renderMonthStageBtns(); renderMonth(); }
@@ -215,7 +232,71 @@ function moDayCap(name){ // 자동 산출 하루 최대 생산량(ea)
   return {ea:ea,bn:e.bn};
 }
 var MO_PRODS=['미니 70g','시그니처 130g','코스트코 170g','트레이더스 460g','메추리알 180g','FC 3kg'];
-function renderMonth(){ renderMonthStageBtns(); renderMonthCalc(); }
+function renderMonth(){ renderMonthStageBtns(); renderMonthCalc(); renderMonthBlocks(); }
+var MO_BLOCKS=[{type:'mix',key:'혼합 FC+미니70',days:10}];
+var MO_SOLO=['미니 70g','시그니처 130g','코스트코 170g','트레이더스 460g','메추리알 180g','FC 3kg'];
+function moAddBlock(){ MO_BLOCKS.push({type:'mix',key:'혼합 FC+미니70',days:5}); renderMonthBlocks(); }
+function moDelBlock(i){ MO_BLOCKS.splice(i,1); renderMonthBlocks(); }
+function moBlockChange(i,field,v){
+  if(field==='days'){ MO_BLOCKS[i].days=parseInt(v)||0; }
+  else if(field==='sel'){ if(v.indexOf('solo:')===0){ MO_BLOCKS[i]={type:'solo',key:v.slice(5),days:MO_BLOCKS[i].days}; } else { MO_BLOCKS[i]={type:'mix',key:v,days:MO_BLOCKS[i].days}; } }
+  renderMonthBlocks();
+}
+function moBlockDaily(b){ // 블록 하루 제품별 ea
+  var out={};
+  if(b.type==='mix'){
+    var M=MIX[b.key]; if(!M)return out;
+    var rFC=mixDefaultRatio(b.key,MO_STAGE);
+    var e=mixEngine(b.key,MO_STAGE,rFC,null,!!M.eggOnly,mixEggBong);
+    out[M.A]=Math.floor(e.prodA*1000/rawPerEa(M.A)*prod(M.A).units);
+    if(M.eggOnly){ out[M.B]=moDayCap(M.B).ea; }
+    else { out[M.B]=Math.floor(e.prodB*1000/rawPerEa(M.B)*prod(M.B).units); }
+  } else { out[b.key]=moDayCap(b.key).ea; }
+  return out;
+}
+function renderMonthBlocks(){
+  var tb=document.getElementById('mo-blocks'); if(!tb)return;
+  var mixOpts=Object.keys(MIX).map(function(k){return {v:k,label:k.replace('혼합 ','').replace('FC+','FC 3kg + ')};});
+  var soloOpts=MO_SOLO.map(function(n){return {v:'solo:'+n,label:n+' (단독)'};});
+  var rows='', acc={}, totDays=0;
+  MO_BLOCKS.forEach(function(b,i){
+    var cur=(b.type==='mix')?b.key:('solo:'+b.key);
+    var sel='<select onchange="moBlockChange('+i+',\'sel\',this.value)" style="padding:4px;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:11px;max-width:200px">';
+    sel+='<optgroup label="FC + 동반제품">'+mixOpts.map(function(o){return '<option value="'+o.v+'"'+(o.v===cur?' selected':'')+'>'+o.label+'</option>';}).join('')+'</optgroup>';
+    sel+='<optgroup label="단독">'+soloOpts.map(function(o){return '<option value="'+o.v+'"'+(o.v===cur?' selected':'')+'>'+o.label+'</option>';}).join('')+'</optgroup></select>';
+    var daily=moBlockDaily(b);
+    Object.keys(daily).forEach(function(p){ acc[p]=(acc[p]||0)+daily[p]*b.days; });
+    totDays+=b.days;
+    var dailyStr=Object.keys(daily).map(function(p){return p.replace(' 3kg','').replace(/ \d+g/,'').replace(' 180g','')+' '+daily[p].toLocaleString();}).join(' / ');
+    rows+='<tr style="border-bottom:1px solid var(--border)">'
+      +'<td style="padding:6px">'+sel+'</td>'
+      +'<td style="padding:6px;text-align:center"><input type="number" value="'+b.days+'" min="0" oninput="moBlockChange('+i+',\'days\',this.value)" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:5px;text-align:center;font-family:inherit;font-size:12px"></td>'
+      +'<td style="padding:6px;font-size:11px;color:var(--mid)">'+dailyStr+'</td>'
+      +'<td style="padding:6px;text-align:center"><button onclick="moDelBlock('+i+')" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:14px">×</button></td>'
+      +'</tr>';
+  });
+  tb.innerHTML=rows||'<tr><td colspan="4" style="padding:10px;color:var(--sub);font-size:11px">블록을 추가하세요</td></tr>';
+  // 제품별 누적 vs 월물량
+  var days=+document.getElementById('mo-days').value||23;
+  var res='<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--bg)">'
+    +'<th style="padding:6px;text-align:left">품목</th><th style="padding:6px;text-align:right">월 물량</th><th style="padding:6px;text-align:right">혼합 생산량</th><th style="padding:6px;text-align:right">과부족</th><th style="padding:6px;text-align:center">충족</th></tr></thead><tbody>';
+  var allOk=true;
+  MO_SOLO.forEach(function(p){
+    var vol=MO_VOL[p]||0, made=acc[p]||0, diff=made-vol, ok=made>=vol;
+    if(vol>0&&!ok)allOk=false;
+    res+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:5px;font-weight:600">'+p+'</td>'
+      +'<td style="padding:5px;text-align:right">'+vol.toLocaleString()+'</td>'
+      +'<td style="padding:5px;text-align:right">'+made.toLocaleString()+'</td>'
+      +'<td style="padding:5px;text-align:right;color:'+(diff>=0?'var(--ok)':'var(--bad)')+'">'+(diff>=0?'+':'')+diff.toLocaleString()+'</td>'
+      +'<td style="padding:5px;text-align:center">'+(vol===0?'—':(ok?'✅':'❌'))+'</td></tr>';
+  });
+  res+='</tbody></table>';
+  var daysOk=totDays<=days;
+  res+='<div style="margin-top:12px;padding:11px;border-radius:8px;font-size:13px;font-weight:600;background:'+((allOk&&daysOk)?'rgba(29,158,117,0.12)':'rgba(192,0,0,0.10)')+';color:'+((allOk&&daysOk)?'var(--ok)':'var(--bad)')+'">'
+    +((allOk&&daysOk)?'✅ ':'⚠ ')+'블록 합계 '+totDays+'일 / '+days+'일'+(daysOk?' (이내)':' (<strong>'+(totDays-days)+'일 초과</strong>)')
+    +' · 물량 '+(allOk?'전 품목 충족':'일부 미충족')+'</div>';
+  document.getElementById('mo-block-result').innerHTML=res;
+}
 function renderMonthCalc(){
   var tb=document.getElementById('mo-tbody'); if(!tb)return;
   var days=+document.getElementById('mo-days').value||23;
@@ -841,7 +922,8 @@ function mixEngine(mixName,stage,rFC,preW,eggOn,eggBong){
   var M=MIX[mixName],pA=prod(M.A),pB=prod(M.B),yA=YIELD[pA.part],yB=YIELD[pB.part],bEgg=pB.egg;
   var cook=STAGES[stage].cook, rawA=cook*rFC, rawB=bEgg?0:cook*(1-rFC);
   var packA=mixPackKg(M.A,stage), packB=bEgg?0:mixPackKg(M.B,stage);
-  var prodA=Math.min(rawA,packA), prodB=bEgg?0:Math.min(rawB,packB);
+  var fragA=fragCap(M.A,stage), fragB=bEgg?0:fragCap(M.B,stage);
+  var prodA=Math.min(rawA,packA,fragA), prodB=bEgg?0:Math.min(rawB,packB,fragB);
   var meatA=rawA*yA.preY*yA.cook, meatB=bEgg?0:rawB*yB.preY*yB.cook;
   var loadFrag=(meatA+meatB)/(STAGES[stage].frag*300*8);
   var loadPackA=rawA/packA, loadPackB=bEgg?0:(packB>0?rawB/packB:0);
