@@ -132,7 +132,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-27d</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-27e</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -472,10 +472,11 @@ function ttAutoPack(){
   try{console.log('[ttAutoPack '+TT_STAGE+'] '+TT_PACK.filter(function(p){return p.use;}).map(function(p){return p.line+':'+p.segs.map(function(s){return s.prod.slice(0,3)+'='+s.ea;}).join(',');}).join(' | '));}catch(e){}
 }
 function ttAutoRetort(){
-  var packStart={}, packRate={};
+  var packStart={}, packEnd={};
   TT_PACK.forEach(function(pk){if(pk.use)pk.segs.forEach(function(s){
     if(packStart[s.prod]==null||s.start<packStart[s.prod])packStart[s.prod]=s.start;
-    packRate[s.prod]=(packRate[s.prod]||0)+(pk.speed||36)*60; // 제품 포장 처리율(봉/h, 호기 병렬 합산)
+    var t=s.ea/((pk.speed||36)*60), end=Math.max(s.start+t, s.minEnd||0); // 실제 점유 종료(파쇄 따라감 반영)
+    packEnd[s.prod]=Math.max(packEnd[s.prod]||0, end);
   });});
   TT_RETORT.forEach(function(rt){rt.segs=[];});
   var nret=STAGES[TT_STAGE].ret, lines=[]; TT_RETORT.forEach(function(rt,i){if(i<nret)lines.push(rt);});
@@ -486,8 +487,8 @@ function ttAutoRetort(){
   TT_PROD.forEach(function(name){
     var p=prod(name), ea=(TT_DEFAULT[name]||0)*p.units; if(ea<=0)return;
     var cycles=Math.ceil(ea/p.rPerCycle);
-    var ps=(packStart[name]!=null?packStart[name]:0), pr=packRate[name]||(36*60);
-    for(var c=0;c<cycles;c++){ jobs.push({prod:name, rHr:p.rHr, ready:ps+(c+1)*p.rPerCycle/pr}); } // (c+1)회전분 포장되면 레토 투입
+    var ps=(packStart[name]!=null?packStart[name]:0), pe=(packEnd[name]!=null?packEnd[name]:ps), span=Math.max(pe-ps,0.01);
+    for(var c=0;c<cycles;c++){ var doneEa=Math.min((c+1)*p.rPerCycle, ea); jobs.push({prod:name, rHr:p.rHr, ready:ps+span*(doneEa/ea)}); } // (c+1)회전분이 실제 포장된 시점(포장 점유구간 보간) → 마지막 회전은 포장 종료 이후
   });
   jobs.sort(function(a,b){return a.ready-b.ready;});
   jobs.forEach(function(job){
