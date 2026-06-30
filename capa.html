@@ -64,6 +64,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
   <button class="tnav" onclick="goPage('max',this)">🚀 투자 사다리 요약</button>
   <button class="tnav" onclick="goPage('tt',this)">⏱ 통합 타임테이블</button>
   <button class="tnav" onclick="goPage('data',this)">📦 물량·기준</button>
+  <button class="tnav" onclick="goPage('month',this)">📅 월 생산 시뮬</button>
 </div>
 
 <div id="page-cap" class="page active">
@@ -132,7 +133,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-27f</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28a</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -156,6 +157,95 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
   </div>
 </div>
 
+<div id="page-month" class="page">
+  <div class="section">
+    <div class="sec-hdr">📅 월 생산 시뮬레이션 <span style="font-weight:600;font-size:11px;color:var(--sub);margin-left:6px">1단계 · 품목별 단독 생산 소요일수</span></div>
+    <div style="padding:14px">
+      <div style="margin-bottom:12px;font-size:12px">
+        <span style="font-weight:600">투자 단계</span> <span id="mo-stage-btns"></span>
+        <span style="margin-left:18px;font-weight:600">월 생산가능일수</span>
+        <input type="number" id="mo-days" value="23" min="1" max="31" oninput="renderMonth()" style="width:56px;padding:5px;border:1px solid var(--border);border-radius:6px;text-align:center;font-family:inherit;font-size:12px"> 일
+        <span style="margin-left:8px;font-size:10px;color:var(--sub)">하루 최대 생산량은 공정능력 기반 자동 산출 · 직접 수정 가능</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px" id="mo-table">
+        <thead><tr style="background:var(--p);color:#fff">
+          <th style="padding:7px;text-align:left">품목</th>
+          <th style="padding:7px;text-align:right">월 물량 (ea)</th>
+          <th style="padding:7px;text-align:right">하루 최대 생산량 (ea)</th>
+          <th style="padding:7px;text-align:center">병목 공정</th>
+          <th style="padding:7px;text-align:right">단독 소요일수</th>
+        </tr></thead>
+        <tbody id="mo-tbody"></tbody>
+        <tfoot id="mo-tfoot"></tfoot>
+      </table>
+      <div id="mo-verdict" style="margin-top:14px;padding:12px;border-radius:8px;font-size:13px;font-weight:600"></div>
+      <div style="margin-top:8px;font-size:11px;color:var(--sub)">※ 단독 생산 기준입니다. 단독 합계가 생산일수를 넘으면, 다음 단계에서 혼합 생산으로 압축해 일수를 줄입니다.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+var MO_STAGE='현재';
+var MO_VOL={'미니 70g':165029,'시그니처 130g':100000,'코스트코 170g':90000,'트레이더스 460g':8000,'메추리알 180g':8000,'FC 3kg':32141};
+var MO_CAP={}; // 사용자 수정 일생산량 (없으면 자동)
+function renderMonthStageBtns(){
+  var box=document.getElementById('mo-stage-btns'); if(!box)return;
+  box.innerHTML=['현재','최대1','최대2','최대3'].map(function(s){
+    var on=(s===MO_STAGE);
+    return '<button onclick="moApplyStage(\''+s+'\')" style="padding:4px 11px;margin-right:4px;border:1px solid '+(on?'var(--p)':'var(--border)')+';background:'+(on?'var(--p)':'var(--card)')+';color:'+(on?'#fff':'var(--mid)')+';border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">'+s+'</button>';
+  }).join('');
+}
+function moApplyStage(s){ MO_STAGE=s; renderMonthStageBtns(); renderMonth(); }
+function moSetVol(name,v){ MO_VOL[name]=parseInt(String(v).replace(/[^0-9]/g,''))||0; renderMonthCalc(); }
+function moSetCap(name,v){ var n=parseInt(String(v).replace(/[^0-9]/g,''))||0; if(n>0)MO_CAP[name]=n; else delete MO_CAP[name]; renderMonthCalc(); }
+function moDayCap(name){ // 자동 산출 하루 최대 생산량(ea)
+  var p=prod(name);
+  if(p.egg){ // 메추리알: 원육 안 쓰므로 포장·레토 봉수 기준
+    var hogis=(PD[name]&&PD[name][MO_STAGE])?PD[name][MO_STAGE]:[];
+    var spd=0; hogis.forEach(function(h){spd+=(SPD_DEFAULT[name]&&SPD_DEFAULT[name][h])||0;});
+    var packEa=spd*480*0.9, retEa=STAGES[MO_STAGE].ret*p.rPerCycle*Math.floor(8/p.rHr);
+    var ea=Math.min(packEa,retEa);
+    return {ea:Math.floor(ea), bn:(packEa<=retEa?'내포장':'레토르트')};
+  }
+  var save={s:capScen,st:capStage,pw:capPreW,h:capHogi,sp:capSpd};
+  capScen=name; capStage=MO_STAGE; capResetDefaults();
+  var e=capEngine();
+  var ea=(e.maxKg>0&&rawPerEa(name)>0)?Math.floor(e.maxKg*1000/rawPerEa(name)*p.units):0;
+  capScen=save.s;capStage=save.st;capPreW=save.pw;capHogi=save.h;capSpd=save.sp;
+  return {ea:ea,bn:e.bn};
+}
+var MO_PRODS=['미니 70g','시그니처 130g','코스트코 170g','트레이더스 460g','메추리알 180g','FC 3kg'];
+function renderMonth(){ renderMonthStageBtns(); renderMonthCalc(); }
+function renderMonthCalc(){
+  var tb=document.getElementById('mo-tbody'); if(!tb)return;
+  var days=+document.getElementById('mo-days').value||23;
+  var rows='',totalDays=0,anyOver=false;
+  MO_PRODS.forEach(function(name){
+    var auto=moDayCap(name);
+    var cap=(MO_CAP[name]!=null)?MO_CAP[name]:auto.ea;
+    var vol=MO_VOL[name]||0;
+    var d=(cap>0)?Math.ceil(vol/cap):0;
+    totalDays+=d;
+    var capStr=cap.toLocaleString()+(MO_CAP[name]!=null?'':'');
+    rows+='<tr style="border-bottom:1px solid var(--border)">'
+      +'<td style="padding:6px;font-weight:600">'+name+'</td>'
+      +'<td style="padding:6px;text-align:right"><input type="text" value="'+(vol.toLocaleString())+'" oninput="moSetVol(\''+name+'\',this.value)" style="width:90px;padding:4px;border:1px solid var(--border);border-radius:5px;text-align:right;font-family:inherit;font-size:12px"></td>'
+      +'<td style="padding:6px;text-align:right"><input type="text" value="'+cap.toLocaleString()+'" oninput="moSetCap(\''+name+'\',this.value)" style="width:80px;padding:4px;border:1px solid '+(MO_CAP[name]!=null?'var(--p)':'var(--border)')+';border-radius:5px;text-align:right;font-family:inherit;font-size:12px"> <span style="font-size:9px;color:var(--sub)">(자동 '+auto.ea.toLocaleString()+')</span></td>'
+      +'<td style="padding:6px;text-align:center"><span style="font-size:10px;padding:2px 7px;background:var(--bg);border-radius:4px">'+auto.bn+'</span></td>'
+      +'<td style="padding:6px;text-align:right;font-weight:700;font-size:13px">'+d+'일</td>'
+      +'</tr>';
+  });
+  tb.innerHTML=rows;
+  document.getElementById('mo-tfoot').innerHTML='<tr style="border-top:2px solid var(--p);font-weight:700"><td style="padding:8px" colspan="4">단독 생산 소요일수 합계</td><td style="padding:8px;text-align:right;font-size:14px">'+totalDays+'일</td></tr>';
+  var ok=totalDays<=days, diff=totalDays-days;
+  var v=document.getElementById('mo-verdict');
+  v.style.background=ok?'rgba(29,158,117,0.12)':'rgba(192,0,0,0.10)';
+  v.style.color=ok?'var(--ok)':'var(--bad)';
+  v.innerHTML=ok
+    ? '✅ 단독 생산만으로 '+days+'일 안에 가능 (합계 '+totalDays+'일, '+(days-totalDays)+'일 여유)'
+    : '⚠ 단독 생산으로는 불가 — 합계 '+totalDays+'일로 '+days+'일을 <strong>'+diff+'일 초과</strong>. 혼합 생산으로 압축 필요';
+}
+</script>
 <script>
 // ===== 데이터 레이어 (v3) =====
 var YIELD={'설도':{preY:.952,cook:.568,fragY:.884},'우둔':{preY:.970,cook:.554,fragY:.913},'홍두깨':{preY:.899,cook:.573,fragY:.956}};
@@ -275,6 +365,7 @@ function goPage(name,btn){
   if(name==='max')renderMax();
   if(name==='tt'){renderTTStageBtns();renderTTProd();renderTTControls();runTT();loadTTScenarioList();}
   if(name==='data')renderData();
+  if(name==='month'){renderMonth();}
 }
 document.addEventListener('DOMContentLoaded',function(){ capResetDefaults(); capRender(); });
 </script>
