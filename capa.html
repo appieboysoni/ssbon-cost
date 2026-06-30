@@ -122,7 +122,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
       </select>
       <span style="font-size:10px;color:var(--sub)">선택한 품목의 봉수를 세트값으로 채웁니다 (이후 직접 수정 가능)</span>
     </div>
-    <div style="margin-top:10px"><button onclick="ttAutoCook()" style="padding:7px 16px;border:1px solid var(--p);background:var(--p);color:#fff;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🤖 자동 배치 (전체 공정)</button> <span style="font-size:11px;font-weight:600;margin-left:10px">주간조 출근</span> <input type="number" id="tt-dayshift" value="9" min="0" max="23" step="0.5" oninput="runTT()" style="width:54px;padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;font-family:inherit">시 <span style="font-size:10px;color:var(--sub)">전처리·자숙은 전처리 시작시각(조기조), 파쇄·내포장·레토는 이 시각 이후 시작</span></div>
+    <div style="margin-top:10px"><button onclick="ttAutoCook()" style="padding:7px 16px;border:1px solid var(--p);background:var(--p);color:#fff;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🤖 자동 배치 (전체 공정)</button> <button onclick="ttReset()" style="padding:7px 14px;border:1px solid var(--border);background:var(--card);color:var(--mid);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🗑 초기화</button> <span style="font-size:11px;font-weight:600;margin-left:10px">주간조 출근</span> <input type="number" id="tt-dayshift" value="9" min="0" max="23" step="0.5" oninput="runTT()" style="width:54px;padding:5px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;font-family:inherit">시 <span style="font-size:10px;color:var(--sub)">전처리·자숙은 전처리 시작시각(조기조), 파쇄·내포장·레토는 이 시각 이후 시작</span></div>
     <div id="tt-preset-info" style="font-size:11px;color:var(--mid);margin-top:8px"></div>
   </div></div>
   <div class="grid2">
@@ -132,7 +132,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-27e</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-27f</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -365,6 +365,19 @@ function ttApplyVolume(set){
   TT_PROD.forEach(function(name){ if(v[name]!=null) TT_DEFAULT[name]=v[name]; });
   renderTTProd(); runTT();
 }
+function ttReset(){
+  if(!confirm('타임테이블을 초기화할까요?\n\n· 자숙·파쇄·포장·레토 배치가 모두 지워집니다\n· 전처리 시작·인원·주간조 출근이 기본값으로 돌아갑니다\n· 제품·봉수는 그대로 유지됩니다')) return;
+  TT_COOK=[1,2,3,4,5,6].map(function(t){return {tank:t,mode:(t>=5?'가압':'상압'),use:true,starts:[],cookParts:[],cookKg:[]};});
+  TT_FRAG=[{line:1,workers:13,use:true,segs:[]},{line:2,workers:13,use:true,segs:[]}];
+  TT_PACK=[{line:'1호기',speed:55,labor:3,use:false,segs:[]},{line:'2호기',speed:15,labor:3,use:false,segs:[]},{line:'3호기',speed:36,labor:3,use:false,segs:[]},{line:'4호기',speed:36,labor:3,use:false,segs:[]},{line:'5호기',speed:36,labor:3,use:false,segs:[]}];
+  TT_RETORT=[{line:'레토르트1',use:false,segs:[]},{line:'레토르트2',use:false,segs:[]},{line:'레토르트3',use:false,segs:[]},{line:'레토르트4',use:false,segs:[]}];
+  var ps=document.getElementById('tt-pres');if(ps)ps.value=5;
+  var pw=document.getElementById('tt-prew');if(pw)pw.value=10;
+  var ds=document.getElementById('tt-dayshift');if(ds)ds.value=9;
+  TT_START.pre=5; TT_START.day=9; TT_WORK.pre=10;
+  ttApplyStage('현재'); // 현재 단계 설비 한도 재적용 (자숙·파쇄·레토·호기 use)
+  renderTTControls(); runTT();
+}
 function ttAutoCook(){
   var d=ttDayRaw(); var total=d.total;
   if(total<=0){alert('제품 봉수를 먼저 입력하세요');return;}
@@ -569,7 +582,7 @@ function runTT(){
   lanes.push({label:'<strong>자숙 ('+TT_LABOR.cook+'명)</strong>',bars:[]});
   TT_COOK.forEach(function(c,i){
     var useEl=document.getElementById('tt-cookuse-'+i),use=useEl?useEl.checked:c.use;
-    var cycEl=document.getElementById('tt-cookcyc-'+i),cyc=use?(cycEl?(+cycEl.value||1):c.starts.length):0, mode=c.mode;
+    var cycEl=document.getElementById('tt-cookcyc-'+i),cyc=use?(cycEl?(+cycEl.value||c.starts.length):c.starts.length):0, mode=c.mode;
     if(c.tank>=5){var me=document.getElementById('tt-cookmode-'+i);if(me&&me.value)mode=me.value;}else{mode='상압';}
     if(mode!=='상압'&&mode!=='가압')mode='상압';
     var hr=COOK_HR[mode],starts=[];
