@@ -133,7 +133,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28e</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28f</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -220,7 +220,7 @@ function moDayCap(name){ // 자동 산출 하루 최대 생산량(ea)
   if(p.egg){ // 메추리알: 원육 안 쓰므로 포장·레토 봉수 기준
     var hogis=(PD[name]&&PD[name][MO_STAGE])?PD[name][MO_STAGE]:[];
     var spd=0; hogis.forEach(function(h){spd+=(SPD_DEFAULT[name]&&SPD_DEFAULT[name][h])||0;});
-    var packEa=spd*480*0.9, retEa=STAGES[MO_STAGE].ret*p.rPerCycle*Math.floor(8/p.rHr);
+    var packEa=spd*450*0.9, retEa=STAGES[MO_STAGE].ret*p.rPerCycle*Math.floor(8/p.rHr);
     var ea=Math.min(packEa,retEa);
     return {ea:Math.floor(ea), bn:(packEa<=retEa?'내포장':'레토르트')};
   }
@@ -243,7 +243,7 @@ function moBlockLabor(b){ // 블록 하루 필요 공수(man-hour) + 공정별 �
     var e=mixEngine(b.key,st,rFC,S.pre,!!M.eggOnly,mixEggBong);
     var raw=e.rawA+e.rawB;
     var tPre=Math.min(raw/(S.pre*rate),hr), tCook=hr, tFrag=Math.min(e.loadFrag,1)*hr;
-    var tPackA=Math.min(e.loadPackA,1)*hr, tPackB=Math.min(e.loadPackBeff,1)*hr, tRt=Math.min(e.loadRt,1)*hr;
+    var tPackA=Math.min(e.loadPackA,1)*7.5, tPackB=Math.min(e.loadPackBeff,1)*7.5, tRt=Math.min(e.loadRt,1)*hr;
     var laborPack=tPackA*S.pack*moHogiCnt(M.A,st) + tPackB*S.pack*moHogiCnt(M.B,st);
     var labor=tPre*S.pre + tCook*S.cook + tFrag*S.frag*frag + laborPack + tRt*S.ret;
     return {labor:labor, tPre:tPre, tFrag:tFrag, tRt:tRt};
@@ -253,12 +253,12 @@ function moBlockLabor(b){ // 블록 하루 필요 공수(man-hour) + 공정별 �
     capScen=save.s;capStage=save.st;capPreW=save.pw;capHogi=save.h;capSpd=save.sp;
     if(mk<=0){ // 메추리알 등: 포장·레토만
       var a=moDayCap(b.key), pB=prod(b.key);
-      var packBong=moHogiCnt(b.key,st)*36*480*0.9; // 근사
-      var tK=Math.min(a.ea/Math.max(packBong,1),1)*hr;
+      var packBong=moHogiCnt(b.key,st)*36*450*0.9; // 근사
+      var tK=Math.min(a.ea/Math.max(packBong,1),1)*7.5;
       var labor2=tK*S.pack*moHogiCnt(b.key,st) + tK*S.ret; // 전처리·자숙·파쇄 없음
       return {labor:labor2, tPre:0, tFrag:0, tRt:tK};
     }
-    var tPre=Math.min(mk/pr['전처리'],1)*hr, tCook=Math.min(mk/pr['자숙'],1)*hr, tFrag=Math.min(mk/pr['파쇄'],1)*hr, tK=Math.min(mk/pr['내포장'],1)*hr, tR=Math.min(mk/pr['레토르트'],1)*hr;
+    var tPre=Math.min(mk/pr['전처리'],1)*hr, tCook=Math.min(mk/pr['자숙'],1)*hr, tFrag=Math.min(mk/pr['파쇄'],1)*hr, tK=Math.min(mk/pr['내포장'],1)*7.5, tR=Math.min(mk/pr['레토르트'],1)*hr;
     var labor=tPre*S.pre + tCook*S.cook + tFrag*S.frag*frag + tK*S.pack*moHogiCnt(b.key,st) + tR*S.ret;
     return {labor:labor, tPre:tPre, tFrag:tFrag, tRt:tR};
   }
@@ -403,7 +403,7 @@ function capResetDefaults(){
 }
 function capPackKg(){
   var sum=0; availHogi(capScen,capStage).forEach(function(h){ if(capHogi[h]) sum+=(capSpd[h]||0); });
-  return sum*480*0.9/prod(capScen).units*rawPerEa(capScen)/1000; // kg
+  return sum*450*0.9/prod(capScen).units*rawPerEa(capScen)/1000; // kg
 }
 function capRetKg(){var p=prod(capScen);var cyc=Math.floor(8/p.rHr);return STAGES[capStage].ret*p.rPerCycle*cyc/p.units*rawPerEa(capScen)/1000;}
 function capRate(){return STAGES[capStage].slicer?80:60;}
@@ -954,7 +954,7 @@ function renderMax(){
 
 
 var MIX={'혼합 FC+시그130':{A:'FC 3kg',B:'시그니처 130g'},'혼합 FC+코스트170':{A:'FC 3kg',B:'코스트코 170g'},'혼합 FC+미니70':{A:'FC 3kg',B:'미니 70g'},'혼합 FC+메추리알180':{A:'FC 3kg',B:'메추리알 180g',eggOnly:true}};
-function mixPackKg(name,stage){var p=prod(name),sum=0;PD[name][stage].forEach(function(h){if(h!=='5호기'||stage==='최대2'||stage==='최대3')sum+=SPD_DEFAULT[name][h];});return sum*480*0.9/p.units*rawPerEa(name)/1000;}
+function mixPackKg(name,stage){var p=prod(name),sum=0;PD[name][stage].forEach(function(h){if(h!=='5호기'||stage==='최대2'||stage==='최대3')sum+=SPD_DEFAULT[name][h];});return sum*450*0.9/p.units*rawPerEa(name)/1000;}
 var mixRatio=null, mixPreW=null, mixEgg=false, mixEggBong=4000;
 function mixDefaultRatio(mix,stage){var M=MIX[mix];if(prod(M.B).egg)return 1;var packB=mixPackKg(M.B,stage);var r=1-packB/STAGES[stage].cook;return Math.max(0.1,Math.min(0.9,r));}
 function mixEngine(mixName,stage,rFC,preW,eggOn,eggBong){
@@ -972,7 +972,7 @@ function mixEngine(mixName,stage,rFC,preW,eggOn,eggBong){
   var rtA=Math.ceil(bongA/pA.rPerCycle)*pA.rHr, rtB=bEgg?0:Math.ceil(bongB/pB.rPerCycle)*pB.rHr;
   var rate=STAGES[stage].slicer?80:60;
   var eggLoad=0, eggRt=0, eggShare=false, eb=(eggOn&&eggBong>0)?eggBong:0;
-  if(eb>0){ eggLoad=eb/(60*480*0.9); eggRt=Math.ceil(eb/4096)*1.25; eggShare=(PD[M.B][stage].indexOf('3호기')>=0||PD[M.B][stage].indexOf('4호기')>=0); }
+  if(eb>0){ eggLoad=eb/(60*450*0.9); eggRt=Math.ceil(eb/4096)*1.25; eggShare=(PD[M.B][stage].indexOf('3호기')>=0||PD[M.B][stage].indexOf('4호기')>=0); }
   var loadPackBeff=loadPackB+(eggShare?eggLoad:0);
   var loadRt=(rtA+rtB+eggRt)/(STAGES[stage].ret*8);
   var loadPre=preW?((rawA+rawB)/(preW*rate*7.5)):null;
