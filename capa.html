@@ -133,7 +133,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28f</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28g</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -193,6 +193,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
         </table>
         <button onclick="moAddBlock()" style="margin-top:8px;padding:5px 13px;border:1px solid var(--p);background:var(--card);color:var(--p);border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">+ 블록 추가</button>
         <div id="mo-block-result" style="margin-top:16px"></div>
+        <div id="mo-verify-result" style="margin-top:12px"></div>
       </div>
     </div>
   </div>
@@ -283,6 +284,46 @@ function moBlockDaily(b){ // 블록 하루 제품별 ea
   } else { out[b.key]=moDayCap(b.key).ea; }
   return out;
 }
+function moFmtH(h){var hh=Math.floor(h),mm=Math.round((h-hh)*60);if(mm===60){hh++;mm=0;}return hh+':'+(mm<10?'0':'')+mm;}
+function moGV(id){var e=document.getElementById(id);return e?e.value:null;}
+function moSV(id,v){var e=document.getElementById(id);if(e&&v!=null)e.value=v;}
+function moVerifyBlock(idx){
+  var b=MO_BLOCKS[idx]; var daily=moBlockDaily(b); var names=Object.keys(daily).filter(function(p){return daily[p]>0;});
+  var out=document.getElementById('mo-verify-result'); if(!out)return;
+  if(!names.length){ out.innerHTML='<span style="color:var(--sub);font-size:12px">검증할 물량이 없습니다</span>'; return; }
+  // 타임테이블 현재 상태 백업 (검증이 화면을 건드리지 않도록)
+  var bak={PROD:TT_PROD.slice(),DEF:JSON.parse(JSON.stringify(TT_DEFAULT)),COOK:JSON.parse(JSON.stringify(TT_COOK)),FRAG:JSON.parse(JSON.stringify(TT_FRAG)),PACK:JSON.parse(JSON.stringify(TT_PACK)),RT:JSON.parse(JSON.stringify(TT_RETORT)),STAGE:TT_STAGE,SP:JSON.parse(JSON.stringify(TT_START)),WK:JSON.parse(JSON.stringify(TT_WORK))};
+  var db={pw:moGV('tt-prew'),ps:moGV('tt-pres'),ds:moGV('tt-dayshift')};
+  // 클린 + 블록 물량 세팅 후 자동배치
+  ttResetCore();
+  TT_PROD=names.slice(); names.forEach(function(p){TT_DEFAULT[p]=daily[p];});
+  TT_START.pre=5; TT_START.day=9; TT_WORK.pre=MO_STAFF.pre;
+  ttApplyStage(MO_STAGE);
+  moSV('tt-pres',5); moSV('tt-prew',MO_STAFF.pre); moSV('tt-dayshift',9);
+  renderTTProd(); renderTTControls(); runTT(); ttAutoCook();
+  // 포장 종료 / 레토 종료 추출
+  var packEnd={},packStart={};
+  TT_PACK.forEach(function(pk){if(pk.use)pk.segs.forEach(function(s){var t=s.ea/((pk.speed||36)*60);var e=Math.max(s.start+t,s.minEnd||0);if(packStart[s.prod]==null||s.start<packStart[s.prod])packStart[s.prod]=s.start;packEnd[s.prod]=Math.max(packEnd[s.prod]||0,e);});});
+  var maxRt=0; TT_RETORT.forEach(function(r){if(r.use)r.segs.forEach(function(s){var e=s.start+s.cycles*prod(s.prod).rHr;if(e>maxRt)maxRt=e;});});
+  var packRows=Object.keys(packStart).map(function(p){var e=packEnd[p];return {p:p,s:packStart[p],e:e,ok:e<=18.001};});
+  var packViol=packRows.filter(function(r){return !r.ok;}), rtViol=maxRt>20.5001;
+  var nm=(b.type==='mix')?b.key.replace('혼합 ',''):(b.key+'(단독)');
+  var h='<div style="padding:12px;border-radius:8px;background:var(--bg);font-size:12px">';
+  h+='<div style="font-weight:700;margin-bottom:6px">⏱ ['+nm+'] 타임테이블 검증 · '+MO_STAGE+' 단계</div>';
+  h+='<div style="font-weight:600;margin-bottom:2px">포장 종료 (18:00 이내)</div>';
+  packRows.forEach(function(r){h+='<div style="margin-left:8px;color:'+(r.ok?'var(--mid)':'var(--bad)')+'">· '+r.p+': '+moFmtH(r.s)+'~'+moFmtH(r.e)+(r.ok?' ✅':' ★ 18시 초과')+'</div>';});
+  h+='<div style="font-weight:600;margin:6px 0 2px">레토르트 종료 (20:30 이내)</div>';
+  h+='<div style="margin-left:8px;color:'+(rtViol?'var(--bad)':'var(--mid)')+'">· 최종 종료 '+moFmtH(maxRt)+(rtViol?' ★ 20:30 초과':' ✅')+'</div>';
+  var pass=!packViol.length&&!rtViol;
+  h+='<div style="margin-top:8px;padding:9px;border-radius:6px;font-weight:600;background:'+(pass?'rgba(29,158,117,0.12)':'rgba(192,0,0,0.10)')+';color:'+(pass?'var(--ok)':'var(--bad)')+'">'
+    +(pass?'✅ 시간 조건 통과 — 이 물량은 하루에 실현 가능':'⚠ 시간 조건 위반 — '+[packViol.length?'포장 18시 초과':'',rtViol?'레토 20:30 초과':''].filter(Boolean).join(', ')+'. 물량을 줄이거나 잔업 필요')+'</div>';
+  h+='<div style="font-size:10px;color:var(--sub);margin-top:4px">※ 검증은 타임테이블 화면을 건드리지 않습니다. 물량 조정은 직접 하세요(자동 수정 안 함).</div></div>';
+  // 복원
+  TT_PROD=bak.PROD; TT_DEFAULT=bak.DEF; TT_COOK=bak.COOK; TT_FRAG=bak.FRAG; TT_PACK=bak.PACK; TT_RETORT=bak.RT; TT_STAGE=bak.STAGE; TT_START=bak.SP; TT_WORK=bak.WK;
+  moSV('tt-prew',db.pw); moSV('tt-pres',db.ps); moSV('tt-dayshift',db.ds);
+  renderTTProd(); renderTTControls(); runTT();
+  out.innerHTML=h;
+}
 function renderMonthBlocks(){
   var tb=document.getElementById('mo-blocks'); if(!tb)return;
   var mixOpts=Object.keys(MIX).map(function(k){return {v:k,label:k.replace('혼합 ','').replace('FC+','FC 3kg + ')};});
@@ -303,7 +344,7 @@ function renderMonthBlocks(){
       +'<td style="padding:6px">'+sel+'</td>'
       +'<td style="padding:6px;text-align:center"><input type="number" value="'+b.days+'" min="0" oninput="moBlockChange('+i+',\'days\',this.value)" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:5px;text-align:center;font-family:inherit;font-size:12px"></td>'
       +'<td style="padding:6px;font-size:11px;color:var(--mid)">'+dailyStr+'</td>'
-      +'<td style="padding:6px;text-align:center"><button onclick="moDelBlock('+i+')" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:14px">×</button></td>'
+      +'<td style="padding:6px;text-align:center;white-space:nowrap"><button onclick="moVerifyBlock('+i+')" title="타임테이블로 18시/20:30 검증" style="border:1px solid var(--border);background:var(--card);border-radius:5px;cursor:pointer;font-size:12px;padding:2px 6px">⏱</button> <button onclick="moDelBlock('+i+')" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:14px">×</button></td>'
       +'</tr>';
   });
   tb.innerHTML=rows||'<tr><td colspan="4" style="padding:10px;color:var(--sub);font-size:11px">블록을 추가하세요</td></tr>';
@@ -576,12 +617,15 @@ function ttApplyVolume(set){
   TT_PROD.forEach(function(name){ if(v[name]!=null) TT_DEFAULT[name]=v[name]; });
   renderTTProd(); runTT();
 }
-function ttReset(){
-  if(!confirm('타임테이블을 초기화할까요?\n\n· 자숙·파쇄·포장·레토 배치가 모두 지워집니다\n· 전처리 시작·인원·주간조 출근이 기본값으로 돌아갑니다\n· 제품·봉수는 그대로 유지됩니다')) return;
+function ttResetCore(){ // 배치 구조만 깨끗이 재생성 (confirm/DOM 없음 — 검증에서도 재사용)
   TT_COOK=[1,2,3,4,5,6].map(function(t){return {tank:t,mode:(t>=5?'가압':'상압'),use:true,starts:[],cookParts:[],cookKg:[]};});
   TT_FRAG=[{line:1,workers:13,use:true,segs:[]},{line:2,workers:13,use:true,segs:[]}];
   TT_PACK=[{line:'1호기',speed:55,labor:3,use:false,segs:[]},{line:'2호기',speed:15,labor:3,use:false,segs:[]},{line:'3호기',speed:36,labor:3,use:false,segs:[]},{line:'4호기',speed:36,labor:3,use:false,segs:[]},{line:'5호기',speed:36,labor:3,use:false,segs:[]}];
   TT_RETORT=[{line:'레토르트1',use:false,segs:[]},{line:'레토르트2',use:false,segs:[]},{line:'레토르트3',use:false,segs:[]},{line:'레토르트4',use:false,segs:[]}];
+}
+function ttReset(){
+  if(!confirm('타임테이블을 초기화할까요?\n\n· 자숙·파쇄·포장·레토 배치가 모두 지워집니다\n· 전처리 시작·인원·주간조 출근이 기본값으로 돌아갑니다\n· 제품·봉수는 그대로 유지됩니다')) return;
+  ttResetCore();
   var ps=document.getElementById('tt-pres');if(ps)ps.value=5;
   var pw=document.getElementById('tt-prew');if(pw)pw.value=10;
   var ds=document.getElementById('tt-dayshift');if(ds)ds.value=9;
@@ -975,6 +1019,7 @@ function mixEngine(mixName,stage,rFC,preW,eggOn,eggBong){
   if(eb>0){ eggLoad=eb/(60*450*0.9); eggRt=Math.ceil(eb/4096)*1.25; eggShare=(PD[M.B][stage].indexOf('3호기')>=0||PD[M.B][stage].indexOf('4호기')>=0); }
   var loadPackBeff=loadPackB+(eggShare?eggLoad:0);
   var loadRt=(rtA+rtB+eggRt)/(STAGES[stage].ret*8);
+  for(var _it=0; loadRt>1.001 && _it<6; _it++){ prodA/=loadRt; if(!bEgg)prodB/=loadRt; bongA=prodA*1000/rawPerEa(M.A)*pA.units; bongB=bEgg?0:prodB*1000/rawPerEa(M.B)*pB.units; rtA=Math.ceil(bongA/pA.rPerCycle)*pA.rHr; rtB=bEgg?0:Math.ceil(bongB/pB.rPerCycle)*pB.rHr; loadRt=(rtA+rtB+eggRt)/(STAGES[stage].ret*8); } // 레토 대수 초과분 반복 축소(회전수 올림 잔차 수렴)
   var loadPre=preW?((rawA+rawB)/(preW*rate*7.5)):null;
   return {A:M.A,B:M.B,rawA:rawA,rawB:rawB,prodA:prodA,prodB:prodB,wasteA:rawA-prodA,wasteB:rawB-prodB,loadFrag:loadFrag,loadPackA:loadPackA,loadPackB:loadPackB,loadPackBeff:loadPackBeff,loadRt:loadRt,loadPre:loadPre,bongA:Math.round(bongA),bongB:Math.round(bongB),eggLoad:eggLoad,eggShare:eggShare,eggBong:eb};
 }
