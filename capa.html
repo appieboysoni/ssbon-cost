@@ -133,7 +133,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28d</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28e</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -234,6 +234,35 @@ function moDayCap(name){ // 자동 산출 하루 최대 생산량(ea)
 var MO_PRODS=['미니 70g','시그니처 130g','코스트코 170g','트레이더스 460g','메추리알 180g','FC 3kg'];
 function renderMonth(){ renderMonthStageBtns(); renderMonthCalc(); renderMonthBlocks(); }
 var MO_BLOCKS=[{type:'mix',key:'혼합 FC+미니70',days:10}];
+var MO_STAFF={pre:16,cook:3,frag:13,pack:3,ret:2}, MO_TOTAL=56, MO_WORKHR=8;
+function moHogiCnt(name,st){var a=(PD[name]&&PD[name][st])?PD[name][st]:[];return a.filter(function(h){return h!=='5호기'||st==='최대2'||st==='최대3';}).length;}
+function moBlockLabor(b){ // 블록 하루 필요 공수(man-hour) + 공정별 시간
+  var st=MO_STAGE, rate=(STAGES[st].slicer?80:60), hr=MO_WORKHR, S=MO_STAFF, frag=STAGES[st].frag;
+  if(b.type==='mix'){
+    var M=MIX[b.key], rFC=mixDefaultRatio(b.key,st);
+    var e=mixEngine(b.key,st,rFC,S.pre,!!M.eggOnly,mixEggBong);
+    var raw=e.rawA+e.rawB;
+    var tPre=Math.min(raw/(S.pre*rate),hr), tCook=hr, tFrag=Math.min(e.loadFrag,1)*hr;
+    var tPackA=Math.min(e.loadPackA,1)*hr, tPackB=Math.min(e.loadPackBeff,1)*hr, tRt=Math.min(e.loadRt,1)*hr;
+    var laborPack=tPackA*S.pack*moHogiCnt(M.A,st) + tPackB*S.pack*moHogiCnt(M.B,st);
+    var labor=tPre*S.pre + tCook*S.cook + tFrag*S.frag*frag + laborPack + tRt*S.ret;
+    return {labor:labor, tPre:tPre, tFrag:tFrag, tRt:tRt};
+  } else {
+    var save={s:capScen,st:capStage,pw:capPreW,h:capHogi,sp:capSpd};
+    capScen=b.key; capStage=st; capResetDefaults(); var e=capEngine(); var mk=e.maxKg, pr=e.procs;
+    capScen=save.s;capStage=save.st;capPreW=save.pw;capHogi=save.h;capSpd=save.sp;
+    if(mk<=0){ // 메추리알 등: 포장·레토만
+      var a=moDayCap(b.key), pB=prod(b.key);
+      var packBong=moHogiCnt(b.key,st)*36*480*0.9; // 근사
+      var tK=Math.min(a.ea/Math.max(packBong,1),1)*hr;
+      var labor2=tK*S.pack*moHogiCnt(b.key,st) + tK*S.ret; // 전처리·자숙·파쇄 없음
+      return {labor:labor2, tPre:0, tFrag:0, tRt:tK};
+    }
+    var tPre=Math.min(mk/pr['전처리'],1)*hr, tCook=Math.min(mk/pr['자숙'],1)*hr, tFrag=Math.min(mk/pr['파쇄'],1)*hr, tK=Math.min(mk/pr['내포장'],1)*hr, tR=Math.min(mk/pr['레토르트'],1)*hr;
+    var labor=tPre*S.pre + tCook*S.cook + tFrag*S.frag*frag + tK*S.pack*moHogiCnt(b.key,st) + tR*S.ret;
+    return {labor:labor, tPre:tPre, tFrag:tFrag, tRt:tR};
+  }
+}
 var MO_SOLO=['미니 70g','시그니처 130g','코스트코 170g','트레이더스 460g','메추리알 180g','FC 3kg'];
 function moAddBlock(){ MO_BLOCKS.push({type:'mix',key:'혼합 FC+미니70',days:5}); renderMonthBlocks(); }
 function moDelBlock(i){ MO_BLOCKS.splice(i,1); renderMonthBlocks(); }
@@ -267,7 +296,9 @@ function renderMonthBlocks(){
     var daily=moBlockDaily(b);
     Object.keys(daily).forEach(function(p){ acc[p]=(acc[p]||0)+daily[p]*b.days; });
     totDays+=b.days;
+    var lab=moBlockLabor(b); var avail=MO_TOTAL*MO_WORKHR; var laborOver=lab.labor>avail+0.5;
     var dailyStr=Object.keys(daily).map(function(p){return p.replace(' 3kg','').replace(/ \d+g/,'').replace(' 180g','')+' '+daily[p].toLocaleString();}).join(' / ');
+    dailyStr+=' <span style="color:'+(laborOver?'var(--bad)':'var(--sub)')+';font-size:10px">· 공수 '+Math.round(lab.labor)+'mh'+(laborOver?' ⚠인원초과':'')+'</span>';
     rows+='<tr style="border-bottom:1px solid var(--border)">'
       +'<td style="padding:6px">'+sel+'</td>'
       +'<td style="padding:6px;text-align:center"><input type="number" value="'+b.days+'" min="0" oninput="moBlockChange('+i+',\'days\',this.value)" style="width:50px;padding:4px;border:1px solid var(--border);border-radius:5px;text-align:center;font-family:inherit;font-size:12px"></td>'
@@ -292,9 +323,17 @@ function renderMonthBlocks(){
   });
   res+='</tbody></table>';
   var daysOk=totDays<=days;
+  // 인원 타당성 (블록별 하루 필요공수 vs 가용공수)
+  var avail=MO_TOTAL*MO_WORKHR, laborOverBlocks=[];
+  MO_BLOCKS.forEach(function(b){ var lab=moBlockLabor(b); if(lab.labor>avail+0.5){ var nm=(b.type==='mix')?b.key.replace('혼합 ',''):(b.key+'(단독)'); laborOverBlocks.push(nm+' '+Math.round(lab.labor)+'mh'); } });
+  var laborOk=laborOverBlocks.length===0;
   res+='<div style="margin-top:12px;padding:11px;border-radius:8px;font-size:13px;font-weight:600;background:'+((allOk&&daysOk)?'rgba(29,158,117,0.12)':'rgba(192,0,0,0.10)')+';color:'+((allOk&&daysOk)?'var(--ok)':'var(--bad)')+'">'
     +((allOk&&daysOk)?'✅ ':'⚠ ')+'블록 합계 '+totDays+'일 / '+days+'일'+(daysOk?' (이내)':' (<strong>'+(totDays-days)+'일 초과</strong>)')
     +' · 물량 '+(allOk?'전 품목 충족':'일부 미충족')+'</div>';
+  res+='<div style="margin-top:8px;padding:11px;border-radius:8px;font-size:12px;background:'+(laborOk?'rgba(29,158,117,0.10)':'rgba(230,150,0,0.12)')+';color:'+(laborOk?'var(--ok)':'#a06600')+'">'
+    +'<span style="font-weight:600">인원 타당성</span> — 총원 '+MO_TOTAL+'명 × '+MO_WORKHR+'h = <strong>'+avail+' man-hour/일</strong> 가용<br>'
+    +(laborOk?'✅ 모든 블록이 하루 가용 공수 이내 (전처리 인력이 후공정 지원 포함)':'⚠ 인원 초과 블록: '+laborOverBlocks.join(', ')+' — 잔업 또는 인력 보강 필요')
+    +'<br><span style="font-size:10px;color:var(--sub)">※ 공수=각 공정 가동시간×인원 합. 전처리가 일찍 끝나면 남는 공수가 후공정 여력으로 자동 반영됨</span></div>';
   document.getElementById('mo-block-result').innerHTML=res;
 }
 function renderMonthCalc(){
