@@ -133,7 +133,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28c</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28d</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -924,6 +924,8 @@ function mixEngine(mixName,stage,rFC,preW,eggOn,eggBong){
   var packA=mixPackKg(M.A,stage), packB=bEgg?0:mixPackKg(M.B,stage);
   var fragA=fragCap(M.A,stage), fragB=bEgg?0:fragCap(M.B,stage);
   var prodA=Math.min(rawA,packA,fragA), prodB=bEgg?0:Math.min(rawB,packB,fragB);
+  var fragShare=((prodA*yA.preY*yA.cook)+(bEgg?0:prodB*yB.preY*yB.cook))/(STAGES[stage].frag*300*8); // 실제 생산량 기준 파쇄 라인 공유 부하
+  if(fragShare>1){ prodA/=fragShare; if(!bEgg)prodB/=fragShare; } // 파쇄 라인 초과분만큼 FC·동반 비례 축소
   var meatA=rawA*yA.preY*yA.cook, meatB=bEgg?0:rawB*yB.preY*yB.cook;
   var loadFrag=(meatA+meatB)/(STAGES[stage].frag*300*8);
   var loadPackA=rawA/packA, loadPackB=bEgg?0:(packB>0?rawB/packB:0);
