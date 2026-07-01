@@ -133,7 +133,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28h</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28i</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -274,14 +274,15 @@ function moBlockChange(i,field,v){
 }
 function moBlockDaily(b){ // 블록 하루 제품별 ea
   var out={};
+  function lim(name,val){ return (MO_CAP[name]!=null)?Math.min(val,MO_CAP[name]):val; } // 사용자 수정값을 상한으로
   if(b.type==='mix'){
     var M=MIX[b.key]; if(!M)return out;
     var rFC=mixDefaultRatio(b.key,MO_STAGE);
     var e=mixEngine(b.key,MO_STAGE,rFC,null,!!M.eggOnly,mixEggBong);
-    out[M.A]=Math.floor(e.prodA*1000/rawPerEa(M.A)*prod(M.A).units);
-    if(M.eggOnly){ out[M.B]=moDayCap(M.B).ea; }
-    else { out[M.B]=Math.floor(e.prodB*1000/rawPerEa(M.B)*prod(M.B).units); }
-  } else { out[b.key]=moDayCap(b.key).ea; }
+    out[M.A]=lim(M.A, Math.floor(e.prodA*1000/rawPerEa(M.A)*prod(M.A).units));
+    if(M.eggOnly){ out[M.B]=lim(M.B, moDayCap(M.B).ea); }
+    else { out[M.B]=lim(M.B, Math.floor(e.prodB*1000/rawPerEa(M.B)*prod(M.B).units)); }
+  } else { out[b.key]=lim(b.key, moDayCap(b.key).ea); }
   return out;
 }
 function moFmtH(h){var hh=Math.floor(h),mm=Math.round((h-hh)*60);if(mm===60){hh++;mm=0;}return hh+':'+(mm<10?'0':'')+mm;}
