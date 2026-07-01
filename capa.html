@@ -133,7 +133,7 @@ select{padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-siz
     <div class="section"><div class="sec-hdr">⚖️ 원육 환산</div><div class="sec-body" id="tt-rawsum"></div></div>
   </div>
   <div class="section"><div class="sec-hdr">🎛 공정 조건 (인원·설비 → 처리시간 자동 / 시작시각 직접 입력)</div><div class="sec-body" id="tt-controls"></div></div>
-  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28i</span></div>
+  <div class="section"><div class="sec-hdr">⏱ 공정 타임테이블 <span id="tt-totallabor" style="font-weight:600;font-size:11px;color:var(--mid);margin-left:8px"></span><span style="font-weight:600;font-size:11px;color:#fff;background:#0a7d3c;border-radius:4px;padding:2px 8px;margin-left:10px">build 2026-06-28j</span></div>
     <div class="sec-body" style="padding:10px"><div class="tt-wrap"><div class="tt" id="tt-canvas2" style="min-height:120px"></div></div></div>
   </div>
 </div>
@@ -297,7 +297,7 @@ function moVerifyBlock(idx){
   var db={pw:moGV('tt-prew'),ps:moGV('tt-pres'),ds:moGV('tt-dayshift')};
   // 클린 + 블록 물량 세팅 후 자동배치
   ttResetCore();
-  TT_PROD=names.slice(); names.forEach(function(p){TT_DEFAULT[p]=daily[p];});
+  TT_PROD=names.slice(); names.forEach(function(p){ var u=prod(p).units||1; TT_DEFAULT[p]=Math.round(daily[p]/u); }); // 타임테이블은 팩 단위 입력 → 봉수/units
   TT_START.pre=5; TT_START.day=9; TT_WORK.pre=MO_STAFF.pre;
   ttApplyStage(MO_STAGE);
   moSV('tt-pres',5); moSV('tt-prew',MO_STAFF.pre); moSV('tt-dayshift',9);
