@@ -284,6 +284,35 @@ tr.total td{background:var(--light);font-weight:700}
           <tbody id="labor-table-body"></tbody>
         </table></div>
       </div>
+      <div class="sec">② 근무내역 (아르바이트·일용직) 붙여넣기</div>
+      <div class="paste-box">
+        <div class="pb-title">📋 아르바이트/일용직 근태 현황표 → 전체 복사 → 아래 붙여넣기</div>
+        <div class="pb-desc">형식: 성명(한글) × 날짜별 [정상근무 | 연장근무 | 연장초과] 3열 반복 (인사팀 근태 현황표 그대로). 야간 시간은 인사팀에서 이미 정상/연장/연장초과에 반영되어 있으므로 별도 입력 불필요.</div>
+        <textarea id="paste-arbeit" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-ok btn-sm" onclick="parseArbeitLabor()">⚡ 공수 분석</button>
+          <button class="btn btn-primary btn-sm" onclick="clearPaste('paste-arbeit','arbeit-result','arbeit-table-wrap')">🗑️ 초기화</button>
+        </div>
+        <div class="paste-result" id="arbeit-result"></div>
+      </div>
+      <div id="arbeit-table-wrap" style="display:none">
+        <div class="info-box" id="arbeit-summary"></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>날짜</th><th>정상근무(h)</th><th>연장근무(h)</th><th>연장초과(h)</th><th>가중공수(h)</th></tr></thead>
+          <tbody id="arbeit-table-body"></tbody>
+        </table></div>
+      </div>
+      <div id="combined-manhours-wrap" style="display:none;margin-top:10px">
+        <div class="sec" style="font-size:11px">② 정규직 + 아르바이트 통합 가중공수 (미리보기 — 아직 원가계산엔 미반영)</div>
+        <div class="info-box" id="combined-summary"></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>날짜</th><th>정규직 가중(h)</th><th>아르바이트 가중(h)</th><th>결합 가중공수(h)</th><th>월 비중</th></tr></thead>
+          <tbody id="combined-table-body"></tbody>
+        </table></div>
+      </div>
+      <div class="btn-row" style="margin-top:6px">
+        <button class="btn btn-primary btn-sm" onclick="previewCombinedManhours()">🔍 통합 가중공수 미리보기 계산</button>
+      </div>
       <div class="sec">③ 재고평가 붙여넣기 (더존 ERP)</div>
       <div class="paste-box">
         <div class="pb-title">📋 더존 재고평가 엑셀 → 전체 복사 → 아래 붙여넣기</div>
@@ -677,7 +706,7 @@ const factoryDb = getFirestore(factoryApp);
 window._factoryDb = factoryDb;
 window._masters = [];
 window._bom = {};
-window._parsed = { prod: null, labor: null, inv: null, erp: null, erpQty: null, manhours: null };
+window._parsed = { prod: null, labor: null, arbeit: null, inv: null, erp: null, erpQty: null, manhours: null };
 
 // ── 차트 인스턴스 저장
 window._charts = { costRate: null, production: null, quarter: null };
@@ -1050,6 +1079,7 @@ window.clearPaste = (textareaId,resultId,tableId) => {
   const t=document.getElementById(tableId); if(t)t.style.display='none';
   if(textareaId==='paste-prod') window._parsed.prod=null;
   if(textareaId==='paste-labor') window._parsed.labor=null;
+  if(textareaId==='paste-arbeit') window._parsed.arbeit=null;
   if(textareaId==='paste-inv') window._parsed.inv=null;
   updateStepIndicators();
 };
@@ -1430,6 +1460,117 @@ window.parseLaborData = () => {
 };
 
 // ════════════════════════════════════
+// 아르바이트/일용직 근무내역 파싱
+// 형식: 성명(한글) × 날짜별 [정상근무|연장근무|연장초과] 3열 반복
+// ════════════════════════════════════
+window.parseArbeitLabor = () => {
+  const raw=document.getElementById('paste-arbeit').value.trim();
+  if(!raw){showToast('❌ 데이터를 붙여넣기 하세요');return;}
+  const rows=raw.split('\n').map(r=>r.split('\t'));
+
+  // 정상근무/연장근무/연장초과 3연속 헤더가 있는 행을 찾는다
+  let subH=-1;
+  for(let i=0;i<Math.min(rows.length,6);i++){
+    const row=rows[i];
+    for(let j=0;j<row.length-2;j++){
+      if((row[j]||'').trim()==='정상근무'&&(row[j+1]||'').trim()==='연장근무'&&(row[j+2]||'').trim()==='연장초과'){
+        subH=i; break;
+      }
+    }
+    if(subH>=0)break;
+  }
+  if(subH<1){showToast('❌ 아르바이트 근무내역 형식을 인식하지 못했습니다 (정상근무/연장근무/연장초과 헤더를 찾을 수 없음)');return;}
+
+  const dateRow=rows[subH-1];
+  const subRow=rows[subH];
+  const groups=[]; // {col, date}
+  for(let j=0;j<subRow.length-2;j++){
+    if((subRow[j]||'').trim()==='정상근무'&&(subRow[j+1]||'').trim()==='연장근무'&&(subRow[j+2]||'').trim()==='연장초과'){
+      const dateRaw=(dateRow[j]||'').trim();
+      const m=dateRaw.match(/(\d{4})[\/\-](\d{2})[\/\-](\d{2})/);
+      if(m) groups.push({col:j, date:`${m[1]}-${m[2]}-${m[3]}`});
+    }
+  }
+  if(!groups.length){showToast('❌ 날짜 헤더를 찾을 수 없습니다 (예: 2026/06/01 형식)');return;}
+
+  const byDate={};
+  for(const g of groups) byDate[g.date]={normal:0,ext:0,over:0};
+  let totalRow=null;
+  for(let i=subH+1;i<rows.length;i++){
+    const row=rows[i];
+    const name=(row[0]||'').trim();
+    if(!name) continue;
+    if(name==='총합계'){ totalRow=row; continue; } // 개인별 합산에서 제외, 검증용으로만 사용
+    for(const g of groups){
+      const n=parseFloat(row[g.col])||0;
+      const e=parseFloat(row[g.col+1])||0;
+      const o=parseFloat(row[g.col+2])||0;
+      byDate[g.date].normal+=n; byDate[g.date].ext+=e; byDate[g.date].over+=o;
+    }
+  }
+
+  // 팩트체크: '총합계' 행이 있으면 우리가 개인별로 합산한 값과 대조
+  let mismatchDates=[];
+  if(totalRow){
+    for(const g of groups){
+      const n=parseFloat(totalRow[g.col])||0;
+      const e=parseFloat(totalRow[g.col+1])||0;
+      const o=parseFloat(totalRow[g.col+2])||0;
+      const v=byDate[g.date];
+      if(Math.abs(v.normal-n)>0.05||Math.abs(v.ext-e)>0.05||Math.abs(v.over-o)>0.05) mismatchDates.push(g.date);
+    }
+  }
+
+  window._parsed.arbeit=byDate;
+  const dates=Object.keys(byDate).sort();
+  let totalN=0,totalE=0,totalO=0,totalW=0;
+  const tbody=document.getElementById('arbeit-table-body');
+  tbody.innerHTML=dates.map(d=>{
+    const v=byDate[d];
+    const w=v.normal*1.0+v.ext*1.5+v.over*2.0;
+    totalN+=v.normal;totalE+=v.ext;totalO+=v.over;totalW+=w;
+    return `<tr><td class="c">${d}</td><td>${fmt(v.normal,1)}</td><td>${fmt(v.ext,1)}</td><td>${fmt(v.over,1)}</td><td style="font-weight:700">${fmt(w,1)}</td></tr>`;
+  }).join('');
+  document.getElementById('arbeit-table-wrap').style.display='block';
+  document.getElementById('arbeit-summary').innerHTML=
+    `✅ ${dates.length}일 집계 | 정상: ${fmt(totalN,1)}h | 연장: ${fmt(totalE,1)}h | 연장초과: ${fmt(totalO,1)}h | <b>가중공수 합계 ${fmt(totalW,1)}h</b>`
+    +(mismatchDates.length?` <span style="color:var(--bad)">⚠️ '총합계' 행과 불일치: ${mismatchDates.join(', ')}</span>`:` <span style="color:var(--ok)">('총합계' 행과 일치 확인됨)</span>`);
+  const res=document.getElementById('arbeit-result');
+  res.style.display='block';
+  res.innerHTML=mismatchDates.length
+    ? `⚠️ ${dates.length}일 인식 — ${mismatchDates.length}개 날짜 합계 불일치 (붙여넣은 원본 확인 필요)`
+    : `✅ ${dates.length}일 인식 완료`;
+  updateStepIndicators();
+};
+
+// ════════════════════════════════════
+// 정규직 + 아르바이트 통합 가중공수 (미리보기 전용, 원가계산 미반영)
+// 가중치: 정상×1.0 + 연장×1.5 + 연장초과(정규직=야간)×2.0
+// ════════════════════════════════════
+window.previewCombinedManhours = () => {
+  const labor=window._parsed.labor, arbeit=window._parsed.arbeit;
+  if(!labor&&!arbeit){showToast('❌ 근무내역(정규직) 또는 아르바이트 근무내역을 먼저 분석하세요');return;}
+  const dates=new Set([...Object.keys(labor||{}), ...Object.keys(arbeit||{})]);
+  const sorted=[...dates].sort();
+  if(!sorted.length){showToast('❌ 집계된 날짜가 없습니다');return;}
+  let grandTotal=0;
+  const rows=sorted.map(d=>{
+    const L=(labor||{})[d]||{normal:0,ext:0,night:0};
+    const A=(arbeit||{})[d]||{normal:0,ext:0,over:0};
+    const wL=L.normal*1.0+L.ext*1.5+(L.night||0)*2.0;
+    const wA=A.normal*1.0+A.ext*1.5+(A.over||0)*2.0;
+    const combined=wL+wA;
+    grandTotal+=combined;
+    return {date:d, wL, wA, combined};
+  });
+  const tbody=document.getElementById('combined-table-body');
+  tbody.innerHTML=rows.map(r=>`<tr><td class="c">${r.date}</td><td>${fmt(r.wL,1)}</td><td>${fmt(r.wA,1)}</td><td style="font-weight:700">${fmt(r.combined,1)}</td><td>${grandTotal>0?fmtPct(r.combined/grandTotal):'—'}</td></tr>`).join('');
+  document.getElementById('combined-manhours-wrap').style.display='block';
+  document.getElementById('combined-summary').innerHTML=
+    `✅ ${sorted.length}일 통합 | 월 결합 가중공수 합계 <b>${fmt(grandTotal,1)}h</b> — 참고용 미리보기입니다. 이 값은 아직 원가 계산에 쓰이지 않습니다.`;
+};
+
+// ════════════════════════════════════
 // 재고평가 파싱
 // ════════════════════════════════════
 window.parseInventory = () => {
@@ -1508,8 +1649,8 @@ function updateCostPreview() {
 window.saveAllData = async () => {
   const month=document.getElementById('inputMonth').value;
   if(!month){showToast('❌ 작업월을 선택하세요');return;}
-  const prod=window._parsed.prod, labor=window._parsed.labor, inv=window._parsed.inv;
-  if(!prod&&!labor&&!inv){showToast('❌ 붙여넣기 데이터가 없습니다');return;}
+  const prod=window._parsed.prod, labor=window._parsed.labor, arbeit=window._parsed.arbeit, inv=window._parsed.inv;
+  if(!prod&&!labor&&!arbeit&&!inv){showToast('❌ 붙여넣기 데이터가 없습니다');return;}
   const laborTotal=parseFloat(document.getElementById('exp-labor').value)||0;
   const raw=parseFloat(document.getElementById('exp-raw').value)||0;
   const sub=parseFloat(document.getElementById('exp-sub').value)||0;
@@ -1562,6 +1703,7 @@ window.saveAllData = async () => {
     month, raw, sub, exp, prodAmt, note,
     prodData: prod||[],
     laborData: labor||{},
+    arbeitData: arbeit||{},
     invData: (inv||[]).map(({code,name,acct,unit,outAmt,outQty})=>({code,name,acct,unit,outAmt,outQty})),
     erpLabor: erp ? {
       임금1:erp[1]||0, 임금2:erp[2]||0, 임금3:erp[3]||0,
@@ -1602,6 +1744,21 @@ window.loadExistingData = async () => {
     document.getElementById('exp-labor-calc').textContent=fmtN(d.erpLabor.total||0)+'원';
   }
   if(d.laborData&&Object.keys(d.laborData).length){window._parsed.labor=d.laborData;}
+  if(d.arbeitData&&Object.keys(d.arbeitData).length){
+    window._parsed.arbeit=d.arbeitData;
+    const dates=Object.keys(d.arbeitData).sort();
+    let totalN=0,totalE=0,totalO=0,totalW=0;
+    const tbody=document.getElementById('arbeit-table-body');
+    tbody.innerHTML=dates.map(dt=>{
+      const v=d.arbeitData[dt];
+      const w=v.normal*1.0+v.ext*1.5+v.over*2.0;
+      totalN+=v.normal;totalE+=v.ext;totalO+=v.over;totalW+=w;
+      return `<tr><td class="c">${dt}</td><td>${fmt(v.normal,1)}</td><td>${fmt(v.ext,1)}</td><td>${fmt(v.over,1)}</td><td style="font-weight:700">${fmt(w,1)}</td></tr>`;
+    }).join('');
+    document.getElementById('arbeit-table-wrap').style.display='block';
+    document.getElementById('arbeit-summary').innerHTML=`✅ 저장된 아르바이트 근무내역 불러옴 | ${dates.length}일 | 가중공수 합계 ${fmt(totalW,1)}h`;
+    const res=document.getElementById('arbeit-result'); res.style.display='block'; res.innerHTML=`✅ ${dates.length}일 불러옴`;
+  }
   if(d.invData?.length){window._parsed.inv=d.invData;}
   if(d.manhoursData&&Object.keys(d.manhoursData).length){
     window._parsed.manhours=d.manhoursData;
