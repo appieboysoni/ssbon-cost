@@ -366,7 +366,7 @@ tr.total td{background:var(--light);font-weight:700}
         </table></div>
       </div>
       <div class="sec">⑥ 경비·노무비 입력 (원 단위)</div>
-      <div class="warn-box">💡 ERP 최종마감 금액을 <b>원 단위 그대로</b> 입력하세요. 원재료비·부재료비는 BOM으로 자동계산되므로 검증용입니다.</div>
+      <div class="warn-box">💡 ERP 최종마감 금액을 <b>원 단위 그대로</b> 입력하세요. 원재료비·부재료비는 BOM으로 자동계산되므로 검증용입니다.<br>⚠️ 기획실 합의: <b>복리후생비(법정)_공정별</b>은 경비에서 제외하고 <b>노무비 총계에 포함</b>해서 입력하세요 (ERP 반영분 확인).</div>
       <div class="form-row cols2">
         <div class="fg">
           <label>경비 합계 (원) *</label>
@@ -424,6 +424,19 @@ tr.total td{background:var(--light);font-weight:700}
           <label style="font-size:12px;cursor:pointer"><input type="radio" name="laborMethod" value="C" onchange="onLaborMethodChange()"> <b>방식C 강제</b> — 스마트팩토리 실공수 배부 <span style="color:#888">(공수 데이터 충분한 달)</span></label>
         </div>
         <div class="paste-result" id="laborMethod-result" style="display:block;color:var(--sub)">현재 선택: 자동</div>
+      </div>
+
+      <div class="sec">⑨ 경비 배부 방식 선택</div>
+      <div class="paste-box" style="border-color:#4CAF50;background:#F2FBF4">
+        <div class="pb-title" style="color:#2E7D32">🏭 이 달의 경비 배부 기준을 선택하세요 (저장 시 함께 기록됩니다)</div>
+        <div class="pb-desc">기획실 합의 기준: <b>생산일수 비중</b> (혼합생산일은 그날 제품별 생산중량 비례로 분할, 포장 실적 기준).<br>⑦ 스마트팩토리 연동 시 제품별 생산일수가 자동 계산됩니다. 일별 데이터가 없는 과거 월은 수량 비율로 폴백됩니다.</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+          <label style="font-size:12px;cursor:pointer"><input type="radio" name="expMethod" value="auto" onchange="onExpMethodChange()" checked> <b>자동</b> — 생산일수 데이터 있으면 일수 비중, 없으면 생산수량 비율</label>
+          <label style="font-size:12px;cursor:pointer"><input type="radio" name="expMethod" value="qty" onchange="onExpMethodChange()"> <b>수량 강제</b> — 생산수량(ea) 비율 <span style="color:#888">(기존 방식, 과거 월 호환)</span></label>
+          <label style="font-size:12px;cursor:pointer"><input type="radio" name="expMethod" value="days" onchange="onExpMethodChange()"> <b>생산일수 강제</b> — 생산일수 비중 (혼합일 중량분할) <span style="color:var(--ok)">(기획실 합의 기준)</span></label>
+        </div>
+        <div class="paste-result" id="expMethod-result" style="display:block;color:var(--sub)">현재 선택: 자동</div>
+        <div class="paste-result" id="expDays-summary" style="display:none"></div>
       </div>
 
       <div id="cost-preview" style="display:none;margin-top:14px">
@@ -1174,6 +1187,40 @@ window.fetchFactoryManhours = async () => {
 
     window._parsed.manhours = processMap;
 
+    // ── 경비 배부용: 제품별 생산일수 계산 (포장 실적 기준, 혼합일 중량분할)
+    await ensureMasters();
+    const dayWeights = {}; const expUnmatched = new Set();
+    for(const [date, data] of Object.entries(dayDocs)) {
+      for(const p of (data.processes || [])) {
+        if(p.process !== '포장') continue;
+        let nm = (p.part || '').trim();
+        if(nm.includes(' · ')) nm = (nm.split(' · ')[1] || nm).trim();
+        const ea = p.ea || 0; if(ea <= 0 || !nm) continue;
+        let mm = null;
+        for(const m of window._masters) {
+          if((m.alias||[]).some(a => nm===a || nm.includes(a) || a.includes(nm)) ||
+             nm.includes(m.name) || m.name.includes(nm)) { mm = m; break; }
+        }
+        if(!mm) { expUnmatched.add(nm); continue; }
+        const spM = String(mm.spec||'').match(/^([\d.]+)\s*g/);
+        const pouchW = spM ? parseFloat(spM[1]) : (mm.weight || 0);
+        if(pouchW <= 0) { expUnmatched.add(nm + ' (중량정보 없음)'); continue; }
+        if(!dayWeights[date]) dayWeights[date] = {};
+        dayWeights[date][mm.code] = (dayWeights[date][mm.code] || 0) + pouchW * ea;
+      }
+    }
+    const expByCode = {}; let expCalDays = 0;
+    for(const codes of Object.values(dayWeights)) {
+      const dayTot = Object.values(codes).reduce((s,v)=>s+v, 0);
+      if(dayTot <= 0) continue;
+      expCalDays++;
+      for(const [c,w] of Object.entries(codes)) expByCode[c] = (expByCode[c]||0) + w/dayTot;
+    }
+    window._parsed.expDays = Object.keys(expByCode).length
+      ? { byCode: expByCode, unmatched: [...expUnmatched], calDays: expCalDays }
+      : null;
+    renderExpDaysSummary();
+
     // 집계 테이블 표시
     const tbody = document.getElementById('manhours-table-body');
     const rows = [];
@@ -1221,6 +1268,8 @@ window.fetchFactoryManhours = async () => {
 
 window.clearManhours = () => {
   window._parsed.manhours = null;
+  window._parsed.expDays = null;
+  renderExpDaysSummary();
   document.getElementById('manhours-table-wrap').style.display = 'none';
   const res = document.getElementById('manhours-result');
   res.style.display = 'none'; res.innerHTML = '';
@@ -1247,6 +1296,40 @@ window.onLaborMethodChange = () => {
   const el = document.getElementById('laborMethod-result');
   if(el) el.textContent = '현재 선택: ' + txt;
 };
+
+// ── 경비 배부 방식 (월별 저장: 'auto' | 'qty' | 'days')
+function getExpMethod() {
+  const sel = document.querySelector('input[name="expMethod"]:checked');
+  return sel ? sel.value : 'auto';
+}
+function setExpMethod(method) {
+  const v = (method === 'qty' || method === 'days') ? method : 'auto';
+  const el = document.querySelector(`input[name="expMethod"][value="${v}"]`);
+  if(el) el.checked = true;
+  onExpMethodChange();
+}
+window.onExpMethodChange = () => {
+  const v = getExpMethod();
+  const txt = v === 'qty' ? '수량 강제 (생산수량 ea 비율)'
+            : v === 'days' ? '생산일수 강제 (혼합일 중량분할)'
+            : '자동 (일수 데이터 있으면 일수, 없으면 수량)';
+  const el = document.getElementById('expMethod-result');
+  if(el) el.textContent = '현재 선택: ' + txt;
+};
+function renderExpDaysSummary() {
+  const el = document.getElementById('expDays-summary');
+  if(!el) return;
+  const ed = window._parsed.expDays;
+  if(!ed || !ed.byCode || !Object.keys(ed.byCode).length) { el.style.display='none'; el.innerHTML=''; return; }
+  const total = Object.values(ed.byCode).reduce((s,v)=>s+v,0);
+  const nameOf = c => { const m=(window._masters||[]).find(x=>x.code===c); return m?m.name:c; };
+  const rows = Object.entries(ed.byCode).sort((a,b)=>b[1]-a[1])
+    .map(([c,dv])=>`${nameOf(c)}: <b>${dv.toFixed(2)}일</b> (${total>0?(dv/total*100).toFixed(1):0}%)`).join(' | ');
+  el.style.display = 'block';
+  el.innerHTML = `📅 생산일수 산출 완료 — 달력 생산일 <b>${ed.calDays}일</b> / 유효일수 합계 <b>${total.toFixed(2)}일</b><br>${rows}`
+    + (ed.unmatched && ed.unmatched.length
+       ? `<br><span style="color:var(--bad)">⚠️ 매칭 실패 제품명: ${ed.unmatched.join(', ')} — 제품 마스터의 생산집계 별칭에 추가하세요</span>` : '');
+}
 // ════════════════════════════════════
 window.parseErpLabor = () => {
   const raw=document.getElementById('paste-erp').value.trim();
@@ -1714,6 +1797,8 @@ window.saveAllData = async () => {
     prodByName, meatInByCode, laborTotal, erpQty,
     manhoursData: window._parsed.manhours || null,
     laborMethod: getLaborMethod(),
+    expDays: window._parsed.expDays || null,
+    expMethod: getExpMethod(),
     updatedAt: new Date().toISOString()
   });
   showToast('✅ 저장 완료!'); loadHistory();
@@ -1724,9 +1809,13 @@ window.saveAllData = async () => {
 // ════════════════════════════════════
 window.loadExistingData = async () => {
   const month=document.getElementById('inputMonth').value; if(!month)return;
-  const snap=await getDoc(doc(db,'costData',month)); if(!snap.exists()){ setLaborMethod('auto'); return; }
+  const snap=await getDoc(doc(db,'costData',month)); if(!snap.exists()){ setLaborMethod('auto'); setExpMethod('auto'); window._parsed.expDays=null; renderExpDaysSummary(); return; }
   const d=snap.data();
   setLaborMethod(d.laborMethod || 'auto');
+  setExpMethod(d.expMethod || 'auto');
+  window._parsed.expDays = (d.expDays && d.expDays.byCode) ? d.expDays : null;
+  await ensureMasters();
+  renderExpDaysSummary();
   document.getElementById('exp-labor').value=d.laborTotal||(d.erpLabor?.total||'');
   document.getElementById('exp-raw').value=d.raw||'';
   document.getElementById('exp-sub').value=d.sub||'';
@@ -1987,6 +2076,7 @@ function computeMonthCost(d, bomFallback) {
   }
 
   const rows=[]; const sum={raw:0,sub:0,labor:0,exp:0,total:0};
+  const expShares=resolveExpShares(d);
   for(const [code,qty] of Object.entries(erpQty)){
     if(qty<=0)continue;
     const b=bom[code]; let rawCost=0,subCost=0;
@@ -2010,14 +2100,14 @@ function computeMonthCost(d, bomFallback) {
       laborAlloc=laborMeat*meatShare+laborQtyBase*qtyShare;
     }
 
-    const qtyShare=totalQty>0?qty/totalQty:0;
-    const expCost=exp*qtyShare;
+    const expCost=exp*(expShares.shares[code]||0);
     const totalCost=rawCost+subCost+laborAlloc+expCost;
     rows.push({code,qty,rawCost,subCost,laborAlloc,expCost,totalCost});
     sum.raw+=rawCost;sum.sub+=subCost;sum.labor+=laborAlloc;sum.exp+=expCost;sum.total+=totalCost;
   }
   const totalMeatKg = Object.values(meatBy).reduce((s,v)=>s+v, 0);
-  return {rows,sum,prodAmt:d.prodAmt||0,totalQty,totalMeatKg,useRealManhours};
+  return {rows,sum,prodAmt:d.prodAmt||0,totalQty,totalMeatKg,useRealManhours,
+          expMethodUsed:expShares.useDays?'days':'qty',expWarn:expShares.warn};
 }
 
 // ════════════════════════════════════
@@ -2026,6 +2116,35 @@ function computeMonthCost(d, bomFallback) {
 // ════════════════════════════════════
 // 노무비 배부 방식별 계산 함수들
 // ════════════════════════════════════
+
+// 공통: 경비 배부 비중 계산 ('auto'|'qty'|'days', 반올림 없음, 누수 방지)
+function resolveExpShares(d) {
+  const erpQty = d.erpQty || {};
+  const method = d.expMethod || 'auto';
+  const ed = (d.expDays && d.expDays.byCode) ? d.expDays.byCode : null;
+  const prodCodes = Object.keys(erpQty).filter(c => erpQty[c] > 0);
+  const totalQty = prodCodes.reduce((s,c) => s + erpQty[c], 0);
+  let useDays = false, warn = null;
+  if(method !== 'qty' && ed) {
+    const covered = prodCodes.filter(c => (ed[c]||0) > 0);
+    const daySum = covered.reduce((s,c) => s + ed[c], 0);
+    if(daySum > 0) {
+      if(covered.length === prodCodes.length) useDays = true;
+      else if(method === 'days') { useDays = true; warn = '⚠️ 생산일수 미확인 제품 존재 — 해당 제품 경비 0 배부, 나머지에 전액 배부됨'; }
+      else warn = '⚠️ 생산일수 미확인 제품이 있어 수량 비율로 폴백 (별칭 매핑 확인)';
+    } else if(method === 'days') warn = '⚠️ 생산일수 데이터 없음 — 수량 비율로 계산됨';
+  } else if(method === 'days' && !ed) {
+    warn = '⚠️ 생산일수 데이터 없음 (⑦ 스마트팩토리 연동 필요) — 수량 비율로 계산됨';
+  }
+  const shares = {};
+  if(useDays) {
+    const daySum = prodCodes.reduce((s,c) => s + (ed[c]||0), 0);
+    for(const c of prodCodes) shares[c] = daySum > 0 ? (ed[c]||0)/daySum : 0;
+  } else {
+    for(const c of prodCodes) shares[c] = totalQty > 0 ? erpQty[c]/totalQty : 0;
+  }
+  return { shares, useDays, warn, method };
+}
 
 // 공통: 원재료비·부재료비·경비 계산 (방식 무관)
 function computeRawSubExp(d, bomFallback) {
@@ -2041,6 +2160,7 @@ function computeRawSubExp(d, bomFallback) {
   const result = {};
   const totalQty = Object.values(erpQty).reduce((s, v) => s + v, 0);
   const exp = d.exp || 0;
+  const expShares = resolveExpShares(d);
   for(const [code, qty] of Object.entries(erpQty)) {
     if(qty <= 0) continue;
     const b = bom[code]; let rawCost = 0, subCost = 0;
@@ -2050,10 +2170,9 @@ function computeRawSubExp(d, bomFallback) {
       if(mat.mcode[0] === '1' || mat.mcode[0] === '2') rawCost += amt;
       else if(mat.mcode[0] === '4' || mat.mcode[0] === '5') subCost += amt;
     }
-    const qtyShare = totalQty > 0 ? qty / totalQty : 0;
-    result[code] = { qty, rawCost, subCost, expCost: exp * qtyShare };
+    result[code] = { qty, rawCost, subCost, expCost: exp * (expShares.shares[code] || 0) };
   }
-  return { result, totalQty, bom };
+  return { result, totalQty, bom, expMethodUsed: expShares.useDays ? 'days' : 'qty', expWarn: expShares.warn };
 }
 
 // ① 수량기준: 전체 노무비를 생산수량 비율로만 배부
@@ -2795,7 +2914,9 @@ window.loadProducts = async () => {
 
   // 배부방식 배지 표시
   const badge = document.getElementById('labor-method-badge');
-  if(badge) badge.textContent = cc.useRealManhours ? '🔗 실공수 배부 적용중' : '📐 원육중량+수량 배부';
+  if(badge) badge.textContent = (cc.useRealManhours ? '🔗 실공수 배부 적용중' : '📐 원육중량+수량 배부')
+    + (cc.expMethodUsed==='days' ? ' | 경비: 생산일수' : ' | 경비: 수량')
+    + (cc.expWarn ? ' | ' + cc.expWarn : '');
 
   const masterMap={}; window._masters.forEach(m=>masterMap[m.code]=m);
   const bom=(d.bomSnapshot&&Object.keys(d.bomSnapshot).length)?d.bomSnapshot:window._bom;
@@ -3429,6 +3550,7 @@ async function buildMonthlyReport(month, y, m, dateStr) {
         <tr><td class="l">보고 기간</td><td class="l">${y}년 ${m}월 (${prev?`전월 ${y}년 ${m-1<1?12:m-1}월 대비`:'전월 데이터 없음'})</td></tr>
         <tr><td class="l">원가 계산 기준</td><td class="l">BOM 기반 원·부재료비 + ERP 공정별 노무비 + 경비 (원단위 입력)</td></tr>
         <tr><td class="l">노무비 배부 방식</td><td class="l">${d.manhoursData?'③ 실공수 기반 배부 (스마트팩토리 연동)':'② 원육중량(임금1~3) + 수량(임금4~5+기타) 배부'}</td></tr>
+        <tr><td class="l">경비 배부 방식</td><td class="l">${(d.expDays&&d.expDays.byCode&&d.expMethod!=='qty')?'생산일수 비중 배부 (혼합생산일 중량분할, 포장 실적 기준)':'생산수량(ea) 비율 배부'}</td></tr>
         <tr><td class="l">ERP 검증</td><td class="l">원재료비·부재료비 ERP 확정값과 차이 0원 확인</td></tr>
       </tbody>
     </table>
