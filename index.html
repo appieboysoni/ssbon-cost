@@ -439,6 +439,22 @@ tr.total td{background:var(--light);font-weight:700}
         <div class="paste-result" id="expDays-summary" style="display:none"></div>
       </div>
 
+      <div class="sec">📥 기획실 확정치 일괄 반영 (2026-01 ~ 2026-06)</div>
+      <div class="paste-box" style="border-color:#7E57C2;background:#F7F4FC">
+        <div class="pb-title" style="color:#5E35B1">기획실 제품별_제조원가 엑셀(1~6월)의 월별 확정 합계를 한 번에 반영합니다</div>
+        <div class="pb-desc">생산금액·노무비·경비만 갱신되며(원재료·부재료 화면값은 사이트 BOM 계산 유지), 기존 저장 데이터(생산실적·재고평가 등)는 보존됩니다.<br>
+        노무비는 <b>복리후생비(법정) 재분류 후</b> 배부총액, 경비는 재분류 후 총액, 생산금액은 <b>기획실 원가율 탭 기준</b>입니다. 값 수정 후 반영 가능합니다.</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>월</th><th>생산금액(원)</th><th>노무비(원)</th><th>경비(원)</th><th>참고: 공급단가85% 기준 생산금액</th></tr></thead>
+          <tbody id="bulk-plan-body"></tbody>
+        </table></div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <button class="btn btn-warn" onclick="applyBulkPlan()">📥 일괄 반영 (Firebase 저장)</button>
+          <span style="font-size:11px;color:var(--sub)">각 월 문서에 merge 저장 — 기존 상세 데이터는 유지됩니다</span>
+        </div>
+        <div class="paste-result" id="bulk-plan-result"></div>
+      </div>
+
       <div id="cost-preview" style="display:none;margin-top:14px">
         <div class="sec">📊 원가 계산 미리보기</div>
         <div class="tbl-wrap"><table>
@@ -1330,6 +1346,63 @@ function renderExpDaysSummary() {
     + (ed.unmatched && ed.unmatched.length
        ? `<br><span style="color:var(--bad)">⚠️ 매칭 실패 제품명: ${ed.unmatched.join(', ')} — 제품 마스터의 생산집계 별칭에 추가하세요</span>` : '');
 }
+
+// ── 기획실 확정치 일괄 반영 (2026-01~06, 제품별_제조원가 엑셀 추출값)
+// prodAmt: 기획실 제조원가율 탭 27행 / labor: 배부시트 O2(복리후생비 재분류 후) / exp: P1(재분류 후)
+// raw/sub: 배부시트 M2/N2 (검증용 필드로만 저장, 화면 원재료비는 사이트 BOM 계산)
+const BULK_PLAN = [
+  { month:'2026-01', prodAmt:699927366,  labor:106185670, exp:148466408, raw:202597392, sub:22156033, k2:699927366 },
+  { month:'2026-02', prodAmt:641020700,  labor:112148441, exp:143418569, raw:170614241, sub:20280865, k2:641020700 },
+  { month:'2026-03', prodAmt:945988715,  labor:110925858, exp:150799260, raw:289445671, sub:29418970, k2:945988715 },
+  { month:'2026-04', prodAmt:1116501716, labor:118735903, exp:170195642, raw:342238846, sub:26398419, k2:1128349016 },
+  { month:'2026-05', prodAmt:959657072,  labor:120208540, exp:171153849, raw:391639382, sub:20025566, k2:1007857597 },
+  { month:'2026-06', prodAmt:1046746780, labor:141740758, exp:202412403, raw:851195303, sub:25949730, k2:1448924348 }
+];
+function renderBulkPlan() {
+  const tb = document.getElementById('bulk-plan-body');
+  if(!tb) return;
+  tb.innerHTML = BULK_PLAN.map((p,i)=>`<tr>
+    <td class="c">${p.month}</td>
+    <td><input type="number" id="bp-prod-${i}" value="${p.prodAmt}" step="1" style="width:140px"></td>
+    <td><input type="number" id="bp-labor-${i}" value="${p.labor}" step="1" style="width:130px"></td>
+    <td><input type="number" id="bp-exp-${i}" value="${p.exp}" step="1" style="width:130px"></td>
+    <td class="c" style="font-size:11px;color:${p.k2!==p.prodAmt?'var(--warn)':'var(--sub)'}">${p.k2.toLocaleString('ko-KR')}${p.k2!==p.prodAmt?' ⚠️상이':''}</td>
+  </tr>`).join('');
+}
+window.applyBulkPlan = async () => {
+  const rows = BULK_PLAN.map((p,i)=>({
+    month: p.month,
+    prodAmt: parseFloat(document.getElementById(`bp-prod-${i}`).value)||0,
+    laborTotal: parseFloat(document.getElementById(`bp-labor-${i}`).value)||0,
+    exp: parseFloat(document.getElementById(`bp-exp-${i}`).value)||0,
+    raw: p.raw, sub: p.sub
+  }));
+  const bad = rows.filter(r=>r.prodAmt<=0||r.laborTotal<=0||r.exp<=0);
+  if(bad.length){ showToast('❌ 0 이하 값이 있습니다: '+bad.map(r=>r.month).join(', ')); return; }
+  if(!confirm(`2026-01~06 6개월의 생산금액·노무비·경비를 기획실 확정치로 덮어씁니다.\n기존 상세 데이터(생산실적·재고평가·공수 등)는 유지됩니다.\n진행할까요?`)) return;
+  const el = document.getElementById('bulk-plan-result');
+  el.style.display='block'; el.innerHTML='⏳ 반영 중...';
+  const done=[], failed=[];
+  for(const r of rows){
+    try {
+      const ref = doc(db,'costData',r.month);
+      const snap = await getDoc(ref);
+      const prevNote = snap.exists() ? (snap.data().note||'') : '';
+      const tag = '기획실 확정치 반영';
+      const note = prevNote.includes(tag) ? prevNote : (prevNote ? prevNote+' | ' : '')+tag+'('+new Date().toISOString().slice(0,10)+')';
+      await setDoc(ref, {
+        month: r.month, prodAmt: r.prodAmt, laborTotal: r.laborTotal,
+        exp: r.exp, raw: r.raw, sub: r.sub, note,
+        updatedAt: new Date().toISOString()
+      }, { merge:true });
+      done.push(r.month);
+    } catch(e) { failed.push(r.month+': '+e.message); }
+  }
+  el.innerHTML = `✅ 반영 완료: ${done.join(', ')}`
+    + (failed.length ? `<br><span style="color:var(--bad)">❌ 실패: ${failed.join(' / ')}</span>` : '');
+  showToast(failed.length ? '⚠️ 일부 실패' : '✅ 6개월 일괄 반영 완료');
+  if(typeof loadHistory==='function') loadHistory();
+};
 // ════════════════════════════════════
 window.parseErpLabor = () => {
   const raw=document.getElementById('paste-erp').value.trim();
@@ -3882,6 +3955,7 @@ async function buildQuarterlyReport(month, y, m, dateStr) {
 document.getElementById('dashMonth').value=thisMonth();
 document.getElementById('prodMonth').value=thisMonth();
 document.getElementById('inputMonth').value=thisMonth();
+renderBulkPlan();
 loadDashboard();
 </script>
 </body>
