@@ -443,9 +443,9 @@ tr.total td{background:var(--light);font-weight:700}
       <div class="paste-box" style="border-color:#7E57C2;background:#F7F4FC">
         <div class="pb-title" style="color:#5E35B1">기획실 제품별_제조원가 엑셀(1~6월)의 월별 확정 합계를 한 번에 반영합니다</div>
         <div class="pb-desc">생산금액·노무비·경비만 갱신되며(원재료·부재료 화면값은 사이트 BOM 계산 유지), 기존 저장 데이터(생산실적·재고평가 등)는 보존됩니다.<br>
-        노무비는 <b>복리후생비(법정) 재분류 후</b> 배부총액, 경비는 재분류 후 총액, 생산금액은 <b>기획실 원가율 탭 기준</b>입니다. 값 수정 후 반영 가능합니다.</div>
+        생산금액은 <b>공급단가 85% × 수량(K2)</b> 기준 — 기획실 원가율 탭 값은 값복사 미갱신 오류로 확인되어 제외. 노무비는 <b>복리후생비(법정) 재분류 후</b> 배부총액, 경비는 재분류 후 총액. 값 수정 후 반영 가능합니다.</div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th>월</th><th>생산금액(원)</th><th>노무비(원)</th><th>경비(원)</th><th>참고: 공급단가85% 기준 생산금액</th></tr></thead>
+          <thead><tr><th>월</th><th>생산금액(원)</th><th>노무비(원)</th><th>경비(원)</th><th>참고: 원가율탭 구값</th></tr></thead>
           <tbody id="bulk-plan-body"></tbody>
         </table></div>
         <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
@@ -1348,15 +1348,16 @@ function renderExpDaysSummary() {
 }
 
 // ── 기획실 확정치 일괄 반영 (2026-01~06, 제품별_제조원가 엑셀 추출값)
-// prodAmt: 기획실 제조원가율 탭 27행 / labor: 배부시트 O2(복리후생비 재분류 후) / exp: P1(재분류 후)
+// prodAmt: 배부시트 K2 = Σ(공급단가85%×수량) — 원가율 탭 값은 값복사 미갱신 오류로 확인됨(기획실)
+// labor: 배부시트 O2(복리후생비 재분류 후) / exp: P1(재분류 후)
 // raw/sub: 배부시트 M2/N2 (검증용 필드로만 저장, 화면 원재료비는 사이트 BOM 계산)
 const BULK_PLAN = [
-  { month:'2026-01', prodAmt:699927366,  labor:106185670, exp:148466408, raw:202597392, sub:22156033, k2:699927366 },
-  { month:'2026-02', prodAmt:641020700,  labor:112148441, exp:143418569, raw:170614241, sub:20280865, k2:641020700 },
-  { month:'2026-03', prodAmt:945988715,  labor:110925858, exp:150799260, raw:289445671, sub:29418970, k2:945988715 },
-  { month:'2026-04', prodAmt:1116501716, labor:118735903, exp:170195642, raw:342238846, sub:26398419, k2:1128349016 },
-  { month:'2026-05', prodAmt:959657072,  labor:120208540, exp:171153849, raw:391639382, sub:20025566, k2:1007857597 },
-  { month:'2026-06', prodAmt:1046746780, labor:141740758, exp:202412403, raw:851195303, sub:25949730, k2:1448924348 }
+  { month:'2026-01', prodAmt:699927366,  labor:106185670, exp:148466408, raw:202597392, sub:22156033, oldTab:699927366 },
+  { month:'2026-02', prodAmt:641020700,  labor:112148441, exp:143418569, raw:170614241, sub:20280865, oldTab:641020700 },
+  { month:'2026-03', prodAmt:945988715,  labor:110925858, exp:150799260, raw:289445671, sub:29418970, oldTab:945988715 },
+  { month:'2026-04', prodAmt:1128349016, labor:118735903, exp:170195642, raw:342238846, sub:26398419, oldTab:1116501716 },
+  { month:'2026-05', prodAmt:1007857597, labor:120208540, exp:171153849, raw:391639382, sub:20025566, oldTab:959657072 },
+  { month:'2026-06', prodAmt:1448924348, labor:141740758, exp:202412403, raw:851195303, sub:25949730, oldTab:1046746780 }
 ];
 function renderBulkPlan() {
   const tb = document.getElementById('bulk-plan-body');
@@ -1366,7 +1367,7 @@ function renderBulkPlan() {
     <td><input type="number" id="bp-prod-${i}" value="${p.prodAmt}" step="1" style="width:140px"></td>
     <td><input type="number" id="bp-labor-${i}" value="${p.labor}" step="1" style="width:130px"></td>
     <td><input type="number" id="bp-exp-${i}" value="${p.exp}" step="1" style="width:130px"></td>
-    <td class="c" style="font-size:11px;color:${p.k2!==p.prodAmt?'var(--warn)':'var(--sub)'}">${p.k2.toLocaleString('ko-KR')}${p.k2!==p.prodAmt?' ⚠️상이':''}</td>
+    <td class="c" style="font-size:11px;color:${p.oldTab!==p.prodAmt?'var(--warn)':'var(--sub)'}">${p.oldTab.toLocaleString('ko-KR')}${p.oldTab!==p.prodAmt?' (미갱신 구값)':''}</td>
   </tr>`).join('');
 }
 window.applyBulkPlan = async () => {
