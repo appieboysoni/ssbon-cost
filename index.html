@@ -1174,12 +1174,12 @@ window.fetchFactoryManhours = async () => {
         if(!TARGET_PROCESSES.includes(procName)) continue;
 
         // 포장은 "부위 · 제품명" 파싱
-        let partKey = p.part || '기타';
+        let partKey = normPart(p.part || '기타');
         let productName = null;
         if(procName === '포장' && partKey.includes(' · ')) {
           const parts = partKey.split(' · ');
-          partKey = parts[0].trim();
-          productName = parts[1]?.trim() || null;
+          partKey = normPart(parts[0]);
+          productName = normPart(parts[1]) || null;
         } else if(procName === '포장' && !partKey.includes(' · ')) {
           // 무원육 제품 (메추리알 등) — 제품명만
           productName = partKey;
@@ -1209,8 +1209,8 @@ window.fetchFactoryManhours = async () => {
     for(const [date, data] of Object.entries(dayDocs)) {
       for(const p of (data.processes || [])) {
         if(p.process !== '포장') continue;
-        let nm = (p.part || '').trim();
-        if(nm.includes(' · ')) nm = (nm.split(' · ')[1] || nm).trim();
+        let nm = normPart(p.part || '');
+        if(nm.includes(' · ')) nm = normPart(nm.split(' · ')[1] || nm);
         const ea = p.ea || 0; if(ea <= 0 || !nm) continue;
         let mm = null;
         for(const m of window._masters) {
@@ -1973,6 +1973,25 @@ window.deleteMonthDataFromProd = async () => {
 // ════════════════════════════════════
 // 공통 원가 계산 (BOM 4단계)
 // ════════════════════════════════════
+// ── 부위명 정규화: smartfactory '홍두깨' ↔ 제품마스터 '홍두께' 철자 불일치 흡수
+function normPart(s){ return String(s||'').replace(/홍두깨/g,'홍두께').trim(); }
+function normMhParts(mh){
+  if(!mh) return mh;
+  const out={};
+  for(const [proc,parts] of Object.entries(mh)){
+    out[proc]={};
+    for(const [k,v] of Object.entries(parts||{})){
+      const nk=normPart(k);
+      if(out[proc][nk]){
+        const t=out[proc][nk];
+        t.days=(t.days||0)+(v.days||0); t.workers=(t.workers||0)+(v.workers||0);
+        t.hours=(t.hours||0)+(v.hours||0); t.manhours=(t.manhours||0)+(v.manhours||0);
+        t.ea=(t.ea||0)+(v.ea||0);
+      } else out[proc][nk]={...v};
+    }
+  }
+  return out;
+}
 function computeMonthCost(d, bomFallback) {
   const erpQty=d.erpQty||{};
   const outAmt={};
@@ -1996,7 +2015,7 @@ function computeMonthCost(d, bomFallback) {
   // ════ 노무비 배부 방식 결정 ════
   // 월별 저장 설정(d.laborMethod) 우선: 'A'=원육중량+수량 강제, 'C'=실공수 강제, 'auto'/없음=자동판정
   // 자동판정: 실공수 데이터(manhoursData) 있으면 방식C, 없으면 방식A
-  const mhData = d.manhoursData || null;
+  const mhData = d.manhoursData ? normMhParts(d.manhoursData) : null;
   const method = d.laborMethod || 'auto';
   const hasMhData = mhData && Object.keys(mhData).length > 0;
   const useRealManhours = method === 'A' ? false
@@ -2039,19 +2058,19 @@ function computeMonthCost(d, bomFallback) {
     // 급여+잡급+퇴직 (eOther)
     const eGlobal = eOther > 0 ? eOther : 0;
 
-    // 부위→코드 매핑 (meatType 기준)
+    // 부위→코드 매핑 (meatType 기준, 철자 정규화)
     // 부위별 총 원육투입량
     const meatByPart = {}; // {설도:kg, 우둔:kg, 홍두께:kg}
     for(const [code,qty] of Object.entries(erpQty)){
       if(qty<=0)continue;
       const mm=masterMap[code];
-      const part=mm?mm.meatType:'';
+      const part=normPart(mm?mm.meatType:'');
       if(!part)continue;
       meatByPart[part]=(meatByPart[part]||0)+(meatBy[code]||0);
     }
 
     // 임금1~3: 공정별 공수 → 부위별 배부 → 제품별 배부
-    // 예: 전처리 공수가 {설도:10인시, 홍두깨:30인시} → 설도 원육 생산제품들에게 설도 원육투입비율로 배부
+    // 예: 전처리 공수가 {설도:10인시, 홍두께:30인시} → 설도 원육 생산제품들에게 설도 원육투입비율로 배부
     const allocPerProcess = (wage, proc) => {
       const byPart = mhData[proc]||{};
       const totalProcMh = Object.values(byPart).reduce((s,v)=>s+v.manhours,0);
@@ -2060,7 +2079,7 @@ function computeMonthCost(d, bomFallback) {
       for(const [code,qty] of Object.entries(erpQty)){
         if(qty<=0)continue;
         const mm=masterMap[code];
-        const part=mm?mm.meatType:'';
+        const part=normPart(mm?mm.meatType:'');
         if(!part){ result[code]=(result[code]||0); continue; }
         // 이 부위의 공수 비율
         const partMh=byPart[part]?.manhours||0;
@@ -2070,6 +2089,17 @@ function computeMonthCost(d, bomFallback) {
         const myMeat=meatBy[code]||0;
         const meatRatioInPart=partTotalMeat>0?myMeat/partTotalMeat:0;
         result[code]=(result[code]||0)+wage*partMhRatio*meatRatioInPart;
+      }
+      // 누수 방지: 미배부 잔여분(부위 매칭 실패 등)을 원육비율(없으면 수량비율)로 재배분
+      const got=Object.values(result).reduce((s,v)=>s+v,0);
+      const rem=wage-got;
+      if(rem>0.5){
+        const useMeat=totalMeat>0;
+        for(const [code,qty] of Object.entries(erpQty)){
+          if(qty<=0)continue;
+          const share=useMeat?(meatBy[code]||0)/totalMeat:(totalQty>0?qty/totalQty:0);
+          result[code]=(result[code]||0)+rem*share;
+        }
       }
       return result;
     };
@@ -2082,8 +2112,9 @@ function computeMonthCost(d, bomFallback) {
     // mhData['포장'][제품명] → 제품코드 매칭
     const alloc4={};
     if(e4>0 && totalPackEa>0){
-      for(const [prodKey, v] of Object.entries(mhData['포장']||{})){
+      for(const [rawKey, v] of Object.entries(mhData['포장']||{})){
         const ea=v.ea||0; if(!ea)continue;
+        const prodKey=normPart(rawKey);
         // 제품명으로 마스터 코드 찾기
         let matchCode=null;
         for(const mm of window._masters){
@@ -2303,7 +2334,7 @@ function computeLaborByMeat(d, bomFallback) {
 // ③ 실공수기준: computeMonthCost의 방식C와 동일 로직 (manhoursData 필요)
 function computeLaborByManhours(d, bomFallback) {
   const erpQty = d.erpQty || {};
-  const mhData = d.manhoursData || null;
+  const mhData = d.manhoursData ? normMhParts(d.manhoursData) : null;
   if(!mhData || !Object.keys(mhData).length) return null; // 데이터 없으면 null
   const eL = d.erpLabor || {};
   const laborTotal = d.laborTotal || eL.total || 0;
@@ -2329,10 +2360,11 @@ function computeLaborByManhours(d, bomFallback) {
   for(const [code, qty] of Object.entries(erpQty)) {
     if(qty<=0) continue;
     const mm = window._masters.find(x=>x.code===code);
-    const part = mm ? mm.meatType : '';
+    const part = normPart(mm ? mm.meatType : '');
     if(!part) continue;
     meatByPart[part] = (meatByPart[part]||0) + (meatBy[code]||0);
   }
+  let totalMeat=0; for(const c of Object.keys(erpQty)) if(erpQty[c]>0) totalMeat+=(meatBy[c]||0);
   const totalQty = Object.values(erpQty).reduce((s,v)=>s+v, 0);
   const totalPackEa = Object.values(mhData['포장']||{}).reduce((s,v)=>s+v.ea, 0);
 
@@ -2344,13 +2376,24 @@ function computeLaborByManhours(d, bomFallback) {
     for(const [code, qty] of Object.entries(erpQty)) {
       if(qty<=0) continue;
       const mm = window._masters.find(x=>x.code===code);
-      const part = mm ? mm.meatType : '';
+      const part = normPart(mm ? mm.meatType : '');
       if(!part) { res[code]=(res[code]||0); continue; }
       const partMh = byPart[part]?.manhours||0;
       const partMhRatio = totalProcMh>0 ? partMh/totalProcMh : 0;
       const partTotalMeat = meatByPart[part]||0;
       const meatRatioInPart = partTotalMeat>0 ? (meatBy[code]||0)/partTotalMeat : 0;
       res[code] = (res[code]||0) + wage*partMhRatio*meatRatioInPart;
+    }
+    // 누수 방지: 미배부 잔여분 재배분 (원육비율, 없으면 수량비율)
+    const got=Object.values(res).reduce((s,v)=>s+v,0);
+    const rem=wage-got;
+    if(rem>0.5){
+      const useMeat=totalMeat>0;
+      for(const [code,qty] of Object.entries(erpQty)){
+        if(qty<=0)continue;
+        const share=useMeat?(meatBy[code]||0)/totalMeat:(totalQty>0?qty/totalQty:0);
+        res[code]=(res[code]||0)+rem*share;
+      }
     }
     return res;
   };
@@ -2361,8 +2404,9 @@ function computeLaborByManhours(d, bomFallback) {
 
   const alloc4 = {};
   if(e4>0 && totalPackEa>0) {
-    for(const [prodKey, v] of Object.entries(mhData['포장']||{})) {
+    for(const [rawKey, v] of Object.entries(mhData['포장']||{})) {
       const ea=v.ea||0; if(!ea) continue;
+      const prodKey=normPart(rawKey);
       let matchCode = null;
       for(const mm of window._masters) {
         const mname = mm.name.replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
