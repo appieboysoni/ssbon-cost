@@ -379,13 +379,13 @@ tr.total td{background:var(--light);font-weight:700}
         경비는 <b>제품별 생산횟수 비중</b>(② 입력값 ÷ 전체 작업횟수 합계)으로 배부됩니다. 별도 선택 없이 고정 적용됩니다.
       </div>
 
-      <div class="sec">📥 기획실 확정치 일괄 반영 (2026-01 ~ 2026-06)</div>
+      <div class="sec">📥 기획실 확정치 일괄 반영 (2026-01 ~ 2026-08)</div>
       <div class="paste-box" style="border-color:#7E57C2;background:#F7F4FC">
-        <div class="pb-title" style="color:#5E35B1">기획실 제품별_제조원가 엑셀(1~6월)의 월별 확정 합계를 한 번에 반영합니다</div>
+        <div class="pb-title" style="color:#5E35B1">공급단가조정 파일(1~8월) "제조원가율" 시트의 신규기준(중량×40원) 확정 합계를 한 번에 반영합니다</div>
         <div class="pb-desc">생산금액·노무비·경비만 갱신되며(원재료·부재료 화면값은 사이트 BOM 계산 유지), 기존 저장 데이터(생산실적·재고평가 등)는 보존됩니다.<br>
-        생산금액은 <b>공급단가 85% × 수량(K2)</b> 기준 — 기획실 원가율 탭 값은 값복사 미갱신 오류로 확인되어 제외. 노무비는 <b>복리후생비(법정) 재분류 후</b> 배부총액, 경비는 재분류 후 총액. 값 수정 후 반영 가능합니다.</div>
+        생산금액은 <b>제조원가율 시트 생산금액(원) = 생산중량(g)×40원</b> 신규기준. 노무비·경비는 각 월 "생산수량, 생산금액" 시트 합계행 원 단위 정밀값. 값 수정 후 반영 가능합니다.</div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th>월</th><th>생산금액(원)</th><th>노무비(원)</th><th>경비(원)</th><th>참고: 원가율탭 구값</th></tr></thead>
+          <thead><tr><th>월</th><th>생산금액(원)</th><th>노무비(원)</th><th>경비(원)</th><th>참고: 기존 반영값</th></tr></thead>
           <tbody id="bulk-plan-body"></tbody>
         </table></div>
         <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
@@ -1055,17 +1055,18 @@ function updateStepIndicators() {
 // ════════════════════════════════════
 // ERP 노무비 파싱
 // ════════════════════════════════════
-// ── 기획실 확정치 일괄 반영 (2026-01~06, 제품별_제조원가 엑셀 추출값)
-// prodAmt: 배부시트 K2 = Σ(공급단가85%×수량) — 원가율 탭 값은 값복사 미갱신 오류로 확인됨(기획실)
-// labor: 배부시트 O2(복리후생비 재분류 후) / exp: P1(재분류 후)
-// raw/sub: 배부시트 M2/N2 (검증용 필드로만 저장, 화면 원재료비는 사이트 BOM 계산)
+// ── 기획실 확정치 일괄 반영 (2026-01~08, 공급단가조정 파일 "제조원가율" 시트 신규기준 확정값)
+// prodAmt: 제조원가율 시트 생산금액(원) = 생산중량(g)×40원 신규기준 (기존 EA×판매단가 기준 대체)
+// labor/exp/raw/sub: 각 월 "생산수량, 생산금액" 시트 합계 행(N2~Q2) 원 단위 정밀값
 const BULK_PLAN = [
-  { month:'2026-01', prodAmt:699927366,  labor:106185670, exp:148466408, raw:202597392, sub:22156033, oldTab:699927366 },
-  { month:'2026-02', prodAmt:641020700,  labor:112148441, exp:143418569, raw:170614241, sub:20280865, oldTab:641020700 },
-  { month:'2026-03', prodAmt:945988715,  labor:110925858, exp:150799260, raw:289445671, sub:29418970, oldTab:945988715 },
-  { month:'2026-04', prodAmt:1128349016, labor:118735903, exp:170195642, raw:342238846, sub:26398419, oldTab:1116501716 },
-  { month:'2026-05', prodAmt:1007857597, labor:120208540, exp:171153849, raw:391639382, sub:20025566, oldTab:959657072 },
-  { month:'2026-06', prodAmt:1448924348, labor:141740758, exp:202412403, raw:851195303, sub:25949730, oldTab:1046746780 }
+  { month:'2026-01', prodAmt:961851600,  labor:106092923, exp:148466408, raw:202597392, sub:22156033, oldTab:699927366 },
+  { month:'2026-02', prodAmt:841192000,  labor:112148441, exp:143418569, raw:170614241, sub:20280865, oldTab:641020700 },
+  { month:'2026-03', prodAmt:1452389200, labor:110925858, exp:150799260, raw:289445671, sub:29418970, oldTab:945988715 },
+  { month:'2026-04', prodAmt:1636459200, labor:119623229, exp:170195642, raw:342238846, sub:26398419, oldTab:1128349016 },
+  { month:'2026-05', prodAmt:1542995600, labor:120208540, exp:171153849, raw:391639382, sub:20025566, oldTab:1007857597 },
+  { month:'2026-06', prodAmt:2726456000, labor:141740758, exp:202412403, raw:851195303, sub:25949730, oldTab:1448924348 },
+  { month:'2026-07', prodAmt:2117248800, labor:134465198, exp:197415501, raw:472461166, sub:37925423, oldTab:null },
+  { month:'2026-08', prodAmt:2488581600, labor:143197444, exp:217693535, raw:581510229, sub:35362526, oldTab:null }
 ];
 function renderBulkPlan() {
   const tb = document.getElementById('bulk-plan-body');
@@ -1075,7 +1076,7 @@ function renderBulkPlan() {
     <td><input type="number" id="bp-prod-${i}" value="${p.prodAmt}" step="1" style="width:140px"></td>
     <td><input type="number" id="bp-labor-${i}" value="${p.labor}" step="1" style="width:130px"></td>
     <td><input type="number" id="bp-exp-${i}" value="${p.exp}" step="1" style="width:130px"></td>
-    <td class="c" style="font-size:11px;color:${p.oldTab!==p.prodAmt?'var(--warn)':'var(--sub)'}">${p.oldTab.toLocaleString('ko-KR')}${p.oldTab!==p.prodAmt?' (미갱신 구값)':''}</td>
+    <td class="c" style="font-size:11px;color:var(--sub)">${p.oldTab!==null?p.oldTab.toLocaleString('ko-KR')+' (기존기준)':'—'}</td>
   </tr>`).join('');
 }
 window.applyBulkPlan = async () => {
@@ -1088,7 +1089,7 @@ window.applyBulkPlan = async () => {
   }));
   const bad = rows.filter(r=>r.prodAmt<=0||r.laborTotal<=0||r.exp<=0);
   if(bad.length){ showToast('❌ 0 이하 값이 있습니다: '+bad.map(r=>r.month).join(', ')); return; }
-  if(!confirm(`2026-01~06 6개월의 생산금액·노무비·경비를 기획실 확정치로 덮어씁니다.\n기존 상세 데이터(생산실적·재고평가·공수 등)는 유지됩니다.\n진행할까요?`)) return;
+  if(!confirm(`2026-01~08 8개월의 생산금액·노무비·경비를 신규기준 확정치로 덮어씁니다.\n기존 상세 데이터(생산실적·재고평가 등)는 유지됩니다.\n진행할까요?`)) return;
   const el = document.getElementById('bulk-plan-result');
   el.style.display='block'; el.innerHTML='⏳ 반영 중...';
   const done=[], failed=[];
@@ -1109,7 +1110,7 @@ window.applyBulkPlan = async () => {
   }
   el.innerHTML = `✅ 반영 완료: ${done.join(', ')}`
     + (failed.length ? `<br><span style="color:var(--bad)">❌ 실패: ${failed.join(' / ')}</span>` : '');
-  showToast(failed.length ? '⚠️ 일부 실패' : '✅ 6개월 일괄 반영 완료');
+  showToast(failed.length ? '⚠️ 일부 실패' : '✅ 8개월 일괄 반영 완료');
   if(typeof loadHistory==='function') loadHistory();
 };
 // ════════════════════════════════════
@@ -1280,12 +1281,13 @@ window.parseInventory = async () => {
     const unit=unitCol>=0?(row[unitCol]||''):(wide?row[8]:row[3])||'';
     if(!code||!name)continue;
 
-    if(acct.includes('제품')){
+    if(acct.includes('제품') && /^6\d{5}$/.test(code)){
       const _iqC=inQtyCol>=0?inQtyCol:(wide?13:8);
       const qty=parseFloat(String(row[_iqC]||'0').replace(/,/g,'').replace(/\.$/,''))||0;
       if(qty>0) prodQty[code]=(prodQty[code]||0)+qty;
       continue;
     }
+    if(acct.includes('제품')) continue; // 6로 시작하지 않는 제품계정(반제품 등)은 완제품 생산실적에서 제외
     if(!['원자재','부자재','원재료','부재료'].some(a=>acct.includes(a)))continue;
     let _oAmtC=outAmtCol>=0?outAmtCol:(wide?16:-1);
     let _oQtyC=outQtyCol>=0?outQtyCol:(wide?15:-1);
@@ -1401,7 +1403,7 @@ window.recalcProdAmt = async () => {
   for(const code of codes){
     const m = masterMap[code];
     const w = m ? (parseFloat(m.weight)||0) : 0;
-    if(!m || w<=0){ missing.push(code); continue; }
+    if(!m || w<=0){ if(/^6\d{5}$/.test(code)) missing.push(code); continue; }
     total += erpQty[code] * w * gramRate;
   }
   document.getElementById('exp-prod').value = Math.round(total);
