@@ -127,7 +127,7 @@ tr.total td{background:var(--light);font-weight:700}
 .chart-card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
 .chart-card .card-hdr{background:var(--mid);color:#fff;padding:10px 16px;font-size:12px;font-weight:700}
 .chart-wrap{padding:16px;position:relative;height:300px}
-.chart-wrap canvas{max-height:268px}
+.chart-wrap canvas{max-height:100%}
 .chart-empty{display:flex;align-items:center;justify-content:center;height:200px;color:#bbb;font-size:12px}
 
 /* 분기차트 */
@@ -501,8 +501,8 @@ tr.total td{background:var(--light);font-weight:700}
 <!-- ══ 월별 이력 ══ -->
 <div id="tab-history" class="tab">
   <div class="chart-card" style="margin-bottom:14px">
-    <div class="card-hdr">💰 제품별 생산금액 추이 (백만원)</div>
-    <div class="chart-wrap" style="height:460px">
+    <div class="card-hdr">💰 월별 생산금액 및 제조원가율</div>
+    <div class="chart-wrap" style="height:620px;padding:20px 22px 8px">
       <canvas id="chartHistAmt"></canvas>
     </div>
     <div class="chart-legend" id="legendHistAmt"></div>
@@ -510,21 +510,12 @@ tr.total td{background:var(--light);font-weight:700}
 
   <div class="chart-card" style="margin-bottom:14px">
     <div class="card-hdr">🥧 제품별 생산금액 비중 (%)</div>
-    <div class="chart-wrap" style="height:460px">
+    <div class="chart-wrap" style="height:540px;padding:20px 22px 8px">
       <canvas id="chartHistMix"></canvas>
     </div>
     <div class="chart-legend" id="legendHistMix"></div>
   </div>
 
-  <div class="chart-card" style="margin-bottom:14px">
-    <div class="card-hdr">📉 월별 제조원가율 추이 (%)</div>
-    <div class="chart-wrap" style="height:360px">
-      <canvas id="chartHistRate"></canvas>
-    </div>
-    <div class="chart-legend">
-      <div class="leg-item"><div class="leg-dot" style="background:#C00000"></div><span>제조원가율 (제조원가 ÷ 생산금액)</span></div>
-    </div>
-  </div>
 
   <div class="card">
     <div class="card-hdr">📅 월별 원가 이력</div>
@@ -2798,7 +2789,7 @@ function histAggregate(){
   const months = Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
   return { months, byMonth };
 }
-// 막대 안에 제품군 이름 + 값 표시
+// 막대 안 제품군 라벨 + 막대 상단 합계 + 원가율 라인 라벨
 const histBarLabelPlugin = {
   id:'histBarLabels',
   afterDatasetsDraw(chart){
@@ -2806,30 +2797,68 @@ const histBarLabelPlugin = {
     if(id!=='chartHistAmt' && id!=='chartHistMix') return;
     const isPct = id==='chartHistMix';
     const ctx = chart.ctx;
+
     chart.data.datasets.forEach((ds,di)=>{
+      if(ds.type==='line') return;
       const meta = chart.getDatasetMeta(di);
-      if(!meta || !meta.data) return;
+      if(!meta || !meta.data || meta.hidden) return;
       meta.data.forEach((bar,i)=>{
         const val = ds.data[i];
         if(!val) return;
         const {x,y,base} = bar.getProps(['x','y','base'],true);
         const h = Math.abs(base-y);
-        if(h < 22) return;                         // 너무 얇으면 생략
+        if(h < 20) return;
         const cy = (y+base)/2;
         ctx.save();
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillStyle='#fff';
-        ctx.font='bold 11px Malgun Gothic, Arial';
-        if(h >= 36){
-          ctx.fillText(ds.label, x, cy-7);
-          ctx.font='bold 11px Malgun Gothic, Arial';
-          ctx.fillText(isPct ? val+'%' : val.toLocaleString('ko-KR'), x, cy+7);
+        ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle='#fff';
+        if(h >= 38){
+          ctx.font='bold 12px Malgun Gothic, Arial';
+          ctx.fillText(ds.label, x, cy-8);
+          ctx.font='bold 12px Malgun Gothic, Arial';
+          ctx.fillText(isPct ? val+'%' : val.toLocaleString('ko-KR'), x, cy+9);
         } else {
+          ctx.font='bold 11px Malgun Gothic, Arial';
           ctx.fillText(isPct ? val+'%' : val.toLocaleString('ko-KR'), x, cy);
         }
         ctx.restore();
       });
     });
+
+    // 막대 상단 합계 (금액 차트만)
+    if(!isPct && chart._histTotals){
+      const bars = chart.getDatasetMeta(0);
+      if(bars && bars.data){
+        ctx.save();
+        ctx.font='bold 13px Malgun Gothic, Arial'; ctx.fillStyle='#2B2B2B';
+        ctx.textAlign='center'; ctx.textBaseline='bottom';
+        bars.data.forEach((bar,i)=>{
+          const t = chart._histTotals[i]; if(!t) return;
+          let top = bar.getProps(['base'],true).base;
+          chart.data.datasets.forEach((ds,di)=>{
+            if(ds.type==='line') return;
+            const m=chart.getDatasetMeta(di);
+            if(m&&m.data&&m.data[i]){ const yy=m.data[i].getProps(['y'],true).y; if(yy<top) top=yy; }
+          });
+          ctx.fillText(t.toLocaleString('ko-KR'), bar.getProps(['x'],true).x, top-6);
+        });
+        ctx.restore();
+      }
+    }
+
+    // 원가율 라인 라벨
+    if(!isPct && chart._histRates){
+      const li = chart.data.datasets.findIndex(d=>d.type==='line');
+      if(li>=0){
+        const m=chart.getDatasetMeta(li);
+        if(m&&m.data){
+          ctx.save();
+          ctx.font='bold 13px Malgun Gothic, Arial'; ctx.fillStyle='#1F3864';
+          ctx.textAlign='center'; ctx.textBaseline='bottom';
+          m.data.forEach((pt,i)=>{ const v=chart._histRates[i]; if(v!=null) ctx.fillText(v+'%', pt.x, pt.y-10); });
+          ctx.restore();
+        }
+      }
+    }
   }
 };
 if(!Chart.registry.plugins.get('histBarLabels')) Chart.registry.plugins.register(histBarLabelPlugin);
@@ -2840,41 +2869,66 @@ function renderHistoryCharts(){
   const labels = months.map(m=>`${m}월`);
   const totalsByMonth = {};
   months.forEach(m=>{ totalsByMonth[m]=HIST_GROUPS.reduce((s,k)=>s+(byMonth[m][k]||0),0); });
+  const totalsArr = months.map(m=>Math.round(totalsByMonth[m]/1000000));
+
+  const rateData = months.map(m=>{
+    let c=0,a2=0;
+    for(const p of PRODUCT_UNITCOST){ const v=p.m[m]; if(v&&v.q){ c+=v.c; a2+=v.a; } }
+    return a2>0 ? +(c/a2*100).toFixed(1) : null;
+  });
 
   const amtSeries = HIST_GROUPS.map((g,i)=>({
-    label: g,
+    type:'bar', label:g, order:2,
     data: months.map(m => Math.round(((byMonth[m][g]||0))/1000000)),
-    backgroundColor: HIST_COLORS[i],
-    stack: 'amt'
+    backgroundColor: HIST_COLORS[i], stack:'amt', yAxisID:'y'
   }));
+
+  const maxTotal = Math.max(...totalsArr, 0);
+  const _rv = rateData.filter(v=>v!=null);
+  const maxRate  = _rv.length ? Math.max(..._rv) : 0;
+  const minRate  = _rv.length ? Math.min(..._rv) : 0;
+
+  // ① 생산금액 누적막대 + 제조원가율 라인(상단 배치)
+  destroyChart('histAmt');
+  const c1 = document.getElementById('chartHistAmt');
+  if(c1){
+    window._charts.histAmt = new Chart(c1.getContext('2d'), {
+      data:{ labels, datasets: [...amtSeries, {
+        type:'line', label:'제조원가율(%)', order:1, yAxisID:'y1',
+        data: rateData, borderColor:'#1F3864', backgroundColor:'transparent',
+        borderWidth:3, pointRadius:6, pointBackgroundColor:'#1F3864',
+        fill:false, tension:0.25, spanGaps:true
+      }]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        layout:{ padding:{ top:28 } },
+        plugins:{ legend:{display:false},
+          tooltip:{ callbacks:{ label: x => x.dataset.type==='line'
+            ? `제조원가율: ${x.parsed.y}%`
+            : `${x.dataset.label}: ${x.parsed.y.toLocaleString('ko-KR')}백만원` } } },
+        scales:{
+          x:{ stacked:true, grid:{display:false}, ticks:{font:{size:13}} },
+          // 막대는 하단 약 60% 영역만 사용
+          y:{ stacked:true, display:false, min:0, max: maxTotal>0 ? maxTotal*1.72 : 100 },
+          // 라인은 상단 영역에 뜨도록 축 범위를 아래로 넓게 잡음
+          y1:{ position:'right', display:false,
+               min: minRate - (maxRate-minRate||10)*7.5 - 10,
+               max: maxRate + (maxRate-minRate||10)*0.45 }
+        }
+      }
+    });
+    window._charts.histAmt._histTotals = totalsArr;
+    window._charts.histAmt._histRates  = rateData;
+  }
+
   const mixSeries = HIST_GROUPS.map((g,i)=>({
     label: g,
     data: months.map(m => {
       const tot = totalsByMonth[m];
       return tot>0 ? +(((byMonth[m][g]||0)/tot*100).toFixed(1)) : 0;
     }),
-    backgroundColor: HIST_COLORS[i],
-    stack: 'mix'
+    backgroundColor: HIST_COLORS[i], stack:'mix'
   }));
-
-  // ① 금액 누적 막대
-  destroyChart('histAmt');
-  const c1 = document.getElementById('chartHistAmt');
-  if(c1) window._charts.histAmt = new Chart(c1.getContext('2d'), {
-    type:'bar',
-    data:{ labels, datasets: amtSeries },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false},
-        tooltip:{ callbacks:{ label: x=>`${x.dataset.label}: ${x.parsed.y.toLocaleString('ko-KR')}백만원` } } },
-      scales:{
-        x:{ stacked:true, grid:{display:false}, ticks:{font:{size:12}} },
-        y:{ stacked:true, beginAtZero:true,
-            ticks:{ callback:v=>v.toLocaleString('ko-KR')+'백만', font:{size:11} },
-            grid:{color:'#f0f0f0'} }
-      }
-    }
-  });
 
   // ② 100% 비중 막대
   destroyChart('histMix');
@@ -2887,62 +2941,21 @@ function renderHistoryCharts(){
       plugins:{ legend:{display:false},
         tooltip:{ callbacks:{ label: x=>`${x.dataset.label}: ${x.parsed.y}%` } } },
       scales:{
-        x:{ stacked:true, grid:{display:false}, ticks:{font:{size:12}} },
+        x:{ stacked:true, grid:{display:false}, ticks:{font:{size:13}} },
         y:{ stacked:true, min:0, max:100,
             ticks:{ callback:v=>v+'%', font:{size:11} }, grid:{color:'#f0f0f0'} }
       }
     }
   });
 
-  // ③ 제조원가율 꺾은선
-  const rateData = months.map(m=>{
-    let c=0,a2=0;
-    for(const p of PRODUCT_UNITCOST){ const v=p.m[m]; if(v&&v.q){ c+=v.c; a2+=v.a; } }
-    return a2>0 ? +(c/a2*100).toFixed(1) : null;
-  });
-  destroyChart('histRate');
-  const c3 = document.getElementById('chartHistRate');
-  if(c3) window._charts.histRate = new Chart(c3.getContext('2d'), {
-    type:'line',
-    data:{ labels, datasets:[{
-      label:'제조원가율',
-      data: rateData,
-      borderColor:'#C00000',
-      backgroundColor:'rgba(192,0,0,0.10)',
-      borderWidth:3, pointRadius:6, pointBackgroundColor:'#C00000',
-      fill:true, tension:0.25, spanGaps:true
-    }]},
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false},
-        tooltip:{ callbacks:{ label:x=>`제조원가율: ${x.parsed.y}%` } } },
-      scales:{
-        x:{ grid:{display:false}, ticks:{font:{size:12}} },
-        y:{ beginAtZero:true,
-            max: (()=>{ const mx=Math.max(...rateData.filter(v=>v!=null),0); return mx>0?Math.ceil(mx*1.3/10)*10:60; })(),
-            ticks:{ callback:v=>v+'%', font:{size:11} }, grid:{color:'#f0f0f0'} }
-      }
-    },
-    plugins:[{
-      id:'histRateLabels',
-      afterDatasetsDraw(chart){
-        const meta=chart.getDatasetMeta(0); if(!meta) return;
-        const ctx=chart.ctx; ctx.save();
-        ctx.font='bold 12px Malgun Gothic, Arial'; ctx.fillStyle='#C00000';
-        ctx.textAlign='center'; ctx.textBaseline='bottom';
-        meta.data.forEach((pt,i)=>{ const v=rateData[i]; if(v!=null) ctx.fillText(v+'%', pt.x, pt.y-9); });
-        ctx.restore();
-      }
-    }]
-  });
-
   // 범례
-  const legHtml = HIST_GROUPS.map((g,i)=>
+  const legBase = HIST_GROUPS.map((g,i)=>
     `<div class="leg-item"><div class="leg-sq" style="background:${HIST_COLORS[i]}"></div><span>${g}</span></div>`).join('');
-  const l1=document.getElementById('legendHistAmt'); if(l1) l1.innerHTML=legHtml;
-  const l2=document.getElementById('legendHistMix'); if(l2) l2.innerHTML=legHtml;
+  const l1=document.getElementById('legendHistAmt');
+  if(l1) l1.innerHTML = legBase + '<div class="leg-item"><div class="leg-dot" style="background:#1F3864"></div><span>제조원가율(%)</span></div>';
+  const l2=document.getElementById('legendHistMix'); if(l2) l2.innerHTML=legBase;
 
-  // ④ 상세 표 (한글 단위)
+  // ③ 상세 표 (한글 단위)
   const W = v => Math.round(v/1000000).toLocaleString('ko-KR')+'백만';
   const head = document.getElementById('histmix-head');
   if(head) head.innerHTML = '<th style="min-width:110px">제품군</th>'
