@@ -500,20 +500,29 @@ tr.total td{background:var(--light);font-weight:700}
 
 <!-- ══ 월별 이력 ══ -->
 <div id="tab-history" class="tab">
-  <div class="chart-grid">
-    <div class="chart-card">
-      <div class="card-hdr">💰 제품별 생산금액 추이 (백만원)</div>
-      <div class="chart-wrap" style="height:340px">
-        <canvas id="chartHistAmt"></canvas>
-      </div>
-      <div class="chart-legend" id="legendHistAmt"></div>
+  <div class="chart-card" style="margin-bottom:14px">
+    <div class="card-hdr">💰 제품별 생산금액 추이 (백만원)</div>
+    <div class="chart-wrap" style="height:460px">
+      <canvas id="chartHistAmt"></canvas>
     </div>
-    <div class="chart-card">
-      <div class="card-hdr">🥧 제품별 생산금액 비중 (%)</div>
-      <div class="chart-wrap" style="height:340px">
-        <canvas id="chartHistMix"></canvas>
-      </div>
-      <div class="chart-legend" id="legendHistMix"></div>
+    <div class="chart-legend" id="legendHistAmt"></div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:14px">
+    <div class="card-hdr">🥧 제품별 생산금액 비중 (%)</div>
+    <div class="chart-wrap" style="height:460px">
+      <canvas id="chartHistMix"></canvas>
+    </div>
+    <div class="chart-legend" id="legendHistMix"></div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:14px">
+    <div class="card-hdr">📉 월별 제조원가율 추이 (%)</div>
+    <div class="chart-wrap" style="height:360px">
+      <canvas id="chartHistRate"></canvas>
+    </div>
+    <div class="chart-legend">
+      <div class="leg-item"><div class="leg-dot" style="background:#C00000"></div><span>제조원가율 (제조원가 ÷ 생산금액)</span></div>
     </div>
   </div>
 
@@ -729,7 +738,7 @@ window._bom = {};
 window._parsed = { inv: null, erp: null, erpQty: null, runs: null, welfare: null, stmt: null };
 
 // ── 차트 인스턴스 저장
-window._charts = { costRate: null, production: null, quarter: null, histAmt: null, histMix: null };
+window._charts = { costRate: null, production: null, quarter: null, histAmt: null, histMix: null, histRate: null };
 
 // ── 유틸
 const fmt = (n,d=2) => (n==null||isNaN(n)) ? '—' : Number(n).toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -1943,15 +1952,28 @@ function resolveExpShares(d, bomFallback) {
   const runs = d.runsData || {};
   const prodCodes = Object.keys(erpQty).filter(c => erpQty[c] > 0);
   const runSum = prodCodes.reduce((s,c) => s + (runs[c]||0), 0);
-  let warn = null;
-  if(runSum <= 0) warn = '⚠️ 생산횟수 데이터 없음 — ② 제품별 생산횟수를 입력하세요 (경비 미배부)';
-  else {
+  const shares = {};
+  let warn = null, useRuns = false;
+
+  if(runSum > 0){
+    useRuns = true;
+    for(const c of prodCodes) shares[c] = (runs[c]||0)/runSum;
     const covered = prodCodes.filter(c => (runs[c]||0) > 0);
     if(covered.length !== prodCodes.length) warn = '⚠️ 생산횟수 미입력 제품 존재 — 해당 제품 경비 0 배부';
+  } else {
+    // 생산횟수 미입력 월(과거 데이터 등) → 경비를 잃지 않도록 생산중량 비율로 대체 배부
+    const bom = (d.bomSnapshot && Object.keys(d.bomSnapshot).length) ? d.bomSnapshot : (bomFallback || window._bom || {});
+    const B = productBases(d, bom);
+    if(B.totWeight > 0){
+      for(const c of prodCodes) shares[c] = (B.weight[c]||0)/B.totWeight;
+      warn = '⚠️ 생산횟수 미입력 — 경비를 생산중량 비율로 대체 배부 (② 생산횟수 입력 시 정확해집니다)';
+    } else {
+      const qtySum = prodCodes.reduce((s,c)=>s+erpQty[c],0);
+      for(const c of prodCodes) shares[c] = qtySum>0 ? erpQty[c]/qtySum : 0;
+      warn = '⚠️ 생산횟수·중량 정보 없음 — 경비를 생산수량 비율로 대체 배부';
+    }
   }
-  const shares = {};
-  for(const c of prodCodes) shares[c] = runSum > 0 ? (runs[c]||0)/runSum : 0;
-  return { shares, useRuns: runSum > 0, warn };
+  return { shares, useRuns, warn };
 }
 
 // 공통: 원재료비·부재료비·경비 계산 (방식 무관)
@@ -2776,20 +2798,59 @@ function histAggregate(){
   const months = Object.keys(byMonth).map(Number).sort((a,b)=>a-b);
   return { months, byMonth };
 }
+// 막대 안에 제품군 이름 + 값 표시
+const histBarLabelPlugin = {
+  id:'histBarLabels',
+  afterDatasetsDraw(chart){
+    const id = chart.canvas.id;
+    if(id!=='chartHistAmt' && id!=='chartHistMix') return;
+    const isPct = id==='chartHistMix';
+    const ctx = chart.ctx;
+    chart.data.datasets.forEach((ds,di)=>{
+      const meta = chart.getDatasetMeta(di);
+      if(!meta || !meta.data) return;
+      meta.data.forEach((bar,i)=>{
+        const val = ds.data[i];
+        if(!val) return;
+        const {x,y,base} = bar.getProps(['x','y','base'],true);
+        const h = Math.abs(base-y);
+        if(h < 22) return;                         // 너무 얇으면 생략
+        const cy = (y+base)/2;
+        ctx.save();
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillStyle='#fff';
+        ctx.font='bold 11px Malgun Gothic, Arial';
+        if(h >= 36){
+          ctx.fillText(ds.label, x, cy-7);
+          ctx.font='bold 11px Malgun Gothic, Arial';
+          ctx.fillText(isPct ? val+'%' : val.toLocaleString('ko-KR'), x, cy+7);
+        } else {
+          ctx.fillText(isPct ? val+'%' : val.toLocaleString('ko-KR'), x, cy);
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+if(!Chart.registry.plugins.get('histBarLabels')) Chart.registry.plugins.register(histBarLabelPlugin);
+
 function renderHistoryCharts(){
   const { months, byMonth } = histAggregate();
   if(!months.length) return;
   const labels = months.map(m=>`${m}월`);
+  const totalsByMonth = {};
+  months.forEach(m=>{ totalsByMonth[m]=HIST_GROUPS.reduce((s,k)=>s+(byMonth[m][k]||0),0); });
+
   const amtSeries = HIST_GROUPS.map((g,i)=>({
     label: g,
-    data: months.map(m => +(((byMonth[m][g]||0))/1000000).toFixed(1)),
+    data: months.map(m => Math.round(((byMonth[m][g]||0))/1000000)),
     backgroundColor: HIST_COLORS[i],
     stack: 'amt'
   }));
   const mixSeries = HIST_GROUPS.map((g,i)=>({
     label: g,
     data: months.map(m => {
-      const tot = HIST_GROUPS.reduce((s,k)=>s+(byMonth[m][k]||0),0);
+      const tot = totalsByMonth[m];
       return tot>0 ? +(((byMonth[m][g]||0)/tot*100).toFixed(1)) : 0;
     }),
     backgroundColor: HIST_COLORS[i],
@@ -2805,11 +2866,11 @@ function renderHistoryCharts(){
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{display:false},
-        tooltip:{ callbacks:{ label: x=>`${x.dataset.label}: ${x.parsed.y.toLocaleString('ko-KR')}M` } } },
+        tooltip:{ callbacks:{ label: x=>`${x.dataset.label}: ${x.parsed.y.toLocaleString('ko-KR')}백만원` } } },
       scales:{
-        x:{ stacked:true, grid:{display:false}, ticks:{font:{size:11}} },
+        x:{ stacked:true, grid:{display:false}, ticks:{font:{size:12}} },
         y:{ stacked:true, beginAtZero:true,
-            ticks:{ callback:v=>v.toLocaleString('ko-KR')+'M', font:{size:10} },
+            ticks:{ callback:v=>v.toLocaleString('ko-KR')+'백만', font:{size:11} },
             grid:{color:'#f0f0f0'} }
       }
     }
@@ -2826,11 +2887,53 @@ function renderHistoryCharts(){
       plugins:{ legend:{display:false},
         tooltip:{ callbacks:{ label: x=>`${x.dataset.label}: ${x.parsed.y}%` } } },
       scales:{
-        x:{ stacked:true, grid:{display:false}, ticks:{font:{size:11}} },
+        x:{ stacked:true, grid:{display:false}, ticks:{font:{size:12}} },
         y:{ stacked:true, min:0, max:100,
-            ticks:{ callback:v=>v+'%', font:{size:10} }, grid:{color:'#f0f0f0'} }
+            ticks:{ callback:v=>v+'%', font:{size:11} }, grid:{color:'#f0f0f0'} }
       }
     }
+  });
+
+  // ③ 제조원가율 꺾은선
+  const rateData = months.map(m=>{
+    let c=0,a2=0;
+    for(const p of PRODUCT_UNITCOST){ const v=p.m[m]; if(v&&v.q){ c+=v.c; a2+=v.a; } }
+    return a2>0 ? +(c/a2*100).toFixed(1) : null;
+  });
+  destroyChart('histRate');
+  const c3 = document.getElementById('chartHistRate');
+  if(c3) window._charts.histRate = new Chart(c3.getContext('2d'), {
+    type:'line',
+    data:{ labels, datasets:[{
+      label:'제조원가율',
+      data: rateData,
+      borderColor:'#C00000',
+      backgroundColor:'rgba(192,0,0,0.10)',
+      borderWidth:3, pointRadius:6, pointBackgroundColor:'#C00000',
+      fill:true, tension:0.25, spanGaps:true
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label:x=>`제조원가율: ${x.parsed.y}%` } } },
+      scales:{
+        x:{ grid:{display:false}, ticks:{font:{size:12}} },
+        y:{ beginAtZero:true,
+            max: (()=>{ const mx=Math.max(...rateData.filter(v=>v!=null),0); return mx>0?Math.ceil(mx*1.3/10)*10:60; })(),
+            ticks:{ callback:v=>v+'%', font:{size:11} }, grid:{color:'#f0f0f0'} }
+      }
+    },
+    plugins:[{
+      id:'histRateLabels',
+      afterDatasetsDraw(chart){
+        const meta=chart.getDatasetMeta(0); if(!meta) return;
+        const ctx=chart.ctx; ctx.save();
+        ctx.font='bold 12px Malgun Gothic, Arial'; ctx.fillStyle='#C00000';
+        ctx.textAlign='center'; ctx.textBaseline='bottom';
+        meta.data.forEach((pt,i)=>{ const v=rateData[i]; if(v!=null) ctx.fillText(v+'%', pt.x, pt.y-9); });
+        ctx.restore();
+      }
+    }]
   });
 
   // 범례
@@ -2839,15 +2942,14 @@ function renderHistoryCharts(){
   const l1=document.getElementById('legendHistAmt'); if(l1) l1.innerHTML=legHtml;
   const l2=document.getElementById('legendHistMix'); if(l2) l2.innerHTML=legHtml;
 
-  // ③ 상세 표
+  // ④ 상세 표 (한글 단위)
+  const W = v => Math.round(v/1000000).toLocaleString('ko-KR')+'백만';
   const head = document.getElementById('histmix-head');
   if(head) head.innerHTML = '<th style="min-width:110px">제품군</th>'
     + months.map(m=>`<th>${m}월</th>`).join('')
     + '<th style="background:#1F3864;color:#fff">누적</th>';
   const body = document.getElementById('histmix-body');
   if(body){
-    const totalsByMonth = {};
-    months.forEach(m=>{ totalsByMonth[m]=HIST_GROUPS.reduce((s,k)=>s+(byMonth[m][k]||0),0); });
     const grand = Object.values(totalsByMonth).reduce((s,v)=>s+v,0);
     body.innerHTML = HIST_GROUPS.map((g,i)=>{
       const cum = months.reduce((s,m)=>s+(byMonth[m][g]||0),0);
@@ -2856,14 +2958,14 @@ function renderHistoryCharts(){
         + months.map(m=>{
             const v = byMonth[m][g]||0, t = totalsByMonth[m];
             return v>0
-              ? `<td>${fmt(v/1000000,0)}M<br><span style="font-size:10px;color:var(--sub)">${t>0?(v/t*100).toFixed(1):0}%</span></td>`
+              ? `<td>${W(v)}<br><span style="font-size:10px;color:var(--sub)">${t>0?(v/t*100).toFixed(1):0}%</span></td>`
               : '<td class="c" style="color:#ddd">—</td>';
           }).join('')
-        + `<td style="font-weight:700;background:var(--light)">${fmt(cum/1000000,0)}M<br><span style="font-size:10px;color:var(--sub)">${grand>0?(cum/grand*100).toFixed(1):0}%</span></td></tr>`;
+        + `<td style="font-weight:700;background:var(--light)">${W(cum)}<br><span style="font-size:10px;color:var(--sub)">${grand>0?(cum/grand*100).toFixed(1):0}%</span></td></tr>`;
     }).join('')
     + `<tr class="total"><td class="l">합계</td>`
-      + months.map(m=>`<td>${fmt(totalsByMonth[m]/1000000,0)}M</td>`).join('')
-      + `<td>${fmt(grand/1000000,0)}M</td></tr>`;
+      + months.map(m=>`<td>${W(totalsByMonth[m])}</td>`).join('')
+      + `<td>${W(grand)}</td></tr>`;
   }
 }
 
