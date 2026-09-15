@@ -2015,7 +2015,10 @@ function renderCostRateChart(allRows) {
         y: {
           stacked: true,
           min: 0,
-          max: 110,
+          max: (() => {
+            const mx = Math.max(...totals.filter(v=>v>0), 0);
+            return mx>0 ? Math.ceil((mx*1.25)/10)*10 : 60;
+          })(),
           ticks: {
             callback: v => v + '%',
             font: { size: 11 }
@@ -2156,8 +2159,13 @@ function renderProductionChart(allRows) {
         yLeft: {
           type: 'linear',
           position: 'left',
+          min: 0,
+          max: (() => {
+            const mx = Math.max(...meatKgs.filter(v=>v>0), 0);
+            return mx>0 ? Math.ceil((mx*1.2)/5000)*5000 : undefined;
+          })(),
           ticks: {
-            callback: v => v.toLocaleString('ko-KR') + 'kg',
+            callback: v => (v>=1000 ? (v/1000)+'t' : v.toLocaleString('ko-KR')+'kg'),
             font: { size: 10 }
           },
           grid: { color: '#f0f0f0' }
@@ -2165,8 +2173,13 @@ function renderProductionChart(allRows) {
         yRight: {
           type: 'linear',
           position: 'right',
+          min: 0,
+          max: (() => {
+            const mx = Math.max(...qtys.filter(v=>v>0), 0);
+            return mx>0 ? Math.ceil((mx*1.2)/50000)*50000 : undefined;
+          })(),
           ticks: {
-            callback: v => v.toLocaleString('ko-KR') + 'ea',
+            callback: v => (v>=10000 ? (v/10000)+'만ea' : v.toLocaleString('ko-KR')+'ea'),
             font: { size: 10 }
           },
           grid: { display: false }
@@ -2476,34 +2489,47 @@ function renderUnitCostTables() {
   for(let m=1;m<=12;m++){
     if(PRODUCT_UNITCOST.some(p=>p.m[m]&&p.m[m].q>0)) activeMonths.push(m);
   }
-  const headHtml = '<th style="min-width:210px">제품명</th>'
-    + activeMonths.map(m=>`<th>${m}월</th>`).join('')
-    + '<th style="background:#1F3864;color:#fff">누적</th>';
+  const monthCols = activeMonths.map(m=>`<th>${m}월</th>`).join('');
 
-  // ② 월별 개당 제조원가
-  document.getElementById('unitcost-month-head').innerHTML = headHtml;
+  // ② 월별 개당 제조원가 — 제품명 옆에 목표 제조원가 열 추가
+  document.getElementById('unitcost-month-head').innerHTML =
+    '<th style="min-width:210px">제품명</th>'
+    + '<th style="background:#EDE7F6;color:#4527A0;min-width:78px">목표<br><span style="font-size:10px;font-weight:400">원/EA</span></th>'
+    + monthCols
+    + '<th style="background:#1F3864;color:#fff">누적</th>';
   document.getElementById('unitcost-month-body').innerHTML = PRODUCT_UNITCOST.map(p=>{
     if(!p.cum.q) return '';
+    const tgt = (typeof PRODUCT_TARGET_UNIT!=='undefined') ? PRODUCT_TARGET_UNIT[p.n] : null;
+    const cumCls = tgt!=null ? (p.cum.u>tgt?'bad':'ok') : '';
     return `<tr><td class="l">${p.n}</td>`
-      + activeMonths.map(m=>{
-          const v=p.m[m];
-          return v&&v.q ? `<td>${fmtN(v.u)}</td>` : '<td class="c" style="color:#ddd">—</td>';
-        }).join('')
-      + `<td style="font-weight:700;background:var(--light)">${fmtN(p.cum.u)}</td></tr>`;
-  }).join('');
-
-  // ③ 월별 제조원가율
-  document.getElementById('unitcost-rate-head').innerHTML = headHtml;
-  document.getElementById('unitcost-rate-body').innerHTML = PRODUCT_UNITCOST.map(p=>{
-    if(!p.cum.q) return '';
-    return `<tr><td class="l">${p.n}${p.t!=null?` <span style="font-size:10px;color:var(--sub)">(목표 ${pct(p.t)})</span>`:''}</td>`
+      + `<td style="background:#F6F3FC;color:#4527A0;font-weight:700">${tgt!=null?fmtN(tgt):'—'}</td>`
       + activeMonths.map(m=>{
           const v=p.m[m];
           if(!v||!v.q) return '<td class="c" style="color:#ddd">—</td>';
-          const over = p.t!=null && v.r>p.t;
-          return `<td class="c ${over?'bad':'ok'}">${pct(v.r)}</td>`;
+          const cls = tgt!=null ? (v.u>tgt?'bad':'ok') : '';
+          return `<td class="${cls}">${fmtN(v.u)}</td>`;
         }).join('')
-      + `<td class="c ${rC(p.cum.r)}" style="font-weight:700;background:var(--light)">${pct(p.cum.r)}</td></tr>`;
+      + `<td class="${cumCls}" style="font-weight:700;background:var(--light)">${fmtN(p.cum.u)}</td></tr>`;
+  }).join('');
+
+  // ③ 월별 제조원가율 — 목표 원가율 열 추가
+  document.getElementById('unitcost-rate-head').innerHTML =
+    '<th style="min-width:210px">제품명</th>'
+    + '<th style="background:#EDE7F6;color:#4527A0;min-width:78px">목표<br><span style="font-size:10px;font-weight:400">원가율</span></th>'
+    + monthCols
+    + '<th style="background:#1F3864;color:#fff">누적</th>';
+  document.getElementById('unitcost-rate-body').innerHTML = PRODUCT_UNITCOST.map(p=>{
+    if(!p.cum.q) return '';
+    const cumCls = p.t!=null ? (p.cum.r>p.t?'bad':'ok') : rC(p.cum.r);
+    return `<tr><td class="l">${p.n}</td>`
+      + `<td class="c" style="background:#F6F3FC;color:#4527A0;font-weight:700">${p.t!=null?pct(p.t):'—'}</td>`
+      + activeMonths.map(m=>{
+          const v=p.m[m];
+          if(!v||!v.q) return '<td class="c" style="color:#ddd">—</td>';
+          const cls = p.t!=null ? (v.r>p.t?'bad':'ok') : '';
+          return `<td class="c ${cls}">${pct(v.r)}</td>`;
+        }).join('')
+      + `<td class="c ${cumCls}" style="font-weight:700;background:var(--light)">${pct(p.cum.r)}</td></tr>`;
   }).join('');
 }
 
