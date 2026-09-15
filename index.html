@@ -323,8 +323,28 @@ tr.total td{background:var(--light);font-weight:700}
           <tbody id="erp-table-body"></tbody>
         </table></div>
       </div>
-      <div class="sec">④ 경비·노무비·생산금액 입력 (원 단위)</div>
-      <div class="warn-box">💡 ERP 최종마감 금액을 <b>원 단위 그대로</b> 입력하세요. 원재료비·부재료비는 BOM으로 자동계산되므로 검증용입니다.<br>⚠️ <b>경비</b>는 복리후생비(법정)_공정별을 <b>제외한</b> 금액을 입력하세요. 해당 금액은 ③-2에서 파싱되어 노무비에 자동 합산됩니다.<br>📌 <b>생산금액</b>은 재고평가 입고수량 × 제품중량(g) × 설정단가(원/g, 설정탭)로 자동계산됩니다. 필요 시 아래에서 직접 수정할 수 있습니다.</div>
+      <div class="sec">④ 제조원가명세서 붙여넣기 (경비·노무비 자동 반영)</div>
+      <div class="paste-box" style="border-color:#5E35B1;background:#F7F4FC">
+        <div class="pb-title" style="color:#5E35B1">📋 ERP → 제조원가명세서 → 전체 복사 → 아래 붙여넣기 (권장)</div>
+        <div class="pb-desc">명세서 한 장으로 <b>원재료비·부재료비·노무비·경비</b>가 모두 자동 입력됩니다.
+        <b>(제)복리후생비(법정)_공정별</b>은 자동으로 경비에서 차감되어 노무비에 가산됩니다 — 수기 계산 불필요.</div>
+        <textarea id="paste-stmt" placeholder="여기에 붙여넣기 (Ctrl+V)"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-ok btn-sm" onclick="parseStatement()">⚡ 명세서 분석 · 자동 입력</button>
+          <button class="btn btn-primary btn-sm" onclick="clearStatement()">🗑️ 초기화</button>
+        </div>
+        <div class="paste-result" id="stmt-result"></div>
+      </div>
+      <div id="stmt-table-wrap" style="display:none">
+        <div class="info-box" id="stmt-summary"></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>구분</th><th>명세서 금액(원)</th><th>복리후생비 재분류</th><th>최종 반영액(원)</th></tr></thead>
+          <tbody id="stmt-table-body"></tbody>
+        </table></div>
+      </div>
+
+      <div class="sec">⑤ 경비·노무비·생산금액 확인 (원 단위)</div>
+      <div class="warn-box">💡 <b>④ 명세서를 붙여넣으면 아래 값들이 자동으로 채워집니다.</b> 수기 입력·수정도 가능합니다.<br>⚠️ <b>경비</b>는 복리후생비(법정)_공정별을 <b>제외한</b> 금액입니다 (명세서 분석 시 자동 차감).<br>📌 <b>생산금액</b>은 재고평가 입고수량 × 제품중량(g) × 설정단가(원/g, 설정탭)로 자동계산됩니다.</div>
       <div class="form-row cols2">
         <div class="fg">
           <label>경비 합계 (원) *</label>
@@ -360,7 +380,7 @@ tr.total td{background:var(--light);font-weight:700}
         <span id="prodAmt-calc-note" style="font-size:11px;color:var(--sub);align-self:center"></span>
       </div>
 
-      <div class="sec">⑤ 노무비 배부 기준 (기획실 확정 — 고정)</div>
+      <div class="sec">⑥ 노무비 배부 기준 (기획실 확정 — 고정)</div>
       <div class="paste-box" style="border-color:var(--warn);background:#FFFBF0">
         <div class="pb-title" style="color:var(--warn)">⚖️ 계정별 배부 기준은 아래로 고정되어 있습니다 (선택 불가)</div>
         <div class="tbl-wrap"><table>
@@ -374,7 +394,7 @@ tr.total td{background:var(--light);font-weight:700}
         <div class="paste-result" style="display:block;color:var(--sub)">복리후생비(법정)_공정별은 ③-2에서 파싱되어 임금(1)~(5)·퇴직급여(관리)에 자동 합산됩니다.</div>
       </div>
 
-      <div class="sec">⑥ 경비 배부 방식 (생산횟수 비중 — 고정)</div>
+      <div class="sec">⑦ 경비 배부 방식 (생산횟수 비중 — 고정)</div>
       <div class="info-box">
         경비는 <b>제품별 생산횟수 비중</b>(② 입력값 ÷ 전체 작업횟수 합계)으로 배부됩니다. 별도 선택 없이 고정 적용됩니다.
       </div>
@@ -641,7 +661,7 @@ const factoryDb = getFirestore(factoryApp);
 window._factoryDb = factoryDb;
 window._masters = [];
 window._bom = {};
-window._parsed = { inv: null, erp: null, erpQty: null, runs: null, welfare: null };
+window._parsed = { inv: null, erp: null, erpQty: null, runs: null, welfare: null, stmt: null };
 
 // ── 차트 인스턴스 저장
 window._charts = { costRate: null, production: null, quarter: null };
@@ -1115,6 +1135,99 @@ window.applyBulkPlan = async () => {
 };
 // ════════════════════════════════════
 // ── (제)복리후생비(법정)_공정별 파서: 1~5공정 → 임금(1)~(5), (사무) → 퇴직급여(관리)
+// ════════════════════════════════════
+// ④ 제조원가명세서 파서 — 원/부재료비·노무비·경비 일괄 추출 + 복리후생비 자동 재분류
+// ════════════════════════════════════
+window.parseStatement = () => {
+  const raw = document.getElementById('paste-stmt').value.trim();
+  if(!raw){showToast('❌ 데이터를 붙여넣기 하세요');return;}
+  const rows = raw.split('\n').map(r=>r.split('\t'));
+  // 계정명 내부 공백 제거 후 비교 (ERP 명세서는 '원   재    료   비' 형태로 자간 띄움)
+  const norm = s => String(s||'').replace(/\s+/g,'');
+  const num  = s => parseFloat(String(s||'').replace(/,/g,'').trim())||0;
+
+  const pick = {}; // 정규화 계정명 -> 금액
+  for(const row of rows){
+    if(row.length<2) continue;
+    const key = norm(row[0]);
+    if(!key) continue;
+    // 금액은 2번째 열(합계) 우선, 비어있으면 3번째 열
+    const v = num(row[1]) || num(row[2]);
+    if(v===0) continue;
+    if(pick[key]===undefined) pick[key]=v;
+  }
+
+  const get = (...keys) => { for(const k of keys){ if(pick[k]!==undefined) return pick[k]; } return 0; };
+
+  const rawMat  = get('원재료비');
+  const subMat  = get('부재료비');
+  const laborSt = get('II.노무비','II.노무비','노무비');
+  const expSt   = get('III.제조경비','제조경비');
+  const welfare = get('(제)복리후생비(법정)_공정별');
+  const totalSt = get('IV.당기총제조비용','당기총제조비용');
+
+  if(!laborSt && !expSt){showToast('❌ 노무비/제조경비 항목을 찾을 수 없습니다 (명세서 형식 확인)');return;}
+
+  const laborFinal = laborSt + welfare;
+  const expFinal   = expSt - welfare;
+
+  // 화면 입력란 자동 반영
+  if(rawMat) document.getElementById('exp-raw').value = Math.round(rawMat);
+  if(subMat) document.getElementById('exp-sub').value = Math.round(subMat);
+  document.getElementById('exp-labor').value = Math.round(laborFinal);
+  document.getElementById('exp-exp').value   = Math.round(expFinal);
+
+  window._parsed.stmt = {
+    raw:rawMat, sub:subMat, laborStated:laborSt, expStated:expSt,
+    welfare, laborFinal, expFinal, totalStated:totalSt,
+    detail:{
+      급여:get('급여'), 임금:get('임금'), 잡급:get('잡급'),
+      퇴직급여:get('퇴직급여'), 퇴직급여공정별:get('(제)퇴직급여_공정별')
+    }
+  };
+
+  // 표 렌더
+  const R = v => fmtN(Math.round(v));
+  document.getElementById('stmt-table-body').innerHTML = `
+    <tr><td class="l">원재료비</td><td>${R(rawMat)}</td><td class="c" style="color:#bbb">—</td><td style="font-weight:700">${R(rawMat)}</td></tr>
+    <tr><td class="l">부재료비</td><td>${R(subMat)}</td><td class="c" style="color:#bbb">—</td><td style="font-weight:700">${R(subMat)}</td></tr>
+    <tr><td class="l">노무비</td><td>${R(laborSt)}</td><td class="c ok">+${R(welfare)}</td><td style="font-weight:700;color:var(--ok)">${R(laborFinal)}</td></tr>
+    <tr><td class="l">제조경비</td><td>${R(expSt)}</td><td class="c bad">-${R(welfare)}</td><td style="font-weight:700;color:var(--ok)">${R(expFinal)}</td></tr>
+    <tr class="total"><td class="l">당기총제조비용</td><td>${R(rawMat+subMat+laborSt+expSt)}</td><td class="c">0</td><td>${R(rawMat+subMat+laborFinal+expFinal)}</td></tr>`;
+
+  // 검증
+  const calcTotal = rawMat+subMat+laborFinal+expFinal;
+  const detailSum = Object.values(window._parsed.stmt.detail).reduce((s,v)=>s+v,0);
+  const checks = [];
+  if(totalSt>0) checks.push(Math.abs(calcTotal-totalSt)<1
+    ? `✅ 당기총제조비용 일치 (${R(totalSt)}원)`
+    : `<span style="color:var(--bad)">⚠️ 당기총제조비용 불일치: 계산 ${R(calcTotal)} ≠ 명세서 ${R(totalSt)}</span>`);
+  if(detailSum>0) checks.push(Math.abs(detailSum-laborSt)<1
+    ? `✅ 노무비 내역 합계 일치`
+    : `<span style="color:var(--bad)">⚠️ 노무비 내역 합 ${R(detailSum)} ≠ 명세서 ${R(laborSt)}</span>`);
+  if(welfare===0) checks.push(`<span style="color:var(--warn)">⚠️ (제)복리후생비(법정)_공정별 미발견 — 재분류 없이 진행됩니다</span>`);
+
+  document.getElementById('stmt-summary').innerHTML =
+    `✅ 명세서 분석 완료 — 경비·노무비 입력란에 자동 반영되었습니다.<br>${checks.join('<br>')}`
+    + `<br><span style="color:var(--sub)">※ 노무비 공정별(임금1~5) 배부 비율은 ③ ERP 노무비 전표 붙여넣기가 있어야 정확합니다. 명세서는 총액만 제공합니다.</span>`;
+  document.getElementById('stmt-table-wrap').style.display='block';
+
+  const res = document.getElementById('stmt-result');
+  res.style.display='block';
+  res.innerHTML = `✅ 노무비 ${R(laborFinal)}원 / 경비 ${R(expFinal)}원 자동 반영 (복리후생비 ${R(welfare)}원 재분류)`;
+  showToast('✅ 명세서 분석 완료 — 경비·노무비 자동 입력됨');
+  updateLaborCalc();
+  updateStepIndicators();
+};
+window.clearStatement = () => {
+  window._parsed.stmt = null;
+  document.getElementById('paste-stmt').value='';
+  document.getElementById('stmt-table-wrap').style.display='none';
+  const res=document.getElementById('stmt-result'); res.style.display='none'; res.innerHTML='';
+  updateStepIndicators();
+  showToast('🗑️ 명세서 초기화');
+};
+
 window.parseWelfare = () => {
   const raw=document.getElementById('paste-welfare').value.trim();
   if(!raw){showToast('❌ 데이터를 붙여넣기 하세요');return;}
@@ -1440,6 +1553,7 @@ window.saveAllData = async () => {
       total:laborTotal>0?laborTotal:(erp[1]||0)+(erp[2]||0)+(erp[3]||0)+(erp[4]||0)+(erp[5]||0)+(erp['급여']||0)+(erp['잡급']||0)+(erp['퇴직관리']||0)+(erp['퇴직생산']||0)
     } : null,
     laborTotal, erpQty, runsData,
+    stmtData: window._parsed.stmt || null,
     welfareData: window._parsed.welfare || null,
     updatedAt: new Date().toISOString()
   });
@@ -1452,7 +1566,7 @@ window.saveAllData = async () => {
 window.loadExistingData = async () => {
   const month=document.getElementById('inputMonth').value; if(!month)return;
   const snap=await getDoc(doc(db,'costData',month));
-  window._parsed = { inv:null, erp:null, erpQty:null, runs:null, welfare:null };
+  window._parsed = { inv:null, erp:null, erpQty:null, runs:null, welfare:null, stmt:null };
   document.getElementById('exp-labor').value='';
   document.getElementById('exp-raw').value='';
   document.getElementById('exp-sub').value='';
@@ -1464,7 +1578,8 @@ window.loadExistingData = async () => {
   document.getElementById('erpqty-table-wrap').style.display='none';
   document.getElementById('erp-table-wrap').style.display='none';
   document.getElementById('welfare-table-wrap').style.display='none';
-  ['inv-result','erp-result','welfare-result','runs-result'].forEach(id=>{
+  document.getElementById('stmt-table-wrap').style.display='none';
+  ['inv-result','erp-result','welfare-result','runs-result','stmt-result'].forEach(id=>{
     const el=document.getElementById(id); if(el){el.style.display='none'; el.innerHTML='';}
   });
   await ensureMasters();
@@ -1479,6 +1594,7 @@ window.loadExistingData = async () => {
   document.getElementById('exp-note').value=d.note||'';
   if(d.erpQty&&Object.keys(d.erpQty).length){window._parsed.erpQty=d.erpQty;}
   if(d.runsData&&Object.keys(d.runsData).length){window._parsed.runs=d.runsData;}
+  if(d.stmtData){window._parsed.stmt=d.stmtData;}
   if(d.erpLabor){
     window._parsed.erp={
       1:d.erpLabor.임금1||0, 2:d.erpLabor.임금2||0, 3:d.erpLabor.임금3||0,
