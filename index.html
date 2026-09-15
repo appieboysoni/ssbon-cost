@@ -1682,12 +1682,16 @@ function computeLaborStandard(d, bomFallback){
   const B=productBases(d,bom);
   const eL=d.erpLabor||{}; const w=d.welfareData||{};
   const g=(k)=>parseFloat(eL[k])||0, gw=(k)=>parseFloat(w[k])||0;
+  // ④ 제조원가명세서 값으로 보충: 전표(③)에 없는 급여·잡급·퇴직급여 계정을 명세서에서 가져온다
+  const sd=(d.stmtData&&d.stmtData.detail)?d.stmtData.detail:{};
+  const gs=(k)=>parseFloat(sd[k])||0;
   const e1=g('임금1')+gw('1'), e2=g('임금2')+gw('2'), e3=g('임금3')+gw('3');
   const e4=g('임금4')+gw('4'), e5=g('임금5')+gw('5');
-  const 급여=g('급여'), 잡급=g('잡급');
+  const 급여=g('급여')||gs('급여'), 잡급=g('잡급')||gs('잡급');
   // 하위호환: 구 저장분은 퇴직 단일 필드 → 전액 관리로 간주
-  const 퇴직관리=(eL.퇴직관리!==undefined?g('퇴직관리'):g('퇴직'))+gw('사무');
-  const 퇴직생산=g('퇴직생산');
+  const 퇴직관리base=(eL.퇴직관리!==undefined?g('퇴직관리'):g('퇴직'))||gs('퇴직급여');
+  const 퇴직관리=퇴직관리base+gw('사무');
+  const 퇴직생산=g('퇴직생산')||gs('퇴직급여공정별');
   const meatBase=급여+e1+e2+e3+퇴직관리;
   const pouchBase=e4+잡급+퇴직생산;
   const outerBase=e5;
