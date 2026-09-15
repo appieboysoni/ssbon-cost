@@ -114,11 +114,17 @@ tr.total td{background:var(--light);font-weight:700}
 .rpt .rpt-footer{margin-top:24px;padding-top:8px;border-top:1px solid #ccc;font-size:9pt;color:#888;display:flex;justify-content:space-between}
 .rpt .page-break{page-break-before:always;height:0;margin:0;padding:0}
 
+.memo-area .memo-input{width:100%;padding:10px 12px;border:1.5px solid #BFBFBF;border-radius:6px;font-size:10.5pt;font-family:'Malgun Gothic',Arial,sans-serif;line-height:1.6;background:#FFFDF5;resize:vertical}
+.memo-area .memo-input:focus{border-color:#1D9E75;outline:none}
+.memo-area .memo-print{display:none;white-space:pre-wrap;border:1px solid #ccc;border-radius:6px;padding:10px 12px;font-size:10.5pt;line-height:1.6;min-height:60px}
+
 @media print {
   body > *:not(#tab-report){display:none!important}
   #tab-report .report-toolbar{display:none!important}
   #tab-report .report-preview{box-shadow:none}
   .rpt{padding:15mm 15mm;max-width:100%}
+  .memo-area .memo-input,.memo-area .memo-tools{display:none!important}
+  .memo-area .memo-print{display:block!important}
   @page{size:A4;margin:10mm}
 }
 
@@ -3149,26 +3155,183 @@ const fmtM = v => (!v&&v!==0)?'—':fmt(v/1000000,1);
 const fmtPct = v => (!v&&v!==0)?'—':(v*100).toFixed(1)+'%';
 
 // 목표원가 퍼지 매칭 — Firebase 키(언더바·공백 혼용)와 그룹명 매칭
+// 목표 제조원가(원/EA) 매칭 — 규격 규칙 기반 (기획실 목표원가 시트 기준)
+// 퍼지 문자열 매칭은 "5입"을 "낱개"로 잘못 잡는 문제가 있어 규칙으로 고정
 function matchTargetCost(gname) {
-  const normalize = s => s
-    .replace(/\s+/g,'').replace(/_/g,'')
-    .replace(/\[본죽\]/g,'').replace(/【본죽】/g,'')
-    .replace(/낱개/g,'').replace(/장조림/g,'')
-    .replace(/쇠고기/g,'').toLowerCase();
-  const gNorm = normalize(gname);
-  let best = null, bestScore = 0;
-  for(const [key, cost] of Object.entries(window._targetCost)) {
-    const kNorm = normalize(key);
-    // 정규화 후 완전일치
-    if(kNorm === gNorm) return cost;
-    // 부분 포함 점수
-    const shorter = kNorm.length < gNorm.length ? kNorm : gNorm;
-    const longer  = kNorm.length < gNorm.length ? gNorm : kNorm;
-    if(longer.includes(shorter) && shorter.length > bestScore) {
-      bestScore = shorter.length; best = cost;
-    }
+  const n = String(gname||'').replace(/\s+/g,'');
+  const T = (typeof PRODUCT_TARGET_UNIT!=='undefined') ? PRODUCT_TARGET_UNIT : {};
+  const pick = k => (T[k]!=null ? T[k] : null);
+
+  if(/3kg|3KG|FC/i.test(n))               return pick('[본죽]3kg 어머니 쇠고기 장조림_FC') ?? 52000;
+  if(/코코|170/.test(n))                   return pick('[본죽]쇠고기장조림 170_코코_4입')   ?? 10480;
+  if(/460|트레/.test(n))                   return pick('[본죽]쇠고기장조림 460_트레')       ?? 5800;
+  if(/메추리알/.test(n))                    return pick('[본죽]메추리알장조림 180g')         ?? 1800;
+  if(/120g/.test(n))                       return pick('[본죽]쇠고기장조림 120g 낱개')      ?? 1840;
+  if(/130g/.test(n))                       return pick('[본죽]쇠고기장조림 130g 낱개')      ?? 1800;
+  if(/미니/.test(n)){
+    if(/5입/.test(n))                      return pick('[본죽]미니쇠고기장조림 70g_5입')    ?? 5860;
+    return pick('[본죽]미니쇠고기장조림 70g_낱개') ?? 1145;
   }
-  return best;
+  // 규칙에 없으면 Firebase 등록값 정확일치만 허용
+  const exact = window._targetCost ? window._targetCost[gname] : null;
+  return exact!=null ? exact : null;
+}
+
+// ════════════════════════════════════
+// 전월 대비 원가 변동 요인 분해 분석
+//  비율 = 비용 ÷ 생산금액 일 때, 정확분해:
+//   Δ비율 = (C1-C0)/A0  [비용효과]  +  C1×(1/A1 - 1/A0)  [조업도효과]
+//  비용효과는 다시 물량(투입량)효과 × 단가효과로 분해
+// ════════════════════════════════════
+function decomposeRatio(C0, C1, A0, A1){
+  if(!A0 || !A1) return null;
+  const r0 = C0/A0, r1 = C1/A1;
+  const costEff = (C1 - C0)/A0;              // 비용 자체 증감 기여
+  const volEff  = C1*(1/A1 - 1/A0);          // 생산금액(분모) 변화 기여
+  return { r0, r1, d: r1-r0, costEff, volEff };
+}
+// C = Q × P 구조의 2요인 분해 (물량 / 단가)
+function decomposeQP(Q0, P0, Q1, P1){
+  if(!(Q0>0&&Q1>0)) return null;
+  return { volume:(Q1-Q0)*P0, price:Q1*(P1-P0), P0, P1, Q0, Q1 };
+}
+const _pp = v => (v>=0?'+':'') + (v*100).toFixed(2) + '%p';
+const _pc = (a,b) => (b>0 ? ((a/b-1)*100) : null);
+const _sg = v => (v>=0?'+':'') + v.toFixed(1) + '%';
+
+function buildCostAnalysis(cur, prev){
+  if(!prev) return '<div class="warn-box">전월 데이터가 없어 비교 분석을 생성할 수 없습니다.</div>';
+  const A1=cur.prodAmt, A0=prev.prodAmt;
+  if(!A0||!A1) return '<div class="warn-box">생산금액이 없어 비교 분석을 생성할 수 없습니다.</div>';
+  const q1=cur.totalQty||0, q0=prev.totalQty||0;
+  const m1=cur.totalMeatKg||0, m0=prev.totalMeatKg||0;
+  const S=[];
+
+  const line = (label, dec, extra) => {
+    const dir = dec.d>0 ? '<span class="bad">상승</span>' : dec.d<0 ? '<span class="ok">하락</span>' : '보합';
+    return `<tr>
+      <td class="l"><b>${label}</b></td>
+      <td class="c">${(dec.r0*100).toFixed(2)}%</td>
+      <td class="c">${(dec.r1*100).toFixed(2)}%</td>
+      <td class="c ${dec.d>0?'bad':'ok'}"><b>${_pp(dec.d)}</b></td>
+      <td class="c ${dec.costEff>0?'bad':'ok'}">${_pp(dec.costEff)}</td>
+      <td class="c ${dec.volEff>0?'bad':'ok'}">${_pp(dec.volEff)}</td>
+      <td class="l" style="font-size:9.5pt">${dir} — ${extra}</td>
+    </tr>`;
+  };
+
+  // ── 원재료: 원육투입량 × kg단가
+  const dRaw = decomposeRatio(prev.sum.raw, cur.sum.raw, A0, A1);
+  let rawNote='', rawDetail='';
+  if(m0>0&&m1>0){
+    const qp = decomposeQP(m0, prev.sum.raw/m0, m1, cur.sum.raw/m1);
+    const pUp = qp.P1>qp.P0;
+    rawNote = `원육 ${_sg(_pc(m1,m0))}, kg단가 ${_sg(_pc(qp.P1,qp.P0))}`;
+    rawDetail = `<div class="section-box">
+      <b>▶ 원재료비 상세</b><br>
+      · 원육 투입량: ${Math.round(m0).toLocaleString()}kg → <b>${Math.round(m1).toLocaleString()}kg</b> (${_sg(_pc(m1,m0))})<br>
+      · 원육 kg당 원재료비: ${Math.round(qp.P0).toLocaleString()}원 → <b>${Math.round(qp.P1).toLocaleString()}원</b> (${_sg(_pc(qp.P1,qp.P0))})<br>
+      · 금액 증감 분해: 투입량 요인 <b>${(qp.volume/1000000).toFixed(1)}백만</b> / 단가·수율 요인 <b>${(qp.price/1000000).toFixed(1)}백만</b><br>
+      <span style="color:#555">→ ${Math.abs(qp.price)>Math.abs(qp.volume)
+        ? `<b>단가·수율 요인이 지배적</b>입니다. kg당 원재료비가 ${pUp?'올라':'내려'}갔다는 것은 원육 매입단가 상승 또는 수율 저하(같은 투입으로 완제품이 덜 나옴)를 의미합니다. 수율 실적을 함께 확인하시기 바랍니다.`
+        : `<b>투입량 요인이 지배적</b>입니다. kg당 단가는 ${pUp?'소폭 상승':'안정적'}이며 생산 확대에 따른 자연스러운 증감으로 판단됩니다.`}</span>
+    </div>`;
+  } else rawNote = '원육 투입량 데이터 없음';
+  if(dRaw) S.push(line('원재료비', dRaw, rawNote));
+
+  // ── 부재료: 생산수량 × EA당 부재료비
+  const dSub = decomposeRatio(prev.sum.sub, cur.sum.sub, A0, A1);
+  let subNote='', subDetail='';
+  if(q0>0&&q1>0){
+    const qp = decomposeQP(q0, prev.sum.sub/q0, q1, cur.sum.sub/q1);
+    subNote = `수량 ${_sg(_pc(q1,q0))}, EA당 ${_sg(_pc(qp.P1,qp.P0))}`;
+    subDetail = `<div class="section-box">
+      <b>▶ 부재료비 상세</b><br>
+      · 생산수량: ${q0.toLocaleString()}EA → <b>${q1.toLocaleString()}EA</b> (${_sg(_pc(q1,q0))})<br>
+      · EA당 부재료비: ${Math.round(qp.P0).toLocaleString()}원 → <b>${Math.round(qp.P1).toLocaleString()}원</b> (${_sg(_pc(qp.P1,qp.P0))})<br>
+      · 금액 증감 분해: 생산량 요인 <b>${(qp.volume/1000000).toFixed(1)}백만</b> / 단가·사용량 요인 <b>${(qp.price/1000000).toFixed(1)}백만</b><br>
+      <span style="color:#555">→ ${Math.abs(qp.price)>Math.abs(qp.volume)
+        ? `<b>EA당 사용액 변동이 주원인</b>입니다. 포장재 단가 인상 또는 제품 믹스 변화(고가 포장재 비중 증가)를 점검하시기 바랍니다.`
+        : `<b>생산량 증감에 따른 변동</b>으로, EA당 사용액은 안정적입니다.`}</span>
+    </div>`;
+  } else subNote = '생산수량 데이터 없음';
+  if(dSub) S.push(line('부재료비', dSub, subNote));
+
+  // ── 노무비: 생산수량 × EA당 노무비 (생산성 지표)
+  const dLab = decomposeRatio(prev.sum.labor, cur.sum.labor, A0, A1);
+  let labNote='', labDetail='';
+  if(q0>0&&q1>0){
+    const qp = decomposeQP(q0, prev.sum.labor/q0, q1, cur.sum.labor/q1);
+    const prod0 = A0/prev.sum.labor, prod1 = A1/cur.sum.labor;   // 노무비 1원당 생산금액
+    labNote = `노무비총액 ${_sg(_pc(cur.sum.labor,prev.sum.labor))}, 생산금액 ${_sg(_pc(A1,A0))}`;
+    labDetail = `<div class="section-box">
+      <b>▶ 노무비 상세</b><br>
+      · 노무비 총액: ${(prev.sum.labor/1000000).toFixed(1)}백만 → <b>${(cur.sum.labor/1000000).toFixed(1)}백만</b> (${_sg(_pc(cur.sum.labor,prev.sum.labor))})<br>
+      · 생산금액: ${(A0/1000000).toFixed(1)}백만 → <b>${(A1/1000000).toFixed(1)}백만</b> (${_sg(_pc(A1,A0))})<br>
+      · EA당 노무비: ${Math.round(qp.P0).toLocaleString()}원 → <b>${Math.round(qp.P1).toLocaleString()}원</b> (${_sg(_pc(qp.P1,qp.P0))})<br>
+      · 노무 생산성(노무비 1원당 생산금액): ${prod0.toFixed(2)} → <b>${prod1.toFixed(2)}</b> (${_sg(_pc(prod1,prod0))})<br>
+      <span style="color:#555">→ ${
+        dLab.d<0 && _pc(A1,A0)>_pc(cur.sum.labor,prev.sum.labor)
+          ? `<b>생산금액 증가율(${_sg(_pc(A1,A0))})이 노무비 증가율(${_sg(_pc(cur.sum.labor,prev.sum.labor))})을 상회</b>했습니다. 공정 인원이 늘었더라도 늘어난 물량을 더 적은 인원 증가로 소화했다는 뜻이며, 1인당 생산성이 개선된 것으로 해석됩니다.`
+          : dLab.d<0
+          ? `노무비 총액이 감소하여 비율이 낮아졌습니다. 연장·야간 근무 축소 또는 인원 조정 여부를 확인하시기 바랍니다.`
+          : `<b>노무비 증가율이 생산금액 증가율을 상회</b>했습니다. 신규 인원 투입 대비 물량이 따라오지 못했거나 연장근무가 늘었을 가능성이 있습니다.`}</span>
+    </div>`;
+  } else labNote = `노무비 ${_sg(_pc(cur.sum.labor,prev.sum.labor))}`;
+  if(dLab) S.push(line('노무비', dLab, labNote));
+
+  // ── 경비: 고정비 성격 → 조업도 효과 중심
+  const dExp = decomposeRatio(prev.sum.exp, cur.sum.exp, A0, A1);
+  let expDetail='';
+  if(dExp){
+    S.push(line('경비', dExp, `경비총액 ${_sg(_pc(cur.sum.exp,prev.sum.exp))}, 생산금액 ${_sg(_pc(A1,A0))}`));
+    expDetail = `<div class="section-box">
+      <b>▶ 경비 상세</b><br>
+      · 경비 총액: ${(prev.sum.exp/1000000).toFixed(1)}백만 → <b>${(cur.sum.exp/1000000).toFixed(1)}백만</b> (${_sg(_pc(cur.sum.exp,prev.sum.exp))})<br>
+      · 비용효과 ${_pp(dExp.costEff)} / 조업도효과 ${_pp(dExp.volEff)}<br>
+      <span style="color:#555">→ ${Math.abs(dExp.volEff)>Math.abs(dExp.costEff)
+        ? `경비는 감가상각·전력비 등 <b>고정비 성격이 강해 총액 변동은 작고, 생산금액 변화(조업도)가 비율을 좌우</b>했습니다. 생산금액이 ${A1>A0?'늘어 단위당 고정비 부담이 줄었습니다':'줄어 단위당 고정비 부담이 커졌습니다'}.`
+        : `<b>경비 총액 자체가 ${cur.sum.exp>prev.sum.exp?'증가':'감소'}</b>하여 비율에 더 큰 영향을 주었습니다. 수선비·소모품비 등 변동 항목의 특이 지출 여부를 확인하시기 바랍니다.`}</span>
+    </div>`;
+  }
+
+  const dTot = decomposeRatio(prev.sum.total, cur.sum.total, A0, A1);
+  const totRow = dTot ? `<tr class="total">
+      <td class="l"><b>제조원가율</b></td>
+      <td class="c">${(dTot.r0*100).toFixed(2)}%</td>
+      <td class="c">${(dTot.r1*100).toFixed(2)}%</td>
+      <td class="c ${dTot.d>0?'bad':'ok'}"><b>${_pp(dTot.d)}</b></td>
+      <td class="c">${_pp(dTot.costEff)}</td>
+      <td class="c">${_pp(dTot.volEff)}</td>
+      <td class="l"></td></tr>` : '';
+
+  // 기여도 순위
+  const contrib = [];
+  if(dRaw) contrib.push(['원재료비', dRaw.d]);
+  if(dSub) contrib.push(['부재료비', dSub.d]);
+  if(dLab) contrib.push(['노무비', dLab.d]);
+  if(dExp) contrib.push(['경비', dExp.d]);
+  contrib.sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+  const top = contrib[0];
+
+  return `
+    <p>원가율(비용 ÷ 생산금액)의 전월 대비 변동을 <b>비용효과</b>(비용 자체의 증감)와 <b>조업도효과</b>(생산금액 변화에 따른 희석·집중)로 분해했습니다. 두 효과의 합은 실제 변동과 정확히 일치합니다.</p>
+    <table>
+      <thead><tr>
+        <th class="l">항목</th><th>전월 비율</th><th>당월 비율</th><th>변동</th>
+        <th>비용효과</th><th>조업도효과</th><th class="l">요약</th>
+      </tr></thead>
+      <tbody>${S.join('')}${totRow}</tbody>
+    </table>
+    ${dTot ? `<div class="${dTot.d>0?'warn-box':'section-box'}">
+      <b>▶ 총평:</b> 당월 제조원가율은 <b>${(dTot.r1*100).toFixed(1)}%</b>로 전월 대비 <b class="${dTot.d>0?'bad':'ok'}">${_pp(dTot.d)}</b> ${dTot.d>0?'상승':'하락'}했습니다.
+      ${top ? `변동에 가장 크게 기여한 항목은 <b>${top[0]}(${_pp(top[1])})</b>입니다.` : ''}
+      ${dTot.volEff<0 ? ' 생산금액 증가로 고정비가 희석되는 효과가 원가율 개선에 기여했습니다.' : dTot.volEff>0 ? ' 생산금액 감소로 단위당 고정비 부담이 늘어난 점이 원가율에 부담으로 작용했습니다.' : ''}
+    </div>` : ''}
+    ${rawDetail}${subDetail}${labDetail}${expDetail}
+    <div class="warn-box" style="font-size:9.5pt">
+      ※ 본 분석은 월 합계 수치를 기계적으로 분해한 <b>참고용 초안</b>입니다. 수율 실적, 인원 변동, 특이 지출 등 현장 정보를 반영한 최종 해석은 아래 실무자 검토 의견란에 기재하시기 바랍니다.
+    </div>`;
 }
 
 function rptHeader(title, subtitle, date) {
@@ -3254,6 +3417,22 @@ function rptTrendTable(allRows) {
   }).join('');
   return `<table><thead>${hdr}</thead><tbody>${trs}</tbody></table>`;
 }
+
+window.saveReportMemo = async () => {
+  const month = document.getElementById('reportMonth').value;
+  if(!month){ showToast('❌ 기준월을 선택하세요'); return; }
+  const ta = document.getElementById('report-memo');
+  if(!ta) return;
+  const text = ta.value;
+  try{
+    await setDoc(doc(db,'costData',month), { reportMemo: text, updatedAt:new Date().toISOString() }, { merge:true });
+    const pv = document.querySelector('.memo-area .memo-print');
+    if(pv) pv.textContent = text;
+    const st = document.getElementById('memo-status');
+    if(st){ st.textContent = `✅ ${month} 검토 의견 저장됨 (${new Date().toLocaleTimeString('ko-KR')})`; }
+    showToast('✅ 검토 의견 저장 완료');
+  }catch(e){ showToast('❌ 저장 실패: '+e.message); }
+};
 
 window.buildReport = async (type) => {
   const month = document.getElementById('reportMonth').value;
@@ -3540,8 +3719,26 @@ async function buildMonthlyReport(month, y, m, dateStr) {
       목표원가 등록은 설정탭 &gt; 목표 제조원가 관리에서 수정할 수 있습니다.
     </div>`:'<div class="warn-box">⚠️ 목표원가가 등록되지 않았습니다. 설정탭 &gt; 목표 제조원가 관리에서 등록해주세요.</div>'}
 
-    <!-- 5. 노무비 배부 방식 현황 -->
-    <h1>5. 노무비 배부 방식 현황</h1>
+    <!-- 5. 전월 대비 원가 변동 요인 분석 -->
+    <h1>5. 전월 대비 원가 변동 요인 분석</h1>
+    ${buildCostAnalysis(
+      {prodAmt, sum, totalQty: cc.totalQty, totalMeatKg: cc.totalMeatKg},
+      prevCc ? {prodAmt: prevProd, sum: prevSum, totalQty: prevCc.totalQty, totalMeatKg: prevCc.totalMeatKg} : null
+    )}
+
+    <h1>6. 실무자 검토 의견</h1>
+    <p>현장 확인 결과와 후속 조치를 기재합니다. 저장하면 해당 월에 보관되며 인쇄·PDF에도 함께 출력됩니다.</p>
+    <div class="memo-area">
+      <textarea id="report-memo" class="memo-input" rows="9" placeholder="예) 원육 kg단가 상승은 8월 수입 설도 매입가 인상분 반영. 수율은 전월 대비 개선(53.6%→54.1%)되어 추가 영향 없음.&#10;예) 노무비 — 9월 야간조 편성으로 인원 5명 증원했으나 물량이 더 크게 늘어 비율은 하락."></textarea>
+      <div class="memo-print"></div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center" class="memo-tools">
+        <button class="btn btn-ok btn-sm" onclick="saveReportMemo()">💾 검토 의견 저장</button>
+        <span id="memo-status" style="font-size:11px;color:var(--sub)"></span>
+      </div>
+    </div>
+
+    <!-- 7. 노무비 배부 방식 현황 -->
+    <h1>7. 노무비 배부 방식 현황</h1>
     <table>
       <thead><tr><th>공정</th><th>배부 기준</th><th>대상 임금 항목</th><th>비고</th></tr></thead>
       <tbody>
@@ -3555,8 +3752,8 @@ async function buildMonthlyReport(month, y, m, dateStr) {
       📌 노무비는 ERP 공정별 전표 기준(원육/파우치/외포장) 배부, 경비는 제품별 생산횟수 비중으로 배부됩니다.
     </div>
 
-    <!-- 6. 비고 및 향후 과제 -->
-    <h1>6. 비고 및 향후 과제</h1>
+    <!-- 8. 비고 및 향후 과제 -->
+    <h1>8. 비고 및 향후 과제</h1>
     <ul>
       <li>원·부재료비는 BOM 4단계 계산으로 ERP 확정값과 차이 없이 검증 완료됩니다.</li>
       <li>노무비·경비는 ERP 최종 마감 후 원단위 입력 기준이며, 배부 방식에 따라 제품별 금액이 달라질 수 있습니다.</li>
@@ -3573,6 +3770,13 @@ async function buildMonthlyReport(month, y, m, dateStr) {
   </div>`;
 
   document.getElementById('report-content').innerHTML = html;
+  const memo = d.reportMemo || '';
+  const ta = document.getElementById('report-memo');
+  if(ta) ta.value = memo;
+  const pv = document.querySelector('.memo-area .memo-print');
+  if(pv) pv.textContent = memo;
+  const st = document.getElementById('memo-status');
+  if(st && memo) st.textContent = '📄 저장된 검토 의견을 불러왔습니다';
   showToast('✅ 월간 보고서 생성 완료');
 }
 
