@@ -223,6 +223,55 @@ tr.total td{background:var(--light);font-weight:700}
       </table></div>
     </div>
   </div>
+
+  <!-- ── 제품별 원가율 분기 비교 차트 ── -->
+  <div class="card">
+    <div class="card-hdr">📊 제품별 원가율 분기 비교</div>
+    <div class="card-body">
+      <div class="info-box">보고싶은 제품을 선택하면 분기별 <b>개당 제조원가(원/EA)</b> 추이를 비교합니다. 기획실 <b>2공장_제품별_제조단가_26년</b> 확정값의 분기 수량가중평균이며, <b>목표 제조원가</b>는 점선으로 함께 표시됩니다. (아래 요약표와 동일 기준)</div>
+      <div id="quarter-product-select" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;padding:10px;background:#f8f9fa;border-radius:8px;border:1px solid #e0e0e0;min-height:40px">
+        <span style="color:#aaa;font-size:11px;align-self:center" id="quarter-select-placeholder">제품 목록을 불러오는 중입니다...</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn btn-primary btn-sm" onclick="selectAllQuarter()">전체 선택</button>
+        <button class="btn btn-primary btn-sm" onclick="deselectAllQuarter()">전체 해제</button>
+      </div>
+      <div class="quarter-chart-wrap">
+        <canvas id="chartQuarter"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 제품별 제조단가 요약 (2공장_제품별_제조단가_26년) ── -->
+  <div class="card">
+    <div class="card-hdr">📒 제품별 제조단가 요약 (2026년 누적 · 목표 대비)</div>
+    <div class="card-body">
+      <div class="info-box">
+        기획실 <b>2공장_제품별_제조단가_26년</b> 자료 기준입니다. 생산 실적이 있는 월만 집계되며,
+        <b>목표 제조원가율</b> 대비 달성 여부를 함께 표시합니다. (생산 없는 월은 평균에서 제외)
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th style="min-width:210px">제품명</th><th>누적 수량</th><th>누적 생산금액</th>
+          <th>누적 제조원가</th><th>개당 제조원가</th><th>누적 원가율</th>
+          <th>목표 원가율</th><th>목표 대비</th><th>판정</th>
+        </tr></thead>
+        <tbody id="unitcost-body"></tbody>
+      </table></div>
+
+      <div class="sec" style="margin-top:16px">월별 개당 제조원가 추이 (원/EA)</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr id="unitcost-month-head"></tr></thead>
+        <tbody id="unitcost-month-body"></tbody>
+      </table></div>
+
+      <div class="sec" style="margin-top:16px">월별 제조원가율 추이</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr id="unitcost-rate-head"></tr></thead>
+        <tbody id="unitcost-rate-body"></tbody>
+      </table></div>
+    </div>
+  </div>
 </div>
 
 <!-- ══ 데이터 입력 ══ -->
@@ -447,54 +496,6 @@ tr.total td{background:var(--light);font-weight:700}
     </div>
   </div>
 
-  <!-- ── 제품별 원가율 분기 비교 차트 ── -->
-  <div class="card">
-    <div class="card-hdr">📊 제품별 원가율 분기 비교</div>
-    <div class="card-body">
-      <div class="info-box">보고싶은 제품을 선택하면 분기별 <b>개당 제조원가(원/EA)</b> 추이를 비교합니다. 기획실 <b>2공장_제품별_제조단가_26년</b> 확정값의 분기 수량가중평균이며, <b>목표 제조원가</b>는 점선으로 함께 표시됩니다. (아래 요약표와 동일 기준)</div>
-      <div id="quarter-product-select" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;padding:10px;background:#f8f9fa;border-radius:8px;border:1px solid #e0e0e0;min-height:40px">
-        <span style="color:#aaa;font-size:11px;align-self:center" id="quarter-select-placeholder">제품별 원가 탭을 열면 제품 목록이 나타납니다...</span>
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <button class="btn btn-primary btn-sm" onclick="selectAllQuarter()">전체 선택</button>
-        <button class="btn btn-primary btn-sm" onclick="deselectAllQuarter()">전체 해제</button>
-      </div>
-      <div class="quarter-chart-wrap">
-        <canvas id="chartQuarter"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── 제품별 제조단가 요약 (2공장_제품별_제조단가_26년) ── -->
-  <div class="card">
-    <div class="card-hdr">📒 제품별 제조단가 요약 (2026년 누적 · 목표 대비)</div>
-    <div class="card-body">
-      <div class="info-box">
-        기획실 <b>2공장_제품별_제조단가_26년</b> 자료 기준입니다. 생산 실적이 있는 월만 집계되며,
-        <b>목표 제조원가율</b> 대비 달성 여부를 함께 표시합니다. (생산 없는 월은 평균에서 제외)
-      </div>
-      <div class="tbl-wrap"><table>
-        <thead><tr>
-          <th style="min-width:210px">제품명</th><th>누적 수량</th><th>누적 생산금액</th>
-          <th>누적 제조원가</th><th>개당 제조원가</th><th>누적 원가율</th>
-          <th>목표 원가율</th><th>목표 대비</th><th>판정</th>
-        </tr></thead>
-        <tbody id="unitcost-body"></tbody>
-      </table></div>
-
-      <div class="sec" style="margin-top:16px">월별 개당 제조원가 추이 (원/EA)</div>
-      <div class="tbl-wrap"><table>
-        <thead><tr id="unitcost-month-head"></tr></thead>
-        <tbody id="unitcost-month-body"></tbody>
-      </table></div>
-
-      <div class="sec" style="margin-top:16px">월별 제조원가율 추이</div>
-      <div class="tbl-wrap"><table>
-        <thead><tr id="unitcost-rate-head"></tr></thead>
-        <tbody id="unitcost-rate-body"></tbody>
-      </table></div>
-    </div>
-  </div>
 </div>
 
 <!-- ══ 월별 이력 ══ -->
@@ -1824,8 +1825,21 @@ function computeMonthCost(d, bomFallback) {
     sum.raw+=rawCost;sum.sub+=subCost;sum.labor+=laborAlloc;sum.exp+=expCost;sum.total+=totalCost;
   }
   const totalMeatKg = Object.values(meatBy).reduce((s,v)=>s+v, 0);
+  // 제품별 상세(재고평가·생산실적)가 없는 달 → 저장된 월 합계로 대체 (일괄반영 월 등)
+  let totalsFallback = false;
+  if(!rows.length){
+    const fRaw   = parseFloat(d.raw)||0;
+    const fSub   = parseFloat(d.sub)||0;
+    const fLabor = parseFloat(d.laborTotal)||parseFloat(eL.total)||0;
+    const fExp   = parseFloat(d.exp)||0;
+    if(fRaw||fSub||fLabor||fExp){
+      sum.raw=fRaw; sum.sub=fSub; sum.labor=fLabor; sum.exp=fExp;
+      sum.total=fRaw+fSub+fLabor+fExp;
+      totalsFallback = true;
+    }
+  }
   return {rows,sum,prodAmt:d.prodAmt||0,totalQty,totalMeatKg,laborBases:L.bases,laborDetail:L.detail,laborWarn:L.warn,
-          expWarn:expShares.warn};
+          expWarn:expShares.warn,totalsFallback};
 }
 
 // ════════════════════════════════════
@@ -2615,11 +2629,6 @@ window.loadProducts = async () => {
     </tr>`;
   }).join('');
 
-  // 분기 비교 차트 렌더
-  await renderQuarterChart();
-
-  // 제품별 제조단가 요약 표
-  renderUnitCostTables();
 };
 
 // ════════════════════════════════════
@@ -2702,6 +2711,10 @@ window.loadDashboard = async () => {
   // 차트 렌더
   renderCostRateChart(trendRows);
   renderProductionChart(trendRows);
+
+  // 제품별 분기 비교 차트 + 제조단가 요약표 (기획실 확정값 기준)
+  await renderQuarterChart();
+  renderUnitCostTables();
 
   // 당월 KPI
   const snap=await getDoc(doc(db,'costData',month));
