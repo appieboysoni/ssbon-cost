@@ -1111,14 +1111,14 @@ function updateStepIndicators() {
 // prodAmt: 제조원가율 시트 생산금액(원) = 생산중량(g)×40원 신규기준 (기존 EA×판매단가 기준 대체)
 // labor/exp/raw/sub: 각 월 "생산수량, 생산금액" 시트 합계 행(N2~Q2) 원 단위 정밀값
 const BULK_PLAN = [
-  { month:'2026-01', prodAmt:961851600,  labor:106092923, exp:148466408, raw:202597392, sub:22156033, oldTab:699927366 },
-  { month:'2026-02', prodAmt:841192000,  labor:112148441, exp:143418569, raw:170614241, sub:20280865, oldTab:641020700 },
-  { month:'2026-03', prodAmt:1452389200, labor:110925858, exp:150799260, raw:289445671, sub:29418970, oldTab:945988715 },
-  { month:'2026-04', prodAmt:1636459200, labor:119623229, exp:170195642, raw:342238846, sub:26398419, oldTab:1128349016 },
-  { month:'2026-05', prodAmt:1542995600, labor:120208540, exp:171153849, raw:391639382, sub:20025566, oldTab:1007857597 },
-  { month:'2026-06', prodAmt:2726456000, labor:141740758, exp:202412403, raw:851195303, sub:25949730, oldTab:1448924348 },
-  { month:'2026-07', prodAmt:2117248800, labor:134465198, exp:197415501, raw:472461166, sub:37925423, oldTab:null },
-  { month:'2026-08', prodAmt:2488581600, labor:143197444, exp:217693535, raw:581510229, sub:35362526, oldTab:null }
+  { month:'2026-01', prodAmt:961851600,  labor:106092923, exp:148466408, raw:202597392, sub:22156033, oldTab:699927366 , qty:90640, meatKg:14417.2},
+  { month:'2026-02', prodAmt:841192000,  labor:112148441, exp:143418569, raw:170614241, sub:20280865, oldTab:641020700 , qty:86756, meatKg:12169.1},
+  { month:'2026-03', prodAmt:1452389200, labor:110925858, exp:150799260, raw:289445671, sub:29418970, oldTab:945988715 , qty:116421, meatKg:20308.6},
+  { month:'2026-04', prodAmt:1636459200, labor:119623229, exp:170195642, raw:342238846, sub:26398419, oldTab:1128349016 , qty:190430, meatKg:20843.3},
+  { month:'2026-05', prodAmt:1542995600, labor:120208540, exp:171153849, raw:391639382, sub:20025566, oldTab:1007857597 , qty:167000, meatKg:24045.0},
+  { month:'2026-06', prodAmt:2726456000, labor:141740758, exp:202412403, raw:851195303, sub:25949730, oldTab:1448924348 , qty:93400, meatKg:54082.6},
+  { month:'2026-07', prodAmt:2117248800, labor:134465198, exp:197415501, raw:472461166, sub:37925423, oldTab:null , qty:238766, meatKg:28783.4},
+  { month:'2026-08', prodAmt:2488581600, labor:143197444, exp:217693535, raw:581510229, sub:35362526, oldTab:null , qty:129383, meatKg:36478.8}
 ];
 function renderBulkPlan() {
   const tb = document.getElementById('bulk-plan-body');
@@ -1137,7 +1137,7 @@ window.applyBulkPlan = async () => {
     prodAmt: parseFloat(document.getElementById(`bp-prod-${i}`).value)||0,
     laborTotal: parseFloat(document.getElementById(`bp-labor-${i}`).value)||0,
     exp: parseFloat(document.getElementById(`bp-exp-${i}`).value)||0,
-    raw: p.raw, sub: p.sub
+    raw: p.raw, sub: p.sub, qty: p.qty||0, meatKg: p.meatKg||0
   }));
   const bad = rows.filter(r=>r.prodAmt<=0||r.laborTotal<=0||r.exp<=0);
   if(bad.length){ showToast('❌ 0 이하 값이 있습니다: '+bad.map(r=>r.month).join(', ')); return; }
@@ -1155,6 +1155,7 @@ window.applyBulkPlan = async () => {
       await setDoc(ref, {
         month: r.month, prodAmt: r.prodAmt, laborTotal: r.laborTotal,
         exp: r.exp, raw: r.raw, sub: r.sub, note,
+        totalQtyPlan: r.qty, totalMeatKgPlan: r.meatKg,
         updatedAt: new Date().toISOString()
       }, { merge:true });
       done.push(r.month);
@@ -1824,7 +1825,13 @@ function computeMonthCost(d, bomFallback) {
     rows.push({code,qty,rawCost,subCost,laborAlloc,expCost,totalCost});
     sum.raw+=rawCost;sum.sub+=subCost;sum.labor+=laborAlloc;sum.exp+=expCost;sum.total+=totalCost;
   }
-  const totalMeatKg = Object.values(meatBy).reduce((s,v)=>s+v, 0);
+  let totalMeatKg = Object.values(meatBy).reduce((s,v)=>s+v, 0);
+  let totalQtyOut = totalQty;
+  // 실측 원육투입량·생산수량이 저장돼 있으면 우선 사용 (BOM 이론치는 완제품 고기중량이라 투입량과 다름)
+  const planMeat = parseFloat(d.totalMeatKgPlan)||0;
+  const planQty  = parseFloat(d.totalQtyPlan)||0;
+  if(planMeat>0) totalMeatKg = planMeat;
+  if(!totalQtyOut && planQty>0) totalQtyOut = planQty;
   // 제품별 상세(재고평가·생산실적)가 없는 달 → 저장된 월 합계로 대체 (일괄반영 월 등)
   let totalsFallback = false;
   if(!rows.length){
@@ -1838,7 +1845,7 @@ function computeMonthCost(d, bomFallback) {
       totalsFallback = true;
     }
   }
-  return {rows,sum,prodAmt:d.prodAmt||0,totalQty,totalMeatKg,laborBases:L.bases,laborDetail:L.detail,laborWarn:L.warn,
+  return {rows,sum,prodAmt:d.prodAmt||0,totalQty:totalQtyOut,totalMeatKg,laborBases:L.bases,laborDetail:L.detail,laborWarn:L.warn,
           expWarn:expShares.warn,totalsFallback};
 }
 
