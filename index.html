@@ -207,7 +207,7 @@ tr.total td{background:var(--light);font-weight:700}
     <div class="card-hdr">📋 원가 구성 (당월 vs 전월)</div>
     <div class="card-body">
       <div class="tbl-wrap"><table>
-        <thead><tr><th>항목</th><th>당월 금액(백만)</th><th>당월 비율</th><th>전월 금액(백만)</th><th>전월 비율</th><th>증감</th></tr></thead>
+        <thead><tr><th>항목</th><th>당월 금액(백만)</th><th>당월 비율<br><span style="font-size:10px;font-weight:400">제조원가대비 (생산금액대비)</span></th><th>전월 금액(백만)</th><th>전월 비율<br><span style="font-size:10px;font-weight:400">제조원가대비 (생산금액대비)</span></th><th>증감</th></tr></thead>
         <tbody id="dashCostBody"><tr><td colspan="6" class="loading">로딩중...</td></tr></tbody>
       </table></div>
     </div>
@@ -567,6 +567,11 @@ tr.total td{background:var(--light);font-weight:700}
         <button class="btn btn-ok btn-sm" onclick="saveGramRate()">💾 저장</button>
         <span id="gramRateSaved" style="font-size:11px;color:var(--ok);display:none">✅ 저장됨</span>
         <span style="font-size:11px;color:var(--sub);width:100%">생산금액 = Σ(제품별 입고수량 × 제품중량(g) × 이 단가). 단가 변경 시 데이터 입력 탭에서 "생산금액 자동계산"을 다시 눌러주세요.</span>
+        <div style="width:100%;border-top:1px dashed var(--ok);margin-top:8px;padding-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-warn btn-sm" onclick="recalcSupplyByWeight()">⚖️ 공급단가 일괄 재계산 (중량 × 원/g)</button>
+          <span style="font-size:11px;color:var(--sub)">전 제품 공급단가를 <b>중량(g) × 위 단가</b>로 통일합니다 — 대시보드 제품별 원가율과 제조단가 요약의 기준이 일치하게 됩니다.</span>
+          <div id="weight-check" style="width:100%;font-size:11px"></div>
+        </div>
       </div>
       <div class="sec" style="margin-top:16px">등록된 제품 목록</div>
       <div class="tbl-wrap"><table>
@@ -1028,6 +1033,54 @@ window.recalcAllSupply = async () => {
   }
   showToast('✅ 전체 재계산 완료'); loadMaster();
 };
+
+// ── 공급단가 일괄 재계산: 중량(g) × 원/g (신규 생산금액 기준과 통일)
+window.recalcSupplyByWeight = async () => {
+  await ensureMasters();
+  const gr = parseFloat(document.getElementById('gramRate').value)||40;
+  const noWeight = window._masters.filter(p => !(parseFloat(p.weight)>0));
+  // 규격(예: 170g*4입)과 등록 중량 정합성 검사
+  const mismatch = [];
+  for(const p of window._masters){
+    const w = parseFloat(p.weight)||0;
+    const sp = String(p.spec||'').replace(/\s/g,'');
+    let expect = null;
+    const mm = sp.match(/^([\d.]+)g\*(\d+)입$/);
+    if(mm) expect = parseFloat(mm[1])*parseInt(mm[2]);
+    else { const s1 = sp.match(/^([\d.]+)g$/i); if(s1) expect = parseFloat(s1[1]); }
+    if(expect!=null && w>0 && Math.abs(expect-w)>0.5) mismatch.push({p, w, expect});
+  }
+  let msg = `전 제품 공급단가를 "중량(g) × ${gr}원" 으로 재계산합니다.\n`;
+  if(noWeight.length) msg += `\n⚠️ 중량 미등록 ${noWeight.length}개는 건너뜁니다: ${noWeight.map(x=>x.code).join(', ')}`;
+  if(mismatch.length) msg += `\n\n🔴 규격과 중량이 맞지 않는 제품이 있습니다 (그대로 진행되면 단가가 틀어집니다):\n`
+    + mismatch.map(x=>`  ${x.p.code} ${x.p.name} — 등록 ${x.w}g / 규격상 ${x.expect}g`).join('\n')
+    + `\n\n먼저 중량을 수정하는 것을 권장합니다. 그래도 진행할까요?`;
+  else msg += `\n진행할까요?`;
+  if(!confirm(msg)) return;
+
+  let n=0;
+  for(const p of window._masters){
+    const w = parseFloat(p.weight)||0;
+    if(w<=0) continue;
+    await setDoc(doc(db,'products',p.code), {...p, supplyPrice: Math.round(w*gr)});
+    n++;
+  }
+  window._masters = [];
+  showToast(`✅ ${n}개 제품 공급단가를 중량 기준으로 재계산했습니다`);
+  loadMaster();
+  renderWeightCheck(mismatch, noWeight);
+};
+
+function renderWeightCheck(mismatch, noWeight){
+  const el = document.getElementById('weight-check');
+  if(!el) return;
+  if(!mismatch.length && !noWeight.length){ el.innerHTML = '<span style="color:var(--ok)">✅ 전 제품 규격·중량 정합성 이상 없음</span>'; return; }
+  let h = '';
+  if(mismatch.length) h += `<span style="color:var(--bad)">🔴 규격↔중량 불일치 ${mismatch.length}건: `
+    + mismatch.map(x=>`${x.p.code}(등록 ${x.w}g / 규격상 ${x.expect}g)`).join(', ') + '</span><br>';
+  if(noWeight.length) h += `<span style="color:var(--warn)">⚠️ 중량 미등록 ${noWeight.length}건: ${noWeight.map(x=>x.code).join(', ')}</span>`;
+  el.innerHTML = h;
+}
 
 // ════════════════════════════════════
 // BOM 관리
@@ -2789,17 +2842,20 @@ window.loadDashboard = async () => {
     ['노무비',c.labor,prevC?.labor||0],['경비',c.exp,prevC?.exp||0],
     ['합계',total,prevC?.total||0]
   ];
+  const sub2 = v => `<span style="color:var(--sub);font-size:11px">(${v})</span>`;
   document.getElementById('dashCostBody').innerHTML=items.map(([label,cv,pv])=>{
     const isT=label==='합계';
-    const cr=total>0?cv/total:0;
+    const cr=total>0?cv/total:0;                       // 제조원가 대비 구성비
     const pr=prevC&&prevC.total>0&&pv?pv/prevC.total:0;
+    const crAct=prodAmt>0?cv/prodAmt:0;                // 생산금액 대비 실제 비율
+    const prAct=prevProd>0&&pv?pv/prevProd:0;
     const dF=pv?cv-pv:null;
     return `<tr ${isT?'class="total"':''}>
       <td class="c">${label}</td>
       <td>${M(cv)}</td>
-      <td class="c">${fmtP(isT?rate:cr)}</td>
+      <td class="c">${fmtP(isT?rate:cr)} ${prodAmt>0?sub2(fmtP(isT?rate:crAct)):''}</td>
       <td>${pv?M(pv):'—'}</td>
-      <td class="c">${pv?fmtP(isT?prevRate:pr):'—'}</td>
+      <td class="c">${pv?fmtP(isT?prevRate:pr):'—'} ${pv&&prevProd>0?sub2(fmtP(isT?prevRate:prAct)):''}</td>
       <td class="c ${dF!=null?(dF>0?'bad':'ok'):''}">${dF!=null?(dF>=0?'+':'')+M(dF):'—'}</td>
     </tr>`;
   }).join('');
