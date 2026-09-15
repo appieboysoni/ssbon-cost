@@ -451,7 +451,7 @@ tr.total td{background:var(--light);font-weight:700}
   <div class="card">
     <div class="card-hdr">📊 제품별 원가율 분기 비교</div>
     <div class="card-body">
-      <div class="info-box">보고싶은 제품을 선택하면 분기별 <b>개당 제조원가(원/EA)</b> 추이를 비교합니다. 그룹 기준(원육종류 통합) 수량가중평균 단가이며, 공급단가(점선)도 함께 표시됩니다.</div>
+      <div class="info-box">보고싶은 제품을 선택하면 분기별 <b>개당 제조원가(원/EA)</b> 추이를 비교합니다. 기획실 <b>2공장_제품별_제조단가_26년</b> 확정값의 분기 수량가중평균이며, <b>목표 제조원가</b>는 점선으로 함께 표시됩니다. (아래 요약표와 동일 기준)</div>
       <div id="quarter-product-select" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;padding:10px;background:#f8f9fa;border-radius:8px;border:1px solid #e0e0e0;min-height:40px">
         <span style="color:#aaa;font-size:11px;align-self:center" id="quarter-select-placeholder">제품별 원가 탭을 열면 제품 목록이 나타납니다...</span>
       </div>
@@ -2409,6 +2409,9 @@ function drawQuarterChart() {
 // ════════════════════════════════════
 // 제품별 제조단가 요약 (기획실 2공장_제품별_제조단가_26년 자료)
 // ════════════════════════════════════
+// 분기별 목표 제조원가 (원/EA) — 기획실 목표원가 시트
+const PRODUCT_TARGET_UNIT = {"[본죽]미니쇠고기장조림 70g_낱개":1145,"[본죽]미니쇠고기장조림 70g_5입":5860,"[본죽]쇠고기장조림 170_코코_4입":10480,"[본죽]쇠고기장조림 130g 낱개":1800,"[본죽]쇠고기장조림 120g 낱개":1840,"[본죽]쇠고기장조림 130g 마트용 낱개":1800,"[본죽]쇠고기장조림 460_트레":5800,"[본죽]3kg 어머니 쇠고기 장조림_FC":52000,"[본죽]메추리알장조림 180g":1800};
+
 const PRODUCT_UNITCOST = [
   {n:"[본죽]미니쇠고기장조림 70g_낱개",t:0.408929,cum:{q:51132,c:90324766,a:143169600,r:0.630893,u:1767},m:{1:{q:10114,c:18867339,a:28319200,r:0.666238,u:1865},4:{q:10125,c:18059673,a:28350000,r:0.637026,u:1784},5:{q:30893,c:53397753,a:86500400,r:0.617312,u:1728}}},
   {n:"[본죽]미니쇠고기장조림 70g_5입",t:0.418571,cum:{q:18914,c:186613105,a:264796000,r:0.704743,u:9866},m:{1:{q:8366,c:81639023,a:117124000,r:0.697031,u:9758},2:{q:10548,c:104974081,a:147672000,r:0.71086,u:9952},7:{q:4720,c:54404241,a:66080000,r:0.823309,u:11526},8:{q:7410,c:56334123,a:103740000,r:0.543032,u:7602}}},
@@ -2484,57 +2487,43 @@ function renderUnitCostTables() {
 }
 
 async function renderQuarterChart() {
-  await ensureMasters();
-  await ensureBom();
   await ensureTargetCost();
-
-  const q = query(collection(db,'costData'), orderBy('month'));
-  const snap = await getDocs(q);
-  const allMonths = [];
-  snap.forEach(d => allMonths.push(d.data()));
-  if(!allMonths.length) return;
-
-  // 분기별 데이터 집계
+  // 기획실 확정 제조단가(PRODUCT_UNITCOST)를 분기 수량가중평균으로 집계
+  const QM = {1:[1,2,3], 2:[4,5,6], 3:[7,8,9], 4:[10,11,12]};
   window._quarterData = {};
-  for(const d of allMonths) {
-    const cc = computeMonthCost(d, window._bom);
-    const ql = quarterLabel(d.month);
-    if(!window._quarterData[ql]) window._quarterData[ql] = {};
-    const masterMap = {};
-    window._masters.forEach(m => masterMap[m.code] = m);
-    for(const r of cc.rows) {
-      const mm = masterMap[r.code];
-      const gname = (mm ? mm.name : r.code).replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
-      const sp = mm ? mm.supplyPrice : 0;
-      if(!window._quarterData[ql][gname]) window._quarterData[ql][gname] = {totalCost:0, totalQty:0, spSum:0};
-      window._quarterData[ql][gname].totalCost += r.totalCost;
-      window._quarterData[ql][gname].totalQty += r.qty;
-      window._quarterData[ql][gname].spSum += sp * r.qty;
+  const groupTotalQty = {};
+
+  for(const p of PRODUCT_UNITCOST){
+    if(!p.cum.q) continue;
+    groupTotalQty[p.n] = p.cum.q;
+    for(const [q, ms] of Object.entries(QM)){
+      let tq=0, tc=0, ta=0;
+      for(const m of ms){
+        const v = p.m[m];
+        if(v && v.q){ tq+=v.q; tc+=v.c; ta+=v.a; }
+      }
+      if(!tq) continue;
+      const ql = `2026-Q${q}`;
+      if(!window._quarterData[ql]) window._quarterData[ql] = {};
+      window._quarterData[ql][p.n] = { totalCost:tc, totalQty:tq, spSum:ta };
     }
   }
 
-  // 전체 그룹 목록 (생산수량 내림차순)
-  const groupTotalQty = {};
-  for(const ql of Object.keys(window._quarterData)) {
-    for(const [g,v] of Object.entries(window._quarterData[ql]||{})) {
-      groupTotalQty[g] = (groupTotalQty[g]||0) + v.totalQty;
-    }
-  }
   window._quarterAllGroups = Object.keys(groupTotalQty)
     .sort((a,b) => groupTotalQty[b] - groupTotalQty[a]);
 
-  // 기존 선택 없으면 상위 5개 기본 선택
-  if(window._quarterSelected.size === 0) {
-    window._quarterAllGroups.slice(0, 5).forEach(g => window._quarterSelected.add(g));
+  // 목표 제조원가(원/EA): 기획실 목표원가 시트 우선, 없으면 Firebase 등록값
+  for(const n of window._quarterAllGroups){
+    if(PRODUCT_TARGET_UNIT[n] != null) window._targetCost[n] = PRODUCT_TARGET_UNIT[n];
   }
 
+  if(window._quarterSelected.size === 0){
+    window._quarterAllGroups.slice(0, 5).forEach(g => window._quarterSelected.add(g));
+  }
   renderQuarterCheckboxes();
   drawQuarterChart();
 }
 
-// ════════════════════════════════════
-// 제품별 원가
-// ════════════════════════════════════
 window.loadProducts = async () => {
   const month=document.getElementById('prodMonth').value||thisMonth();
   document.getElementById('prodMonth').value=month;
