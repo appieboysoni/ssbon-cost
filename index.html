@@ -464,6 +464,37 @@ tr.total td{background:var(--light);font-weight:700}
       </div>
     </div>
   </div>
+
+  <!-- ── 제품별 제조단가 요약 (2공장_제품별_제조단가_26년) ── -->
+  <div class="card">
+    <div class="card-hdr">📒 제품별 제조단가 요약 (2026년 누적 · 목표 대비)</div>
+    <div class="card-body">
+      <div class="info-box">
+        기획실 <b>2공장_제품별_제조단가_26년</b> 자료 기준입니다. 생산 실적이 있는 월만 집계되며,
+        <b>목표 제조원가율</b> 대비 달성 여부를 함께 표시합니다. (생산 없는 월은 평균에서 제외)
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th style="min-width:210px">제품명</th><th>누적 수량</th><th>누적 생산금액</th>
+          <th>누적 제조원가</th><th>개당 제조원가</th><th>누적 원가율</th>
+          <th>목표 원가율</th><th>목표 대비</th><th>판정</th>
+        </tr></thead>
+        <tbody id="unitcost-body"></tbody>
+      </table></div>
+
+      <div class="sec" style="margin-top:16px">월별 개당 제조원가 추이 (원/EA)</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr id="unitcost-month-head"></tr></thead>
+        <tbody id="unitcost-month-body"></tbody>
+      </table></div>
+
+      <div class="sec" style="margin-top:16px">월별 제조원가율 추이</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr id="unitcost-rate-head"></tr></thead>
+        <tbody id="unitcost-rate-body"></tbody>
+      </table></div>
+    </div>
+  </div>
 </div>
 
 <!-- ══ 월별 이력 ══ -->
@@ -2374,6 +2405,84 @@ function drawQuarterChart() {
   });
 }
 
+
+// ════════════════════════════════════
+// 제품별 제조단가 요약 (기획실 2공장_제품별_제조단가_26년 자료)
+// ════════════════════════════════════
+const PRODUCT_UNITCOST = [
+  {n:"[본죽]미니쇠고기장조림 70g_낱개",t:0.408929,cum:{q:51132,c:90324766,a:143169600,r:0.630893,u:1767},m:{1:{q:10114,c:18867339,a:28319200,r:0.666238,u:1865},4:{q:10125,c:18059673,a:28350000,r:0.637026,u:1784},5:{q:30893,c:53397753,a:86500400,r:0.617312,u:1728}}},
+  {n:"[본죽]미니쇠고기장조림 70g_5입",t:0.418571,cum:{q:18914,c:186613105,a:264796000,r:0.704743,u:9866},m:{1:{q:8366,c:81639023,a:117124000,r:0.697031,u:9758},2:{q:10548,c:104974081,a:147672000,r:0.71086,u:9952},7:{q:4720,c:54404241,a:66080000,r:0.823309,u:11526},8:{q:7410,c:56334123,a:103740000,r:0.543032,u:7602}}},
+  {n:"[본죽]쇠고기장조림 170_코코_4입",t:0.385294,cum:{q:113421,c:1351880830,a:3085051200,r:0.438204,u:11919},m:{1:{q:20444,c:272544066,a:556076800,r:0.490119,u:13331},2:{q:13920,c:191426964,a:378624000,r:0.505586,u:13752},3:{q:38500,c:445515551,a:1047200000,r:0.425435,u:11572},4:{q:11807,c:137894440,a:321150400,r:0.429377,u:11679},5:{q:7938,c:90934277,a:215913600,r:0.42116,u:11456},6:{q:20812,c:213565532,a:566086400,r:0.377267,u:10262},7:{q:13751,c:142191755,a:374027200,r:0.380164,u:10340},8:{q:27898,c:285235667,a:758825600,r:0.375891,u:10224}}},
+  {n:"[본죽]쇠고기장조림 130g 낱개",t:0.346154,cum:{q:460015,c:879829631,a:2392078000,r:0.36781,u:1913},m:{1:{q:30237,c:61558468,a:157232400,r:0.391513,u:2036},2:{q:39784,c:97337533,a:206876800,r:0.47051,u:2447},3:{q:77921,c:135074208,a:405189200,r:0.333361,u:1733},4:{q:143291,c:260574867,a:745113200,r:0.349712,u:1819},5:{q:119226,c:238231993,a:619975200,r:0.384261,u:1998},6:{q:49556,c:87052562,a:257691200,r:0.337817,u:1757},7:{q:160802,c:261590992,a:836170400,r:0.312844,u:1627},8:{q:75528,c:121098785,a:392745600,r:0.308339,u:1603}}},
+  {n:"[본죽]쇠고기장조림 120g 낱개",t:0.383333,cum:{q:43983,c:97427397,a:211118400,r:0.461482,u:2215},m:{1:{q:21479,c:44703859,a:103099200,r:0.4336,u:2081},2:{q:22504,c:52723538,a:108019200,r:0.488094,u:2343}}},
+  {n:"[본죽]쇠고기장조림 460_트레",t:0.315217,cum:{q:28444,c:189883015,a:523369600,r:0.362809,u:6676},m:{4:{q:19968,c:141289650,a:367411200,r:0.384555,u:7076},6:{q:8476,c:48593365,a:155958400,r:0.311579,u:5733},7:{q:6500,c:38787345,a:119600000,r:0.324309,u:5967},8:{q:8866,c:50367372,a:163134400,r:0.308748,u:5681}}},
+  {n:"[본죽]3kg 어머니 쇠고기 장조림_FC",t:0.433333,cum:{q:20699,c:1272783644,a:2483880000,r:0.512418,u:61490},m:{4:{q:1212,c:90049565,a:145440000,r:0.619153,u:74298},5:{q:4931,c:310647345,a:591720000,r:0.52499,u:62999},6:{q:14556,c:872086734,a:1746720000,r:0.499271,u:59913},7:{q:4889,c:271647710,a:586680000,r:0.463025,u:55563},8:{q:8817,c:441092890,a:1058040000,r:0.416896,u:50028}}},
+  {n:"[본죽]메추리알장조림 180g",t:0.25,cum:{q:8039,c:20403910,a:57880800,r:0.352516,u:2538},m:{4:{q:4027,c:10587942,a:28994400,r:0.365172,u:2629},5:{q:4012,c:9815968,a:28886400,r:0.339813,u:2447}}},
+  {n:"[본죽]미니쇠고기장조림 70g_낱개_리뉴얼",t:0.357143,cum:{q:0,c:0,a:0,r:0,u:0},m:{7:{q:48104,c:64282476,a:134691200,r:0.477258,u:1336}}}
+];
+
+function renderUnitCostTables() {
+  const body = document.getElementById('unitcost-body');
+  if(!body) return;
+  const pct = v => (v==null||isNaN(v)) ? '—' : (v*100).toFixed(1)+'%';
+
+  // ① 누적 요약
+  body.innerHTML = PRODUCT_UNITCOST.map(p=>{
+    const c=p.cum;
+    if(!c.q) return '';
+    const gap = p.t!=null ? c.r - p.t : null;
+    const cls = gap==null ? '' : gap>0 ? 'bad' : 'ok';
+    const bdg = gap==null ? '<span style="color:#bbb">목표 미등록</span>'
+      : gap>0 ? '<span class="badge b-bad">🔴 초과</span>' : '<span class="badge b-ok">🟢 달성</span>';
+    return `<tr>
+      <td class="l">${p.n}</td>
+      <td class="c">${fmtN(c.q)}</td>
+      <td>${fmt(c.a/1000000,1)}M</td>
+      <td>${fmt(c.c/1000000,1)}M</td>
+      <td style="font-weight:700">${fmtN(c.u)}</td>
+      <td class="c ${rC(c.r)}">${pct(c.r)}</td>
+      <td class="c">${p.t!=null?pct(p.t):'—'}</td>
+      <td class="c ${cls}" style="font-weight:700">${gap!=null?(gap>=0?'+':'')+(gap*100).toFixed(1)+'%p':'—'}</td>
+      <td class="c">${bdg}</td>
+    </tr>`;
+  }).join('');
+
+  // 실제 생산이 있었던 월만 컬럼으로
+  const activeMonths = [];
+  for(let m=1;m<=12;m++){
+    if(PRODUCT_UNITCOST.some(p=>p.m[m]&&p.m[m].q>0)) activeMonths.push(m);
+  }
+  const headHtml = '<th style="min-width:210px">제품명</th>'
+    + activeMonths.map(m=>`<th>${m}월</th>`).join('')
+    + '<th style="background:#1F3864;color:#fff">누적</th>';
+
+  // ② 월별 개당 제조원가
+  document.getElementById('unitcost-month-head').innerHTML = headHtml;
+  document.getElementById('unitcost-month-body').innerHTML = PRODUCT_UNITCOST.map(p=>{
+    if(!p.cum.q) return '';
+    return `<tr><td class="l">${p.n}</td>`
+      + activeMonths.map(m=>{
+          const v=p.m[m];
+          return v&&v.q ? `<td>${fmtN(v.u)}</td>` : '<td class="c" style="color:#ddd">—</td>';
+        }).join('')
+      + `<td style="font-weight:700;background:var(--light)">${fmtN(p.cum.u)}</td></tr>`;
+  }).join('');
+
+  // ③ 월별 제조원가율
+  document.getElementById('unitcost-rate-head').innerHTML = headHtml;
+  document.getElementById('unitcost-rate-body').innerHTML = PRODUCT_UNITCOST.map(p=>{
+    if(!p.cum.q) return '';
+    return `<tr><td class="l">${p.n}${p.t!=null?` <span style="font-size:10px;color:var(--sub)">(목표 ${pct(p.t)})</span>`:''}</td>`
+      + activeMonths.map(m=>{
+          const v=p.m[m];
+          if(!v||!v.q) return '<td class="c" style="color:#ddd">—</td>';
+          const over = p.t!=null && v.r>p.t;
+          return `<td class="c ${over?'bad':'ok'}">${pct(v.r)}</td>`;
+        }).join('')
+      + `<td class="c ${rC(p.cum.r)}" style="font-weight:700;background:var(--light)">${pct(p.cum.r)}</td></tr>`;
+  }).join('');
+}
+
 async function renderQuarterChart() {
   await ensureMasters();
   await ensureBom();
@@ -2519,6 +2628,9 @@ window.loadProducts = async () => {
 
   // 분기 비교 차트 렌더
   await renderQuarterChart();
+
+  // 제품별 제조단가 요약 표
+  renderUnitCostTables();
 };
 
 // ════════════════════════════════════
