@@ -768,7 +768,7 @@ tr.total td{background:var(--light);font-weight:700}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, getDocs, collection, orderBy, query, deleteDoc }
+import { getFirestore, doc, setDoc, getDoc, getDocs, collection, orderBy, query, where, deleteDoc }
   from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -3266,7 +3266,36 @@ const _pp = v => (v>=0?'+':'') + (v*100).toFixed(2) + '%p';
 const _pc = (a,b) => (b>0 ? ((a/b-1)*100) : null);
 const _sg = v => (v>=0?'+':'') + v.toFixed(1) + '%';
 
-function buildCostAnalysis(cur, prev){
+// 스마트팩토리 실측 수율 근거 문장
+function fxYieldNote(fx, priceUp){
+  if(!fx || !fx.cur || !fx.cur.ok || fx.cur.yieldTotal==null) return '';
+  const c=fx.cur, p=(fx.prev&&fx.prev.ok)?fx.prev:null;
+  const d = (p&&p.yieldTotal!=null) ? c.yieldTotal-p.yieldTotal : null;
+  let verdict='';
+  if(d!=null){
+    if(priceUp && d<-0.3) verdict = ` <b class="bad">수율 저하가 원인으로 확인됩니다</b> (${p.yieldTotal.toFixed(1)}% → ${c.yieldTotal.toFixed(1)}%, ${d.toFixed(1)}%p).`;
+    else if(priceUp && d>=-0.3) verdict = ` 수율은 ${d>=0?'개선':'보합'}(${p.yieldTotal.toFixed(1)}% → ${c.yieldTotal.toFixed(1)}%)이므로 <b class="bad">원육 매입단가 상승이 주원인</b>으로 판단됩니다.`;
+    else verdict = ` 수율 ${p.yieldTotal.toFixed(1)}% → ${c.yieldTotal.toFixed(1)}% (${d>=0?'+':''}${d.toFixed(1)}%p).`;
+  }
+  return `<div style="margin-top:6px;padding:6px 10px;background:#EEF4FF;border-left:3px solid #2F5496;font-size:10pt">
+    🔗 <b>스마트팩토리 실측</b> — 원육투입 ${Math.round(c.thKg).toLocaleString()}kg → 파쇄산출 ${Math.round(c.shKg).toLocaleString()}kg
+    · 원육수율 <b>${c.yieldTotal.toFixed(1)}%</b>${c.yieldCook!=null?` (자숙 ${c.yieldCook.toFixed(1)}%)`:''}.${verdict}</div>`;
+}
+function fxLaborNote(fx){
+  if(!fx || !fx.cur || !fx.cur.ok || fx.cur.eaPerWorkerDay==null) return '';
+  const c=fx.cur, p=(fx.prev&&fx.prev.ok)?fx.prev:null;
+  let cmp='';
+  if(p && p.eaPerWorkerDay!=null){
+    const r=(c.eaPerWorkerDay/p.eaPerWorkerDay-1)*100;
+    cmp = ` 전월 대비 <b class="${r>=0?'ok':'bad'}">${r>=0?'+':''}${r.toFixed(1)}%</b> (${Math.round(p.eaPerWorkerDay).toLocaleString()} → ${Math.round(c.eaPerWorkerDay).toLocaleString()} EA/인일).`;
+  }
+  return `<div style="margin-top:6px;padding:6px 10px;background:#EEF4FF;border-left:3px solid #2F5496;font-size:10pt">
+    🔗 <b>스마트팩토리 실측</b> — 생산 ${c.days}일 · 연인원 ${Math.round(c.workerDays).toLocaleString()}인일 ·
+    1인일당 <b>${Math.round(c.eaPerWorkerDay).toLocaleString()} EA</b>.${cmp}</div>`;
+}
+
+function buildCostAnalysis(cur, prev, fx){
+  // fx = {cur:{...}, prev:{...}} 스마트팩토리 실측 (없으면 null)
   if(!prev) return '<div class="warn-box">전월 데이터가 없어 비교 분석을 생성할 수 없습니다.</div>';
   const A1=cur.prodAmt, A0=prev.prodAmt;
   if(!A0||!A1) return '<div class="warn-box">생산금액이 없어 비교 분석을 생성할 수 없습니다.</div>';
@@ -3300,8 +3329,9 @@ function buildCostAnalysis(cur, prev){
       · 원육 kg당 원재료비: ${Math.round(qp.P0).toLocaleString()}원 → <b>${Math.round(qp.P1).toLocaleString()}원</b> (${_sg(_pc(qp.P1,qp.P0))})<br>
       · 금액 증감 분해: 투입량 요인 <b>${(qp.volume/1000000).toFixed(1)}백만</b> / 단가·수율 요인 <b>${(qp.price/1000000).toFixed(1)}백만</b><br>
       <span style="color:#555">→ ${Math.abs(qp.price)>Math.abs(qp.volume)
-        ? `<b>단가·수율 요인이 지배적</b>입니다. kg당 원재료비가 ${pUp?'올라':'내려'}갔다는 것은 원육 매입단가 상승 또는 수율 저하(같은 투입으로 완제품이 덜 나옴)를 의미합니다. 수율 실적을 함께 확인하시기 바랍니다.`
+        ? `<b>단가·수율 요인이 지배적</b>입니다. kg당 원재료비가 ${pUp?'올라':'내려'}갔습니다.`
         : `<b>투입량 요인이 지배적</b>입니다. kg당 단가는 ${pUp?'소폭 상승':'안정적'}이며 생산 확대에 따른 자연스러운 증감으로 판단됩니다.`}</span>
+      ${fxYieldNote(fx, pUp)}
     </div>`;
   } else rawNote = '원육 투입량 데이터 없음';
   if(dRaw) S.push(line('원재료비', dRaw, rawNote));
@@ -3343,6 +3373,7 @@ function buildCostAnalysis(cur, prev){
           : dLab.d<0
           ? `노무비 총액이 감소하여 비율이 낮아졌습니다. 연장·야간 근무 축소 또는 인원 조정 여부를 확인하시기 바랍니다.`
           : `<b>노무비 증가율이 생산금액 증가율을 상회</b>했습니다. 신규 인원 투입 대비 물량이 따라오지 못했거나 연장근무가 늘었을 가능성이 있습니다.`}</span>
+      ${fxLaborNote(fx)}
     </div>`;
   } else labNote = `노무비 ${_sg(_pc(cur.sum.labor,prev.sum.labor))}`;
   if(dLab) S.push(line('노무비', dLab, labNote));
@@ -3502,6 +3533,87 @@ window.saveReportMemo = async () => {
 };
 
 // ════════════════════════════════════
+// 스마트팩토리 연동 — 수율·생산성 (읽기 전용)
+//   컬렉션: thawing(해동=원육투입) / cooking(자숙) / shredding(파쇄) / packing(내포장)
+//   공통 필드: date('YYYY-MM-DD'), type(부위), kg, test(테스트행)
+//   packing: product, ea, pouch, defect, workers
+// ════════════════════════════════════
+window._factoryCache = {};
+
+async function fbRange(colName, from, to){
+  const q1 = query(collection(factoryDb, colName),
+                   where('date','>=',from), where('date','<=',to));
+  const snap = await getDocs(q1);
+  const rows=[];
+  snap.forEach(d=>rows.push({id:d.id, ...d.data()}));
+  return rows.filter(r=>r.test!==true);          // 테스트 행 제외
+}
+
+// 월 단위 집계 — month='YYYY-MM'
+window.loadFactoryMonth = async (month) => {
+  if(window._factoryCache[month]) return window._factoryCache[month];
+  const [y,m] = month.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  const from = `${month}-01`, to = `${month}-${String(last).padStart(2,'0')}`;
+  const num = v => parseFloat(v)||0;
+  try{
+    const [th, ck, sh, pk] = await Promise.all([
+      fbRange('thawing', from, to),
+      fbRange('cooking', from, to),
+      fbRange('shredding', from, to),
+      fbRange('packing', from, to)
+    ]);
+    const sumKg = rows => rows.reduce((s,r)=>s+num(r.kg),0);
+    const thKg=sumKg(th), ckKg=sumKg(ck), shKg=sumKg(sh);
+    let ea=0, pouch=0, defect=0, workerDays=0;
+    const byProduct={}, byDate={};
+    pk.forEach(r=>{
+      const e=num(r.ea);
+      ea+=e; pouch+=num(r.pouch); defect+=num(r.defect);
+      const pn=r.product||'기타';
+      if(!byProduct[pn]) byProduct[pn]={ea:0,pouch:0,defect:0};
+      byProduct[pn].ea+=e; byProduct[pn].pouch+=num(r.pouch); byProduct[pn].defect+=num(r.defect);
+      const dt=String(r.date||'').slice(0,10);
+      if(dt){ if(!byDate[dt]) byDate[dt]={ea:0,workers:0}; byDate[dt].ea+=e;
+              byDate[dt].workers=Math.max(byDate[dt].workers, num(r.workers)); }
+    });
+    Object.values(byDate).forEach(v=>{ workerDays+=v.workers; });
+    const days = Object.keys(byDate).length;
+    const res = {
+      month, days,
+      thKg, ckKg, shKg,                                  // 해동(원육투입) / 자숙 / 파쇄
+      yieldCook  : thKg>0 ? ckKg/thKg*100 : null,        // 자숙 수율
+      yieldShred : ckKg>0 ? shKg/ckKg*100 : null,        // 파쇄 공정수율
+      yieldTotal : thKg>0 ? shKg/thKg*100 : null,        // 원육수율(해동→파쇄)
+      ea, pouch, defect,
+      defectRate : ea>0 ? defect/ea*100 : null,
+      workerDays,                                        // 일별 최대인원 합 ≈ 연인원
+      eaPerWorkerDay : workerDays>0 ? ea/workerDays : null,
+      kgPerWorkerDay : workerDays>0 ? thKg/workerDays : null,
+      byProduct,
+      ok: true
+    };
+    window._factoryCache[month]=res;
+    return res;
+  }catch(e){
+    const res={month, ok:false, err:e.message};
+    window._factoryCache[month]=res;
+    return res;
+  }
+};
+
+// 1~12월 일괄 (보고서/차트용)
+window.loadFactoryYear = async (year) => {
+  const out={};
+  for(let m=1;m<=12;m++){
+    const key=`${year}-${String(m).padStart(2,'0')}`;
+    const r=await loadFactoryMonth(key);
+    if(r.ok && (r.thKg>0 || r.ea>0)) out[m]=r;
+  }
+  return out;
+};
+
+// ════════════════════════════════════
 // 경영보고 PPT — 원본 템플릿의 차트 캐시값만 교체
 // ════════════════════════════════════
 const EXEC_CHART_MAP = [
@@ -3511,7 +3623,7 @@ const EXEC_CHART_MAP = [
   { slide:5, chart:'ppt/charts/chart3.xml', desc:'  └ 제조원가율 라인',              series:'계열 1' },
   { slide:7, chart:'ppt/charts/chart6.xml', desc:'제조원가율(노무비)',               series:'노무비' },
   { slide:8, chart:'ppt/charts/chart7.xml', desc:'제조원가율 구성',                  series:'원재료·부재료·노무비·경비 + 제조원가율' },
-  { slide:6, chart:'ppt/charts/chart5.xml', desc:'2공장 장조림 제조수율',            series:'평균수율 — 사이트에 수율 데이터 없음(원본 유지)', skip:true },
+  { slide:6, chart:'ppt/charts/chart5.xml', desc:'2공장 장조림 제조수율',            series:'평균수율 — 스마트팩토리 실측(해동→파쇄) 연동' },
 ];
 const EXEC_GROUPS = ['미니 70g','코스트코 170g','시그니처 130g','트레이더스 460g','FC 3kg','기타'];
 function execGroupOf(n){
@@ -3704,6 +3816,17 @@ window.buildExecPpt = async () => {
       'ppt/charts/chart6.xml': {'노무비':D.LAB},
       'ppt/charts/chart7.xml': {'원재료':D.RAW,'부재료':D.SUB,'노무비':D.LAB,'경비':D.EXP,'제조원가율':D.R},
     };
+    // 슬라이드6 제조수율 — 스마트팩토리 실측 연동
+    try{
+      const yr = (month.split('-')[0]);
+      const fy = await loadFactoryYear(yr);
+      const ylist = [...Array(12)].map((_,i)=>{
+        const r = fy[i+1];
+        return (r && r.yieldTotal!=null) ? +r.yieldTotal.toFixed(1) : null;
+      });
+      if(ylist.some(v=>v!=null)) jobs['ppt/charts/chart5.xml'] = {'평균수율': ylist};
+    }catch(e){ console.warn('수율 연동 실패', e); }
+
     const status={};
     for(const [f,map] of Object.entries(jobs)){
       const fo=zip.file(f);
@@ -3792,6 +3915,13 @@ async function buildMonthlyReport(month, y, m, dateStr) {
 
   // 목표원가 로드
   await ensureTargetCost();
+  // 스마트팩토리 실측(수율·생산성) 로드 — 실패해도 보고서는 생성됨
+  let _fxPair = null;
+  try{
+    const fxc = await loadFactoryMonth(month);
+    const fxp = await loadFactoryMonth(pm);
+    _fxPair = { cur: fxc, prev: fxp };
+  }catch(e){ _fxPair = null; }
 
   // 제품별 개당단가 행 구성
   const masterMap={}; window._masters.forEach(mm=>masterMap[mm.code]=mm);
@@ -4041,7 +4171,8 @@ async function buildMonthlyReport(month, y, m, dateStr) {
     <h1>5. 전월 대비 원가 변동 요인 분석</h1>
     ${buildCostAnalysis(
       {prodAmt, sum, totalQty: cc.totalQty, totalMeatKg: cc.totalMeatKg},
-      prevCc ? {prodAmt: prevProd, sum: prevSum, totalQty: prevCc.totalQty, totalMeatKg: prevCc.totalMeatKg} : null
+      prevCc ? {prodAmt: prevProd, sum: prevSum, totalQty: prevCc.totalQty, totalMeatKg: prevCc.totalMeatKg} : null,
+      _fxPair
     )}
 
     <h1>6. 실무자 검토 의견</h1>
