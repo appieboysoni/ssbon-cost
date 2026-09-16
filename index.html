@@ -3267,6 +3267,31 @@ const _pc = (a,b) => (b>0 ? ((a/b-1)*100) : null);
 const _sg = v => (v>=0?'+':'') + v.toFixed(1) + '%';
 
 // 스마트팩토리 실측 수율 근거 문장
+// 제품명 → 표준키 (사이트 품목명 / 기획실 제조단가표 이름 모두 매칭)
+function canonProduct(n){
+  const t = String(n||'').replace(/\s+/g,'');
+  if(/3kg|3KG|FC/i.test(t)) return 'fc3k';
+  if(/코코|170/.test(t))     return 'costco';
+  if(/460|트레/.test(t))     return 'tray460';
+  if(/메추리알/.test(t))      return 'quail';
+  if(/120g/.test(t))         return 'sig120';
+  if(/130g/.test(t))         return /마트/.test(t) ? 'sig130m' : 'sig130';
+  if(/미니/.test(t))         return /5입/.test(t) ? 'mini5' : 'mini1';
+  return 'etc:'+t;
+}
+// 기획실 확정 제조단가표에서 특정 월의 그룹별 개당원가 산출
+function unitCostFromPlan(monthNum){
+  const out={};
+  if(typeof PRODUCT_UNITCOST==='undefined') return out;
+  for(const p of PRODUCT_UNITCOST){
+    const v=p.m[monthNum]; if(!v||!v.q) continue;
+    const k=canonProduct(p.n);
+    if(!out[k]) out[k]={qty:0,total:0};
+    out[k].qty+=v.q; out[k].total+=v.c;
+  }
+  return out;
+}
+
 function fxYieldNote(fx, priceUp){
   if(!fx || !fx.cur || !fx.cur.ok || fx.cur.yieldTotal==null) return '';
   const c=fx.cur, p=(fx.prev&&fx.prev.ok)?fx.prev:null;
@@ -4005,22 +4030,26 @@ async function buildMonthlyReport(month, y, m, dateStr) {
                       / (groupsWithTarget.filter(r => r.diffPct !== null).length || 1);
 
   // 전월 목표 대비 개선도 (전월 그룹별 단가 계산)
-  const prevGroupMap = {};
-  if(prevCc) {
-    const prevProdRowsRaw = prevCc.rows.map(r => {
+  // 전월 그룹별 단가 — 사이트 상세가 있으면 그것을, 없으면 기획실 확정 제조단가표를 사용
+  let prevGroupMap = {};   // key = canonProduct()
+  let prevSrc = '';
+  if(prevCc && prevCc.rows && prevCc.rows.length) {
+    for(const r of prevCc.rows) {
       const mm = masterMap[r.code];
-      const gn = (mm ? mm.name : r.code).replace(/\s*\((설도|우둔|홍두께)\)\s*$/, '').trim();
-      return { gname: gn, qty: r.qty, total: r.totalCost };
-    });
-    for(const r of prevProdRowsRaw) {
-      if(!prevGroupMap[r.gname]) prevGroupMap[r.gname] = { qty: 0, total: 0 };
-      prevGroupMap[r.gname].qty   += r.qty;
-      prevGroupMap[r.gname].total += r.total;
+      const k = canonProduct(mm ? mm.name : r.code);
+      if(!prevGroupMap[k]) prevGroupMap[k] = { qty: 0, total: 0 };
+      prevGroupMap[k].qty   += r.qty;
+      prevGroupMap[k].total += r.totalCost;
     }
+    prevSrc = '사이트 계산값';
+  } else {
+    const pmNum = parseInt(String(pm).split('-')[1]);
+    prevGroupMap = unitCostFromPlan(pmNum);
+    if(Object.keys(prevGroupMap).length) prevSrc = '기획실 제조단가표';
   }
 
   const trendRows = groupsWithTarget.filter(r => r.target !== null).map(r => {
-    const prev = prevGroupMap[r.gname];
+    const prev = prevGroupMap[canonProduct(r.gname)];
     const prevUnit = prev && prev.qty > 0 ? prev.total / prev.qty : null;
     const prevDiff = prevUnit !== null && r.target !== null ? prevUnit - r.target : null;
     const prevDiffPct = prevDiff !== null && r.target > 0 ? prevDiff / r.target * 100 : null;
@@ -4164,6 +4193,7 @@ async function buildMonthlyReport(month, y, m, dateStr) {
     </table>
     <div class="section-box">
       ▶ <strong>개선도 해석:</strong> 전월 대비 목표원가 초과율이 줄어들면 <span class="ok">▲ 개선</span>, 늘어나면 <span class="bad">▼ 악화</span>입니다.
+      ${prevSrc ? `전월 실적원가 출처: <b>${prevSrc}</b>.` : '<span class="warn">전월 실적 데이터가 없어 비교가 생략되었습니다.</span>'}
       목표원가 등록은 설정탭 &gt; 목표 제조원가 관리에서 수정할 수 있습니다.
     </div>`:'<div class="warn-box">⚠️ 목표원가가 등록되지 않았습니다. 설정탭 &gt; 목표 제조원가 관리에서 등록해주세요.</div>'}
 
