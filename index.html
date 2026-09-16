@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>순수본 제조원가 관리</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
 :root {
   --primary:#1F3864; --mid:#2F5496; --light:#D6E4F7;
@@ -162,6 +163,7 @@ tr.total td{background:var(--light);font-weight:700}
   <button onclick="goTab('history',this)">📅 월별 이력</button>
   <button onclick="goTab('settings',this)">⚙️ 설정</button>
   <button onclick="goTab('report',this)">📄 보고서</button>
+  <button onclick="goTab('exec',this)">📊 경영보고 PPT</button>
   <button onclick="goTab('capa',this)">🏭 CAPA 분석</button>
 </nav>
 <main>
@@ -686,6 +688,70 @@ tr.total td{background:var(--light);font-weight:700}
   </div>
 </div>
 
+<!-- ══ 경영보고 PPT ══ -->
+<div id="tab-exec" class="tab">
+  <div class="card">
+    <div class="card-hdr">📊 생산본부 회의자료 자동 생성</div>
+    <div class="card-body">
+      <div class="info-box">
+        기존 <b>생산본부회의 PPT 원본</b>을 템플릿으로 삼아 <b>차트 데이터와 표지 월만 교체</b>합니다.
+        배경·서식·로고·도형은 원본 그대로 유지되므로 매달 같은 양식으로 뽑을 수 있습니다.
+      </div>
+      <div class="warn-box">
+        📌 준비: 원본 PPT 파일명을 <b>report_template.pptx</b> 로 바꿔서 index.html과 <b>같은 폴더</b>에 올려두세요(GitHub 업로드).
+        파일을 직접 선택해서 쓸 수도 있습니다.
+      </div>
+
+      <div class="form-row cols3" style="margin-bottom:10px">
+        <div class="fg">
+          <label>보고 기준월 *</label>
+          <input type="month" id="execMonth">
+        </div>
+        <div class="fg">
+          <label>템플릿 (미선택 시 report_template.pptx 사용)</label>
+          <input type="file" id="execTpl" accept=".pptx" style="padding:6px;background:#fff">
+        </div>
+        <div class="fg" style="justify-content:flex-end">
+          <button class="btn btn-ok" onclick="buildExecPpt()">📥 회의자료 생성·다운로드</button>
+        </div>
+      </div>
+
+      <div class="sec" style="margin-top:6px">슬라이드 코멘트 (말풍선) — 비워두면 빈 박스로 삽입됩니다</div>
+      <div class="info-box" style="margin-bottom:8px">
+        각 슬라이드 <b>고정 위치</b>(차트 좌측 상단 여백)에 남색 코멘트 박스가 삽입됩니다.
+        PPT에서 박스를 드래그해 위치를 옮기거나 내용을 직접 수정할 수도 있습니다.
+      </div>
+      <div class="form-row cols3" style="margin-bottom:10px">
+        <div class="fg"><label>4번 — 생산금액(금액)</label><textarea id="memo-4" rows="3" style="padding:8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff"></textarea></div>
+        <div class="fg"><label>5번 — 생산금액(비중)</label><textarea id="memo-5" rows="3" style="padding:8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff"></textarea></div>
+        <div class="fg"><label>6번 — 제조수율</label><textarea id="memo-6" rows="3" style="padding:8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff"></textarea></div>
+      </div>
+      <div class="form-row cols3" style="margin-bottom:10px">
+        <div class="fg"><label>7번 — 제조원가율(노무비)</label><textarea id="memo-7" rows="3" style="padding:8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff"></textarea></div>
+        <div class="fg"><label>8번 — 제조원가율 구성</label><textarea id="memo-8" rows="3" style="padding:8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff"></textarea></div>
+        <div class="fg" style="justify-content:flex-end">
+          <label style="font-size:11px;color:var(--sub)">코멘트는 기준월과 함께 저장됩니다</label>
+          <button class="btn btn-primary btn-sm" onclick="saveExecMemos()">💾 코멘트 저장</button>
+        </div>
+      </div>
+
+      <div class="paste-result" id="exec-result"></div>
+
+      <div class="sec" style="margin-top:14px">반영되는 차트</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>슬라이드</th><th class="l" style="min-width:230px">내용</th><th class="l">반영 계열</th><th>상태</th></tr></thead>
+        <tbody id="exec-map-body"></tbody>
+      </table></div>
+
+      <div class="sec" style="margin-top:14px">생성될 데이터 미리보기</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr id="exec-prev-head"></tr></thead>
+        <tbody id="exec-prev-body"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ CAPA 분석 ══ -->
 <div id="tab-capa" class="tab">
   <iframe
@@ -763,6 +829,7 @@ window.goTab = (name,btn) => {
   if(name==='settings')  { loadMaster(); loadBomProductList(); loadTargetCostList(); }
   if(name==='input')     loadExistingData();
   if(name==='report')    { document.getElementById('reportMonth').value = document.getElementById('dashMonth').value || thisMonth(); }
+  if(name==='exec') { document.getElementById('execMonth').value = document.getElementById('execMonth').value || document.getElementById('dashMonth').value || thisMonth(); renderExecPreview(); loadExecMemos(); }
   if(name==='capa') {
     const frame = document.getElementById('capa-frame');
     if(!frame.src || frame.src === window.location.href) {
@@ -3432,6 +3499,257 @@ window.saveReportMemo = async () => {
     if(st){ st.textContent = `✅ ${month} 검토 의견 저장됨 (${new Date().toLocaleTimeString('ko-KR')})`; }
     showToast('✅ 검토 의견 저장 완료');
   }catch(e){ showToast('❌ 저장 실패: '+e.message); }
+};
+
+// ════════════════════════════════════
+// 경영보고 PPT — 원본 템플릿의 차트 캐시값만 교체
+// ════════════════════════════════════
+const EXEC_CHART_MAP = [
+  { slide:4, chart:'ppt/charts/chart2.xml', desc:'월별생산금액 및 원재료율(금액)', series:'제품별 생산금액 6종 + 총 생산금액 + 원재료율' },
+  { slide:4, chart:'ppt/charts/chart1.xml', desc:'  └ 제조원가율 라인',              series:'계열 1' },
+  { slide:5, chart:'ppt/charts/chart4.xml', desc:'월별생산금액 및 원재료율(비중)',   series:'제품별 구성비 6종 + 원재료율' },
+  { slide:5, chart:'ppt/charts/chart3.xml', desc:'  └ 제조원가율 라인',              series:'계열 1' },
+  { slide:7, chart:'ppt/charts/chart6.xml', desc:'제조원가율(노무비)',               series:'노무비' },
+  { slide:8, chart:'ppt/charts/chart7.xml', desc:'제조원가율 구성',                  series:'원재료·부재료·노무비·경비 + 제조원가율' },
+  { slide:6, chart:'ppt/charts/chart5.xml', desc:'2공장 장조림 제조수율',            series:'평균수율 — 사이트에 수율 데이터 없음(원본 유지)', skip:true },
+];
+const EXEC_GROUPS = ['미니 70g','코스트코 170g','시그니처 130g','트레이더스 460g','FC 3kg','기타'];
+function execGroupOf(n){
+  if(n.includes('미니')) return '미니 70g';
+  if(n.includes('코코')) return '코스트코 170g';
+  if(n.includes('130g 낱개') && !n.includes('마트')) return '시그니처 130g';
+  if(n.includes('460') || n.includes('트레')) return '트레이더스 460g';
+  if(n.includes('FC') || n.includes('3kg')) return 'FC 3kg';
+  return '기타';
+}
+// 12개월 배열 (데이터 없는 달은 null → 차트 공백)
+function execBlank(){ return Array(12).fill(null); }
+
+async function execCollect(){
+  await ensureBom();
+  const snap = await getDocs(query(collection(db,'costData'), orderBy('month')));
+  const byMonth = {};
+  snap.forEach(dd=>{
+    const d=dd.data();
+    const m=parseInt(String(d.month||'').split('-')[1]);
+    if(!m) return;
+    const cc=computeMonthCost(d, window._bom);
+    byMonth[m]={ sum:cc.sum, prodAmt:d.prodAmt||0 };
+  });
+
+  const amt = {}; EXEC_GROUPS.forEach(g=>amt[g]=execBlank());
+  const totalAmt = execBlank();
+  for(const p of PRODUCT_UNITCOST){
+    const g=execGroupOf(p.n);
+    for(const [mk,v] of Object.entries(p.m||{})){
+      const m=parseInt(mk); if(!v||!v.q) continue;
+      amt[g][m-1] = (amt[g][m-1]||0) + v.a;
+      totalAmt[m-1] = (totalAmt[m-1]||0) + v.a;
+    }
+  }
+  const M = v => v==null ? null : Math.round(v/1000000);
+  const amtM = {}; EXEC_GROUPS.forEach(g=>amtM[g]=amt[g].map(M));
+  const totM = totalAmt.map(M);
+
+  // 비중(%)
+  const mix = {}; EXEC_GROUPS.forEach(g=>mix[g]=execBlank());
+  for(let i=0;i<12;i++){
+    if(!totalAmt[i]) continue;
+    EXEC_GROUPS.forEach(g=>{ mix[g][i] = +(((amt[g][i]||0)/totalAmt[i])*100).toFixed(1); });
+  }
+
+  // 원가 비율 — Firebase costData 기준
+  const R = execBlank(), RAW=execBlank(), SUB=execBlank(), LAB=execBlank(), EXP=execBlank();
+  for(let m=1;m<=12;m++){
+    const x=byMonth[m]; if(!x||!x.prodAmt) continue;
+    const A=x.prodAmt, S=x.sum;
+    RAW[m-1]=+(S.raw/A*100).toFixed(1);
+    SUB[m-1]=+(S.sub/A*100).toFixed(1);
+    LAB[m-1]=+(S.labor/A*100).toFixed(1);
+    EXP[m-1]=+(S.exp/A*100).toFixed(1);
+    R[m-1]  =+(S.total/A*100).toFixed(1);
+  }
+  return { amtM, totM, mix, R, RAW, SUB, LAB, EXP, byMonth };
+}
+
+function renderExecMap(status){
+  const tb=document.getElementById('exec-map-body'); if(!tb) return;
+  tb.innerHTML = EXEC_CHART_MAP.map(c=>{
+    const st = c.skip ? '<span class="badge b-warn">원본 유지</span>'
+      : (status && status[c.chart]!=null
+          ? (status[c.chart]>0 ? `<span class="badge b-ok">✅ ${status[c.chart]}계열</span>` : '<span class="badge b-bad">❌ 실패</span>')
+          : '<span style="color:#bbb">대기</span>');
+    return `<tr><td class="c">${c.slide}</td><td class="l">${c.desc}</td><td class="l" style="font-size:11px;color:#666">${c.series}</td><td class="c">${st}</td></tr>`;
+  }).join('');
+}
+
+async function renderExecPreview(){
+  renderExecMap(null);
+  let D; try{ D = await execCollect(); }catch(e){ return; }
+  const head=document.getElementById('exec-prev-head');
+  const body=document.getElementById('exec-prev-body');
+  if(!head||!body) return;
+  const months=[...Array(12)].map((_,i)=>i+1);
+  head.innerHTML='<th class="l" style="min-width:130px">구분</th>'+months.map(m=>`<th>${m}월</th>`).join('');
+  const row=(label,arr,suffix)=>`<tr><td class="l">${label}</td>`
+    + arr.map(v=>v==null?'<td class="c" style="color:#ddd">—</td>':`<td>${typeof v==='number'?v.toLocaleString('ko-KR'):v}${suffix||''}</td>`).join('') + '</tr>';
+  body.innerHTML =
+      EXEC_GROUPS.map(g=>row(g, D.amtM[g])).join('')
+    + `<tr class="total">${row('총 생산금액(백만)', D.totM).replace('<tr>','').replace('</tr>','')}</tr>`
+    + row('원재료율', D.RAW, '%')
+    + row('제조원가율', D.R, '%');
+}
+
+// ── 템플릿 치환 유틸 (Node 검증본과 동일 로직)
+function _execWriteCache(cacheEl, values, doc){
+  if(!cacheEl) return false;
+  Array.from(cacheEl.getElementsByTagName('c:pt')).forEach(p=>p.parentNode.removeChild(p));
+  let pc = cacheEl.getElementsByTagName('c:ptCount')[0];
+  if(!pc){ pc = doc.createElement('c:ptCount'); cacheEl.appendChild(pc); }
+  pc.setAttribute('val', String(values.length));
+  values.forEach((v,i)=>{
+    if(v===null||v===undefined||v==='') return;
+    const pt=doc.createElement('c:pt'); pt.setAttribute('idx',String(i));
+    const cv=doc.createElement('c:v'); cv.appendChild(doc.createTextNode(String(v)));
+    pt.appendChild(cv); cacheEl.appendChild(pt);
+  });
+  return true;
+}
+function execUpdateChart(xml, seriesMap, categories){
+  const doc = new DOMParser().parseFromString(xml,'application/xml');
+  const sers = Array.from(doc.getElementsByTagName('c:ser'));
+  let hit=0;
+  sers.forEach(sr=>{
+    const tx=sr.getElementsByTagName('c:tx')[0];
+    const nm=tx ? (tx.getElementsByTagName('c:v')[0]?.textContent||'').trim() : '';
+    if(categories&&categories.length){
+      const cat=sr.getElementsByTagName('c:cat')[0];
+      if(cat) _execWriteCache(cat.getElementsByTagName('c:strCache')[0]||cat.getElementsByTagName('c:numCache')[0], categories, doc);
+    }
+    if(!(nm in seriesMap)) return;
+    const val=sr.getElementsByTagName('c:val')[0]; if(!val) return;
+    if(_execWriteCache(val.getElementsByTagName('c:numCache')[0], seriesMap[nm], doc)) hit++;
+  });
+  return { xml:new XMLSerializer().serializeToString(doc), hit };
+}
+
+function execMemoShape(id, text, x, y, cx, cy){
+  const esc = t => String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const paras = String(text||'').split(/\r?\n/).map(l =>
+    `<a:p><a:pPr algn="l"/><a:r><a:rPr lang="ko-KR" altLang="en-US" sz="1100" b="1" dirty="0">`
+    + `<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>`
+    + `<a:latin typeface="맑은 고딕"/><a:ea typeface="맑은 고딕"/></a:rPr>`
+    + `<a:t>${esc(l)}</a:t></a:r></a:p>`).join('');
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="코멘트박스${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>`
+    + `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>`
+    + `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 8000"/></a:avLst></a:prstGeom>`
+    + `<a:solidFill><a:srgbClr val="1F3864"/></a:solidFill>`
+    + `<a:ln w="12700"><a:solidFill><a:srgbClr val="1F3864"/></a:solidFill></a:ln></p:spPr>`
+    + `<p:txBody><a:bodyPr wrap="square" lIns="108000" tIns="72000" rIns="108000" bIns="72000" anchor="ctr"><a:normAutofit/></a:bodyPr>`
+    + `<a:lstStyle/>${paras || '<a:p><a:endParaRPr lang="ko-KR"/></a:p>'}</p:txBody></p:sp>`;
+}
+function execInsertMemo(slideXml, text){
+  const ids = (slideXml.match(/id="(\d+)"/g)||[]).map(t=>parseInt(t.replace(/\D/g,'')));
+  const maxId = Math.max(100, ...(ids.length?ids:[100]));
+  const sp = execMemoShape(maxId+1, text, 1000000, 2150000, 4300000, 1150000);
+  return slideXml.replace('</p:spTree>', sp + '</p:spTree>');
+}
+window.saveExecMemos = async () => {
+  const month=document.getElementById('execMonth').value;
+  if(!month){ showToast('❌ 기준월을 선택하세요'); return; }
+  const memos={};
+  [4,5,6,7,8].forEach(n=>{ const el=document.getElementById('memo-'+n); if(el) memos[n]=el.value; });
+  try{
+    await setDoc(doc(db,'costData',month), { execMemos: memos, updatedAt:new Date().toISOString() }, { merge:true });
+    showToast('✅ 코멘트 저장 완료');
+  }catch(e){ showToast('❌ 저장 실패: '+e.message); }
+};
+async function loadExecMemos(){
+  const month=document.getElementById('execMonth').value;
+  if(!month) return;
+  try{
+    const sn=await getDoc(doc(db,'costData',month));
+    const m=(sn.exists()&&sn.data().execMemos)?sn.data().execMemos:{};
+    [4,5,6,7,8].forEach(n=>{ const el=document.getElementById('memo-'+n); if(el) el.value=m[n]||''; });
+  }catch(e){}
+}
+
+window.buildExecPpt = async () => {
+  const res=document.getElementById('exec-result');
+  const month=document.getElementById('execMonth').value;
+  if(!month){ showToast('❌ 보고 기준월을 선택하세요'); return; }
+  if(typeof JSZip==='undefined'){ showToast('❌ JSZip 로드 실패 — 네트워크 확인'); return; }
+  res.style.display='block'; res.innerHTML='⏳ 템플릿 로드 중...';
+  try{
+    const fileEl=document.getElementById('execTpl');
+    let buf;
+    if(fileEl.files && fileEl.files[0]){
+      buf = await fileEl.files[0].arrayBuffer();
+    } else {
+      const r = await fetch('report_template.pptx');
+      if(!r.ok) throw new Error('report_template.pptx 를 찾을 수 없습니다 (index.html과 같은 폴더에 올려주세요)');
+      buf = await r.arrayBuffer();
+    }
+    res.innerHTML='⏳ 데이터 수집 중...';
+    const D = await execCollect();
+    const zip = await JSZip.loadAsync(buf);
+    const cats=[...Array(12)].map((_,i)=>`${i+1}월`);
+
+    const jobs = {
+      'ppt/charts/chart2.xml': Object.assign({}, ...EXEC_GROUPS.map(g=>({[g]:D.amtM[g]})),
+        {'총 생산금액(백만원)':D.totM, '원재료율(%)':D.RAW}),
+      'ppt/charts/chart1.xml': {'계열 1':D.R},
+      'ppt/charts/chart4.xml': Object.assign({}, ...EXEC_GROUPS.map(g=>({[g]:D.mix[g]})), {'원재료율(%)':D.RAW}),
+      'ppt/charts/chart3.xml': {'계열 1':D.R},
+      'ppt/charts/chart6.xml': {'노무비':D.LAB},
+      'ppt/charts/chart7.xml': {'원재료':D.RAW,'부재료':D.SUB,'노무비':D.LAB,'경비':D.EXP,'제조원가율':D.R},
+    };
+    const status={};
+    for(const [f,map] of Object.entries(jobs)){
+      const fo=zip.file(f);
+      if(!fo){ status[f]=0; continue; }
+      const xml=await fo.async('string');
+      const r=execUpdateChart(xml,map,cats);
+      zip.file(f,r.xml);
+      status[f]=r.hit;
+    }
+    renderExecMap(status);
+
+    // 표지 월 교체 (예: "08" → 선택 월)
+    const [yy,mm]=month.split('-');
+    const s1f=zip.file('ppt/slides/slide1.xml');
+    if(s1f){
+      let s1=await s1f.async('string');
+      s1=s1.replace(/(<a:t>[^<]*?)(\d{4})(\s*년[^<]*?)(\d{2})(\s*월[^<]*?실적보고[^<]*?<\/a:t>)/g,
+                    (m0,a,y,b,mo,c)=>a+yy+b+mm+c);
+      zip.file('ppt/slides/slide1.xml',s1);
+    }
+
+    // 슬라이드 코멘트(말풍선) 삽입 — 고정 위치
+    for(const n of [4,5,6,7,8]){
+      const f=`ppt/slides/slide${n}.xml`;
+      const fo=zip.file(f); if(!fo) continue;
+      const el=document.getElementById('memo-'+n);
+      let sx=await fo.async('string');
+      zip.file(f, execInsertMemo(sx, el?el.value:''));
+    }
+
+    res.innerHTML='⏳ 파일 생성 중...';
+    const out=await zip.generateAsync({type:'blob',compression:'DEFLATE',
+      mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
+    const url=URL.createObjectURL(out);
+    const a=document.createElement('a');
+    a.href=url; a.download=`${yy}년${mm}월생산본부회의_운영팀.pptx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+
+    const okCnt=Object.values(status).filter(v=>v>0).length;
+    res.innerHTML=`✅ 생성 완료 — 차트 ${okCnt}종 갱신 / 파일 ${(out.size/1024).toFixed(0)}KB 다운로드됨`;
+    showToast('✅ 회의자료 생성 완료');
+  }catch(e){
+    res.innerHTML=`<span style="color:var(--bad)">❌ ${e.message}</span>`;
+    showToast('❌ 생성 실패: '+e.message);
+  }
 };
 
 window.buildReport = async (type) => {
