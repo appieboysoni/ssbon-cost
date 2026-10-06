@@ -149,15 +149,74 @@ tr.total td{background:var(--light);font-weight:700}
 .chart-legend .leg-item{display:flex;align-items:center;gap:5px}
 .chart-legend .leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .chart-legend .leg-sq{width:12px;height:10px;border-radius:2px;flex-shrink:0}
+
+/* ── 생산계획·재고 ── */
+.pp-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pp-bar input[type=month],.pp-bar input[type=date]{padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--input);font-family:inherit}
+.pp-chip{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
+.st-draft{background:#eceff3;color:#555}.st-submitted{background:#fff3cd;color:#856404}.st-reviewed{background:#dbe8fb;color:#1F3864}.st-approved{background:#d4edda;color:#155724}.st-none{background:#f6f6f6;color:#aaa}
+.pp-tbl td input{width:72px;padding:4px 5px;border:1px solid var(--border);border-radius:4px;text-align:right;font-size:12px;font-family:inherit;background:var(--input)}
+.pp-tbl td input:disabled{background:transparent;border-color:transparent;color:#222}
+.pp-tbl td input.act-empty{background:#fff}
+.pp-tbl td.l{text-align:left}.pp-tbl td.sub{color:#888;font-size:11px}
+.pp-tbl .num{font-variant-numeric:tabular-nums}
+.pp-sub{font-size:10px;color:#888;display:block}
+.pp-tabs{display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap}
+.pp-tabs button{padding:6px 14px;border:1.5px solid var(--border);background:#fff;border-radius:16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color:#555}
+.pp-tabs button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.appr{display:flex;border:1.5px solid var(--primary);border-radius:6px;overflow:hidden;width:max-content;max-width:100%}
+.appr > div{min-width:96px;text-align:center;border-right:1px solid var(--border)}
+.appr > div:last-child{border-right:none}
+.appr .ah{background:var(--light);color:var(--primary);font-size:11px;font-weight:700;padding:4px}
+.appr .ab{padding:8px 6px;min-height:44px;font-size:12px}
+.appr .ab b{display:block}.appr .ab span{font-size:10px;color:#888}
+.pp-hist{font-size:11px;color:#666;line-height:1.7;max-height:140px;overflow:auto;margin-top:8px}
+.days-badge{display:inline-block;min-width:44px;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;text-align:center}
+.d-red{background:#f8d7da;color:#C00000}.d-orange{background:#ffe5cc;color:#B45309}.d-green{background:#d4edda;color:#155724}.d-none{background:#f2f2f2;color:#999}
+body:not(.is-leader) .need-leader{display:none!important}
+body:not(.can-write) .need-writer{display:none!important}
+.ro-note{font-size:11px;color:#888}
+
+/* ── 로그인·계정 ── */
+body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{visibility:hidden}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.who-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:14px;padding:4px 12px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.who-btn:hover{background:rgba(255,255,255,.25)}
+.who-btn .r{font-size:10px;background:#FFC000;color:#1F3864;border-radius:8px;padding:1px 6px;margin-left:5px;font-weight:700}
+.auth-gate{position:fixed;inset:0;background:#f0f2f5;z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px}
+.auth-gate.hidden,.acct-modal.hidden{display:none}
+.auth-card{background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.12);width:100%;max-width:380px;overflow:hidden}
+.auth-card .ac-hdr{background:var(--primary);color:#fff;padding:16px 20px}
+.auth-card .ac-hdr h2{font-size:16px}
+.auth-card .ac-hdr p{font-size:11px;opacity:.8;margin-top:3px}
+.auth-card .ac-body{padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.auth-card .fg input,.auth-card .fg select,.acct-modal .fg input,.acct-modal .fg select{background:#fff}
+.auth-msg{font-size:12px;min-height:16px;color:var(--bad)}
+.auth-msg.info{color:var(--mid)}
+.auth-note{font-size:11px;color:#777;line-height:1.5}
+.acct-modal{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+.acct-box{background:#fff;border-radius:10px;width:100%;max-width:720px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.acct-box .card-hdr button{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1}
+.acct-sec{padding:14px 16px;border-bottom:1px solid #eee}
+.acct-sec:last-child{border-bottom:none}
+.acct-sec h3{font-size:12px;color:var(--mid);margin-bottom:8px}
+.acct-tbl td{text-align:center}
+.acct-tbl td.l{text-align:left}
+.acct-tbl tr.off td{color:#aaa}
+@media(max-width:600px){.who-btn{padding:3px 8px}.hdr-month{display:none}}
 </style>
 </head>
 <body>
 <header>
   <h1>🏭 순수본 제조원가 관리</h1>
-  <span class="hdr-month" id="hdrMonth">—</span>
+  <div class="hdr-right">
+    <span class="hdr-month" id="hdrMonth">—</span>
+    <button class="who-btn" id="whoBtn" type="button" onclick="openAcct()">로그인</button>
+  </div>
 </header>
 <nav>
   <button class="active" onclick="goTab('dashboard',this)">📊 대시보드</button>
+  <button onclick="goTab('plan',this)">📋 생산계획·재고</button>
   <button onclick="goTab('input',this)">📥 데이터 입력</button>
   <button onclick="goTab('products',this)">📦 제품별 원가</button>
   <button onclick="goTab('history',this)">📅 월별 이력</button>
@@ -752,6 +811,97 @@ tr.total td{background:var(--light);font-weight:700}
   </div>
 </div>
 
+<!-- ══ 생산계획·재고 ══ -->
+<div id="tab-plan" class="tab">
+  <!-- ① 월단위 생산계획 -->
+  <div class="card">
+    <div class="card-hdr"><span>① 월단위 생산계획</span>
+      <div class="pp-bar"><input type="month" id="ppMonth" onchange="renderPlanMonth()"></div></div>
+    <div class="card-body">
+      <div id="ppMonthWeeks" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+      <div class="tbl-wrap"><table class="pp-tbl">
+        <thead><tr><th>제품명</th><th>생산수량<span class="pp-sub">(ERP 단위·팩)</span></th><th>파우치</th><th>원육/파우치</th><th>수율</th><th>원육량 (kg)</th><th>원육 구분</th></tr></thead>
+        <tbody id="ppMonthBody"></tbody>
+      </table></div>
+      <div class="ro-note" style="margin-top:6px">원육량 = 파우치 수 × 원육/파우치 ÷ 수율. 결재 상태와 관계없이 저장된 주간 계획을 날짜 기준으로 이 달에 합산합니다.</div>
+    </div>
+  </div>
+
+  <!-- ② 제품별 재고·소진시점 -->
+  <div class="card">
+    <div class="card-hdr"><span>② 제품별 재고 · 예상 소진시점</span><span id="ppInvAsOf" style="font-weight:400"></span></div>
+    <div class="card-body">
+      <div id="ppInvWarn"></div>
+      <div class="tbl-wrap"><table class="pp-tbl">
+        <thead><tr><th>제품명</th><th>이번주 주초재고</th><th>이번주 생산</th><th>다음주 생산</th><th>이번주 출고</th><th>다음주 출고</th><th>차주 예상 잔여</th><th>일평균 출고<span class="pp-sub">(최근 4주 실적)</span></th><th>예상 소진일</th><th>남은 일수</th></tr></thead>
+        <tbody id="ppInvBody"></tbody>
+      </table></div>
+      <div class="ro-note" style="margin-top:6px">생산·출고는 실적이 입력된 값은 실적, 없으면 계획(예정)으로 계산합니다. <b>*</b> 표시는 계획·예정값이 섞인 숫자입니다. 남은 일수: <span class="days-badge d-red">7일 미만</span> <span class="days-badge d-orange">14일 미만</span> <span class="days-badge d-green">14일 이상</span></div>
+
+      <div class="sec">원육 재고 · 소진시점 <span style="font-weight:400;color:#888">(수기 입력, 참고용)</span></div>
+      <div class="tbl-wrap"><table class="pp-tbl">
+        <thead><tr><th>원육</th><th>재고 (kg)</th><th>입고예정 (kg)</th><th>합계 (kg)</th><th>일 최대 사용량 (kg)<span class="pp-sub">생산계획 중 가장 많은 날</span></th><th>가용 생산일</th><th>예상 소진일<span class="pp-sub">기준일부터 월~금 계산</span></th></tr></thead>
+        <tbody id="ppMeatBody"></tbody>
+      </table></div>
+      <div class="pp-bar" style="margin-top:8px">
+        <label style="font-size:12px;font-weight:700;color:var(--primary)" for="ppMeatDate">재고 기준일</label>
+        <input type="date" id="ppMeatDate">
+        <button class="btn btn-primary btn-sm need-writer" type="button" onclick="saveMeatStock()">원육 재고 저장</button>
+        <span class="ro-note" id="ppMeatInfo"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 주간 생산계획 입력·결재 -->
+  <div class="card">
+    <div class="card-hdr"><span>③ 주간 생산계획 · 결재</span>
+      <div class="pp-bar">
+        <button class="btn btn-sm" style="background:#fff;color:var(--primary)" type="button" onclick="shiftPlanWeek(-1)">◀</button>
+        <input type="date" id="ppWeek" onchange="setPlanWeek(this.value)">
+        <button class="btn btn-sm" style="background:#fff;color:var(--primary)" type="button" onclick="shiftPlanWeek(1)">▶</button>
+      </div></div>
+    <div class="card-body">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--primary)" id="ppWeekTitle"></div>
+          <div style="margin-top:4px" id="ppWeekStatus"></div>
+        </div>
+        <div class="appr" id="ppAppr"></div>
+      </div>
+      <div class="pp-tabs">
+        <button type="button" id="ppTabPlan" class="on" onclick="setPlanMode('plan')">생산계획</button>
+        <button type="button" id="ppTabAct" onclick="setPlanMode('actual')">생산실적</button>
+        <button type="button" id="ppTabShip" onclick="setPlanMode('ship')">출고</button>
+      </div>
+      <div id="ppModeNote" class="ro-note" style="margin-bottom:6px"></div>
+      <div class="tbl-wrap"><table class="pp-tbl" id="ppGrid"></table></div>
+      <div class="btn-row" id="ppActions"></div>
+      <div class="fg" id="ppCommentWrap" style="margin-top:8px;max-width:520px;display:none">
+        <label for="ppComment">결재 의견 (반려·회수 시 필수)</label><input id="ppComment" autocomplete="off">
+      </div>
+      <div class="auth-msg" id="ppMsg" style="margin-top:6px"></div>
+      <div class="pp-hist" id="ppHist"></div>
+    </div>
+  </div>
+
+  <!-- 기준정보 -->
+  <div class="card">
+    <div class="card-hdr"><span>제품 기준정보 · 기초재고</span><span class="ro-note" style="color:#dfe7f5">수율·원육중량·입수·기초재고는 팀장만 수정</span></div>
+    <div class="card-body">
+      <div class="tbl-wrap"><table class="pp-tbl">
+        <thead><tr><th>ERP코드</th><th>제품명</th><th>파우치/팩</th><th>원육/파우치 (g)</th><th>수율 (%)</th><th>원육 구분</th><th>사용</th><th>기초재고 (팩)</th><th>기초 4주 출고량 (팩)</th></tr></thead>
+        <tbody id="ppMasterBody"></tbody>
+      </table></div>
+      <div class="pp-bar" style="margin-top:8px">
+        <label style="font-size:12px;font-weight:700;color:var(--primary)" for="ppBaseDate">기초재고 기준일 (월요일 주초)</label>
+        <input type="date" id="ppBaseDate">
+        <button class="btn btn-primary btn-sm need-leader" type="button" onclick="saveMaster()">기준정보·기초재고 저장</button>
+        <span class="ro-note" id="ppMasterInfo"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ CAPA 분석 ══ -->
 <div id="tab-capa" class="tab">
   <iframe
@@ -765,6 +915,74 @@ tr.total td{background:var(--light);font-weight:700}
 
 </main>
 <div id="toast"></div>
+
+<!-- ══ 로그인 화면 (사이트 전체) ══ -->
+<div class="auth-gate" id="authGate">
+  <div class="auth-card">
+    <div class="ac-hdr">
+      <h2>🏭 순수본 제조원가 관리</h2>
+      <p id="authSub">계정 정보를 불러오는 중…</p>
+    </div>
+    <div class="ac-body">
+      <!-- 처음 사용: 관리 계정 만들기 -->
+      <div id="authSetup" style="display:none;flex-direction:column;gap:10px">
+        <div class="auth-note">등록된 계정이 없습니다. 계정을 관리할 첫 계정(팀장 또는 본부장)을 만드세요. 팀원 계정은 로그인 후 [계정 관리]에서 추가합니다.</div>
+        <div class="fg"><label for="suName">이름</label><input id="suName" autocomplete="off" placeholder="예: 홍길동"></div>
+        <div class="fg"><label for="suRole">역할</label>
+          <select id="suRole"><option value="leader">팀장</option><option value="director">본부장</option></select></div>
+        <div class="fg"><label for="suPin">PIN (숫자 4~8자리)</label><input id="suPin" type="password" inputmode="numeric" autocomplete="new-password"></div>
+        <div class="fg"><label for="suPin2">PIN 한 번 더</label><input id="suPin2" type="password" inputmode="numeric" autocomplete="new-password"></div>
+        <button class="btn btn-primary" id="suOk" type="button" onclick="authSetupSubmit()">계정 만들고 들어가기</button>
+      </div>
+      <!-- 로그인 -->
+      <div id="authLogin" style="display:none;flex-direction:column;gap:10px">
+        <div class="fg"><label for="lgUser">이름</label><select id="lgUser" onchange="authUserPicked()"></select></div>
+        <div class="fg" id="lgPinWrap"><label for="lgPin" id="lgPinLabel">PIN</label><input id="lgPin" type="password" inputmode="numeric" autocomplete="current-password"></div>
+        <div class="fg" id="lgPin2Wrap" style="display:none"><label for="lgPin2">PIN 한 번 더</label><input id="lgPin2" type="password" inputmode="numeric" autocomplete="new-password"></div>
+        <button class="btn btn-primary" id="lgOk" type="button" onclick="authLoginSubmit()">로그인</button>
+      </div>
+      <div class="auth-msg" id="authMsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 내 계정 / 계정 관리 ══ -->
+<div class="acct-modal hidden" id="acctModal" onclick="if(event.target===this) closeAcct()">
+  <div class="acct-box">
+    <div class="card-hdr"><span id="acctTitle">내 계정</span><button type="button" onclick="closeAcct()" aria-label="닫기">×</button></div>
+    <div class="acct-sec">
+      <h3>내 정보</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div id="acctMe" style="font-size:13px"></div>
+        <button class="btn btn-bad btn-sm" type="button" onclick="authLogout()">로그아웃</button>
+      </div>
+    </div>
+    <div class="acct-sec">
+      <h3>내 PIN 바꾸기</h3>
+      <div class="form-row cols3">
+        <div class="fg"><label for="myPinOld">현재 PIN</label><input id="myPinOld" type="password" inputmode="numeric" autocomplete="current-password"></div>
+        <div class="fg"><label for="myPin1">새 PIN (숫자 4~8자리)</label><input id="myPin1" type="password" inputmode="numeric" autocomplete="new-password"></div>
+        <div class="fg"><label for="myPin2">새 PIN 한 번 더</label><input id="myPin2" type="password" inputmode="numeric" autocomplete="new-password"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary btn-sm" type="button" onclick="changeMyPin()">PIN 바꾸기</button><span class="auth-msg" id="myPinMsg" style="align-self:center"></span></div>
+    </div>
+    <div class="acct-sec" id="acctAdminSec" style="display:none">
+      <h3>계정 관리 <span style="font-weight:400;color:#888">(팀장 이상)</span></h3>
+      <div class="auth-note" style="margin-bottom:8px">PIN은 되돌릴 수 없는 암호값으로만 저장되어 숫자는 볼 수 없습니다. 잊은 경우 [PIN 초기화]를 누르면 그 사람이 다음 로그인 때 새 PIN을 직접 정합니다. 팀장은 팀원·팀장 계정만, 본부장은 모든 계정을 관리합니다.</div>
+      <div class="tbl-wrap"><table class="acct-tbl">
+        <thead><tr><th>이름</th><th>역할</th><th>PIN</th><th>상태</th><th>최근 접속</th><th>관리</th></tr></thead>
+        <tbody id="acctList"></tbody>
+      </table></div>
+      <div class="sec">계정 추가</div>
+      <div class="form-row cols3">
+        <div class="fg"><label for="nuName">이름</label><input id="nuName" autocomplete="off"></div>
+        <div class="fg"><label for="nuRole">역할</label><select id="nuRole"></select></div>
+        <div class="fg"><label for="nuPin">처음 PIN (비우면 본인이 첫 로그인 때 정함)</label><input id="nuPin" type="password" inputmode="numeric" autocomplete="new-password"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-ok btn-sm" type="button" onclick="addAcct()">추가</button><span class="auth-msg" id="nuMsg" style="align-self:center"></span></div>
+    </div>
+  </div>
+</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
@@ -830,6 +1048,7 @@ window.goTab = (name,btn) => {
   if(name==='input')     loadExistingData();
   if(name==='report')    { document.getElementById('reportMonth').value = document.getElementById('dashMonth').value || thisMonth(); }
   if(name==='exec') { document.getElementById('execMonth').value = document.getElementById('execMonth').value || document.getElementById('dashMonth').value || thisMonth(); renderExecPreview(); loadExecMemos(); }
+  if(name==='plan')      loadPlanTab();
   if(name==='capa') {
     const frame = document.getElementById('capa-frame');
     if(!frame.src || frame.src === window.location.href) {
@@ -4431,12 +4650,874 @@ async function buildQuarterlyReport(month, y, m, dateStr) {
   showToast(`✅ ${qLabel} 분기 보고서 생성 완료`);
 }
 
-// 초기화
-document.getElementById('dashMonth').value=thisMonth();
-document.getElementById('prodMonth').value=thisMonth();
-document.getElementById('inputMonth').value=thisMonth();
-renderBulkPlan();
-loadDashboard();
+// ════════════════════════════════════
+// 로그인·계정 (이름 + PIN, 사이트 전체)
+//  - 역할: 팀원(member) < 팀장(leader) < 본부장(director)
+//  - Firestore: costsite_users (PIN은 SHA-256 해시만 저장)
+//  - 화면 차단 용도. Firestore 보안규칙이 열려 있으면 데이터 자체를 막지는 못함.
+// ════════════════════════════════════
+const ROLE_LEVEL = { member:1, leader:2, director:3 };
+const ROLE_LABEL = { member:'팀원', leader:'팀장', director:'본부장' };
+const USERS_COL = 'costsite_users';
+const SESSION_KEY = 'ssboncost_session';
+const authUsers = [];
+let authMe = null;
+let authFails = 0, authLockUntil = 0;
+const $a = id => document.getElementById(id);
+const authEsc = t => String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function sha256hex(str){
+  const bytes = Array.from(new TextEncoder().encode(str));
+  const K=[], H=[]; let n=2, c=0;
+  const frac = x => ((x-Math.floor(x))*4294967296)|0;
+  while(c<64){ let p=true; for(let j=2;j*j<=n;j++){ if(n%j===0){p=false;break;} } if(p){ if(c<8) H[c]=frac(Math.pow(n,1/2)); K[c]=frac(Math.pow(n,1/3)); c++; } n++; }
+  const bitLen = bytes.length*8;
+  bytes.push(0x80); while(bytes.length%64!==56) bytes.push(0);
+  const hi=Math.floor(bitLen/4294967296), lo=bitLen>>>0;
+  bytes.push((hi>>>24)&255,(hi>>>16)&255,(hi>>>8)&255,hi&255,(lo>>>24)&255,(lo>>>16)&255,(lo>>>8)&255,lo&255);
+  const w=new Array(64);
+  for(let off=0; off<bytes.length; off+=64){
+    for(let i=0;i<16;i++) w[i]=(bytes[off+i*4]<<24)|(bytes[off+i*4+1]<<16)|(bytes[off+i*4+2]<<8)|bytes[off+i*4+3];
+    for(let i=16;i<64;i++){ const a1=w[i-15], a2=w[i-2];
+      const s0=((a1>>>7)|(a1<<25))^((a1>>>18)|(a1<<14))^(a1>>>3);
+      const s1=((a2>>>17)|(a2<<15))^((a2>>>19)|(a2<<13))^(a2>>>10);
+      w[i]=(w[i-16]+s0+w[i-7]+s1)|0; }
+    let [A,B,C,D,E,F,G,HH]=H;
+    for(let i=0;i<64;i++){
+      const t1=(HH+(((E>>>6)|(E<<26))^((E>>>11)|(E<<21))^((E>>>25)|(E<<7)))+((E&F)^(~E&G))+K[i]+w[i])|0;
+      const t2=((((A>>>2)|(A<<30))^((A>>>13)|(A<<19))^((A>>>22)|(A<<10)))+((A&B)^(A&C)^(B&C)))|0;
+      HH=G; G=F; F=E; E=(D+t1)|0; D=C; C=B; B=A; A=(t1+t2)|0;
+    }
+    H[0]=(H[0]+A)|0; H[1]=(H[1]+B)|0; H[2]=(H[2]+C)|0; H[3]=(H[3]+D)|0;
+    H[4]=(H[4]+E)|0; H[5]=(H[5]+F)|0; H[6]=(H[6]+G)|0; H[7]=(H[7]+HH)|0;
+  }
+  return H.map(h=>('00000000'+(h>>>0).toString(16)).slice(-8)).join('');
+}
+window._sha256hex = sha256hex;
+const pinHashOf = (uid,pin) => sha256hex('ssboncost:user:'+uid+':'+pin);
+const pinOk = p => /^\d{4,8}$/.test(p||'');
+const PIN_RULE = 'PIN은 숫자 4~8자리로 정하세요.';
+const lvl = u => u ? (ROLE_LEVEL[u.role]||0) : 0;
+// 내가 이 계정을 관리할 수 있나: 팀장 이상 + 내 등급 이하 계정
+const canManageUser = u => lvl(authMe)>=2 && lvl(u)<=lvl(authMe);
+window.authMe = () => authMe;
+window.authLevel = () => lvl(authMe);
+
+function readSession(){ try{ return JSON.parse(localStorage.getItem(SESSION_KEY)||'null'); }catch(e){ return null; } }
+function writeSession(v){ try{ v ? localStorage.setItem(SESSION_KEY, JSON.stringify(v)) : localStorage.removeItem(SESSION_KEY); }catch(e){} }
+function newUid(){ return 'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function findAuthUser(id){ return authUsers.find(u=>u.id===id)||null; }
+function activeAuthUsers(){ return authUsers.filter(u=>u.active!==false); }
+function sortedUsers(list){ return list.slice().sort((a,b)=> (a.active!==false)!==(b.active!==false) ? ((a.active!==false)?-1:1) : (lvl(b)-lvl(a) || (a.name<b.name?-1:a.name>b.name?1:0))); }
+function authMsg(id,text,info){ const m=$a(id); if(!m) return; m.textContent=text||''; m.classList.toggle('info',!!info); }
+
+async function loadAuthUsers(){
+  const snap = await getDocs(collection(db, USERS_COL));
+  authUsers.length = 0;
+  snap.forEach(d => authUsers.push({ id:d.id, ...d.data() }));
+}
+async function saveAuthUser(u, patch){
+  const data = { ...patch, updatedAt: Date.now(), updatedBy: authMe ? authMe.name : (patch.name||'') };
+  await setDoc(doc(db, USERS_COL, u.id), data, { merge:true });
+  Object.assign(u, data);
+}
+
+function showGate(mode){
+  document.body.classList.remove('authed');
+  $a('authGate').classList.remove('hidden');
+  $a('authSetup').style.display = mode==='setup' ? 'flex' : 'none';
+  $a('authLogin').style.display = mode==='login' ? 'flex' : 'none';
+  $a('authSub').textContent = mode==='setup' ? '처음 사용 — 관리 계정 만들기' : mode==='login' ? '이름을 고르고 PIN을 입력하세요' : $a('authSub').textContent;
+  if(mode==='login') fillLoginPicker();
+}
+function fillLoginPicker(){
+  const sv = readSession() || {};
+  const list = sortedUsers(activeAuthUsers());
+  $a('lgUser').innerHTML = '<option value="">이름을 고르세요</option>' +
+    list.map(u=>`<option value="${authEsc(u.id)}">${authEsc(u.name)} (${ROLE_LABEL[u.role]||'?'})</option>`).join('');
+  $a('lgUser').value = (sv.uid && findAuthUser(sv.uid) && findAuthUser(sv.uid).active!==false) ? sv.uid : '';
+  authUserPicked();
+}
+window.authUserPicked = () => {
+  const u = findAuthUser($a('lgUser').value);
+  $a('lgPin').value=''; $a('lgPin2').value=''; authMsg('authMsg','');
+  $a('lgPinWrap').style.display = u ? '' : 'none';
+  const first = !!u && !u.pinHash;
+  $a('lgPin2Wrap').style.display = first ? '' : 'none';
+  $a('lgPinLabel').textContent = first ? 'PIN 처음 정하기 (숫자 4~8자리)' : 'PIN';
+  $a('lgOk').textContent = first ? 'PIN 정하고 들어가기' : '로그인';
+  if(first) authMsg('authMsg','아직 PIN이 없습니다. 쓸 PIN을 정하면 다음부터 이 PIN으로 들어옵니다.',true);
+  if(u) setTimeout(()=>$a('lgPin').focus(),0);
+};
+
+function finishLogin(u){
+  authMe = { id:u.id, name:u.name, role:u.role };
+  writeSession({ uid:u.id, h:u.pinHash });
+  authFails = 0;
+  setDoc(doc(db, USERS_COL, u.id), { lastLoginAt: Date.now(), loginCount: (u.loginCount||0)+1 }, { merge:true })
+    .then(()=>{ u.lastLoginAt=Date.now(); u.loginCount=(u.loginCount||0)+1; })
+    .catch(e=>console.warn('접속 기록 저장 실패', e));
+  enterApp();
+}
+function enterApp(){
+  $a('authGate').classList.add('hidden');
+  document.body.classList.add('authed');
+  $a('whoBtn').innerHTML = `${authEsc(authMe.name)}<span class="r">${ROLE_LABEL[authMe.role]}</span>`;
+  document.body.classList.toggle('lv-leader', lvl(authMe)>=2);
+  document.body.classList.toggle('lv-director', lvl(authMe)>=3);
+  document.body.classList.toggle('is-leader', authMe.role==='leader');
+  document.body.classList.toggle('can-write', authMe.role==='member' || authMe.role==='leader');
+  startApp();
+  if(document.getElementById('tab-plan').classList.contains('active')) loadPlanTab();
+}
+
+window.authSetupSubmit = async () => {
+  const name = $a('suName').value.trim(), role = $a('suRole').value;
+  const p1 = $a('suPin').value, p2 = $a('suPin2').value;
+  if(!name) return authMsg('authMsg','이름을 입력하세요.');
+  if(!(role==='leader'||role==='director')) return authMsg('authMsg','첫 계정은 팀장 또는 본부장이어야 합니다.');
+  if(!pinOk(p1)) return authMsg('authMsg',PIN_RULE);
+  if(p1!==p2) return authMsg('authMsg','두 PIN이 서로 다릅니다.');
+  $a('suOk').disabled = true;
+  try{
+    await loadAuthUsers();                       // 그 사이 다른 기기에서 만들었는지 다시 확인
+    if(authUsers.length){ $a('suOk').disabled=false; authMsg('authMsg','다른 곳에서 이미 계정이 만들어졌습니다. 로그인하세요.'); return showGate('login'); }
+    const u = { id:newUid(), name, role, active:true, createdAt:Date.now(), createdBy:name };
+    u.pinHash = pinHashOf(u.id, p1);
+    await setDoc(doc(db, USERS_COL, u.id), { name:u.name, role:u.role, active:true, pinHash:u.pinHash, createdAt:u.createdAt, createdBy:name, updatedAt:Date.now(), updatedBy:name });
+    authUsers.push(u);
+    $a('suOk').disabled = false;
+    finishLogin(u);
+  }catch(e){ $a('suOk').disabled=false; authMsg('authMsg','저장 실패: '+(e.message||e)); }
+};
+
+window.authLoginSubmit = async () => {
+  const u = findAuthUser($a('lgUser').value);
+  if(!u || u.active===false) return authMsg('authMsg','이름을 고르세요.');
+  const p1 = $a('lgPin').value;
+  if(!u.pinHash){                                 // 첫 로그인(또는 PIN 초기화 후): 본인이 정함
+    const p2 = $a('lgPin2').value;
+    if(!pinOk(p1)) return authMsg('authMsg',PIN_RULE);
+    if(p1!==p2) return authMsg('authMsg','두 PIN이 서로 다릅니다.');
+    $a('lgOk').disabled = true;
+    try{
+      const h = pinHashOf(u.id, p1);
+      await setDoc(doc(db, USERS_COL, u.id), { pinHash:h, updatedAt:Date.now(), updatedBy:u.name }, { merge:true });
+      u.pinHash = h; $a('lgOk').disabled = false;
+      finishLogin(u);
+    }catch(e){ $a('lgOk').disabled=false; authMsg('authMsg','PIN 저장 실패: '+(e.message||e)); }
+    return;
+  }
+  if(Date.now() < authLockUntil) return authMsg('authMsg',`PIN을 여러 번 틀렸습니다. ${Math.ceil((authLockUntil-Date.now())/1000)}초 뒤에 다시 시도하세요.`);
+  if(!p1) return authMsg('authMsg','PIN을 입력하세요.');
+  if(pinHashOf(u.id, p1) !== u.pinHash){
+    authFails++;
+    if(authFails>=5){ authLockUntil = Date.now()+30000; authFails=0; authMsg('authMsg','PIN을 5번 틀렸습니다. 30초 뒤에 다시 시도하세요.'); }
+    else authMsg('authMsg',`PIN이 맞지 않습니다. (${authFails}/5)`);
+    $a('lgPin').value = '';
+    return;
+  }
+  finishLogin(u);
+};
+
+window.authLogout = () => {
+  authMe = null; writeSession(null); closeAcct();
+  document.body.classList.remove('lv-leader','lv-director','is-leader','can-write');
+  $a('whoBtn').textContent = '로그인';
+  authMsg('authMsg','');
+  showGate('login');
+};
+
+// ── 내 계정 / 계정 관리 창
+window.openAcct = () => {
+  if(!authMe) return;
+  $a('acctMe').innerHTML = `<b>${authEsc(authMe.name)}</b> · ${ROLE_LABEL[authMe.role]}`;
+  ['myPinOld','myPin1','myPin2','nuName','nuPin'].forEach(id=>$a(id).value='');
+  authMsg('myPinMsg',''); authMsg('nuMsg','');
+  const admin = lvl(authMe)>=2;
+  $a('acctAdminSec').style.display = admin ? '' : 'none';
+  $a('acctTitle').textContent = admin ? '내 계정 · 계정 관리' : '내 계정';
+  if(admin){
+    $a('nuRole').innerHTML = Object.keys(ROLE_LEVEL).filter(r=>ROLE_LEVEL[r]<=lvl(authMe)).map(r=>`<option value="${r}">${ROLE_LABEL[r]}</option>`).join('');
+    $a('nuRole').value = 'member';
+    renderAcctList();
+  }
+  $a('acctModal').classList.remove('hidden');
+};
+window.closeAcct = () => $a('acctModal').classList.add('hidden');
+
+function fmtDT(t){ if(!t) return '—'; const d=new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+function renderAcctList(){
+  $a('acctList').innerHTML = sortedUsers(authUsers).map(u=>{
+    const self = u.id===authMe.id, can = canManageUser(u) && !self;
+    const off = u.active===false;
+    const roleCell = can
+      ? `<select onchange="setAcctRole('${u.id}',this.value)">${Object.keys(ROLE_LEVEL).filter(r=>ROLE_LEVEL[r]<=lvl(authMe)).map(r=>`<option value="${r}"${r===u.role?' selected':''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`
+      : (ROLE_LABEL[u.role]||'?');
+    const btns = can
+      ? `<button class="btn btn-warn btn-sm" type="button" onclick="resetAcctPin('${u.id}')"${u.pinHash?'':' disabled'}>PIN 초기화</button>
+         <button class="btn btn-sm" type="button" style="background:#eee" onclick="toggleAcct('${u.id}')">${off?'다시 사용':'사용 중지'}</button>`
+      : (self ? '<span style="color:#aaa">본인</span>' : '<span style="color:#aaa">권한 없음</span>');
+    return `<tr class="${off?'off':''}"><td class="l">${authEsc(u.name)}</td><td>${roleCell}</td>
+      <td>${u.pinHash?'<span class="badge b-ok">설정됨</span>':'<span class="badge b-warn">미설정</span>'}</td>
+      <td>${off?'중지':'사용'}</td><td>${fmtDT(u.lastLoginAt)}</td><td style="white-space:nowrap">${btns}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">계정 없음</td></tr>';
+}
+
+window.changeMyPin = async () => {
+  const u = findAuthUser(authMe.id);
+  const old = $a('myPinOld').value, p1 = $a('myPin1').value, p2 = $a('myPin2').value;
+  if(!u) return authMsg('myPinMsg','계정을 찾을 수 없습니다.');
+  if(pinHashOf(u.id, old)!==u.pinHash) return authMsg('myPinMsg','현재 PIN이 맞지 않습니다.');
+  if(!pinOk(p1)) return authMsg('myPinMsg',PIN_RULE);
+  if(p1!==p2) return authMsg('myPinMsg','두 PIN이 서로 다릅니다.');
+  try{
+    await saveAuthUser(u, { pinHash: pinHashOf(u.id, p1) });
+    writeSession({ uid:u.id, h:u.pinHash });
+    ['myPinOld','myPin1','myPin2'].forEach(id=>$a(id).value='');
+    authMsg('myPinMsg','PIN을 바꿨습니다.',true);
+    showToast('✅ PIN 변경 완료');
+  }catch(e){ authMsg('myPinMsg','저장 실패: '+(e.message||e)); }
+};
+
+window.addAcct = async () => {
+  if(lvl(authMe)<2) return;
+  const name = $a('nuName').value.trim(), role = $a('nuRole').value, pin = $a('nuPin').value;
+  if(!name) return authMsg('nuMsg','이름을 입력하세요.');
+  if(!ROLE_LEVEL[role] || ROLE_LEVEL[role]>lvl(authMe)) return authMsg('nuMsg','이 역할은 추가할 수 없습니다.');
+  if(activeAuthUsers().some(u=>u.name===name)) return authMsg('nuMsg','같은 이름의 사용 중 계정이 있습니다. 구분되게 적어 주세요 (예: 홍길동B).');
+  if(pin && !pinOk(pin)) return authMsg('nuMsg',PIN_RULE);
+  const u = { id:newUid(), name, role, active:true, createdAt:Date.now(), createdBy:authMe.name, pinHash:'' };
+  if(pin) u.pinHash = pinHashOf(u.id, pin);
+  try{
+    await setDoc(doc(db, USERS_COL, u.id), { name, role, active:true, pinHash:u.pinHash, createdAt:u.createdAt, createdBy:authMe.name, updatedAt:Date.now(), updatedBy:authMe.name });
+    authUsers.push(u);
+    $a('nuName').value=''; $a('nuPin').value='';
+    authMsg('nuMsg',`${name} (${ROLE_LABEL[role]}) 추가됨`,true);
+    renderAcctList();
+  }catch(e){ authMsg('nuMsg','저장 실패: '+(e.message||e)); }
+};
+
+window.resetAcctPin = async id => {
+  const u = findAuthUser(id);
+  if(!u || !canManageUser(u) || u.id===authMe.id) return;
+  if(!confirm(`${u.name}님의 PIN을 초기화할까요?\n다음 로그인 때 본인이 새 PIN을 정합니다.`)) return;
+  try{ await saveAuthUser(u, { pinHash:'', pinResetAt:Date.now(), pinResetBy:authMe.name }); renderAcctList(); showToast(`✅ ${u.name} PIN 초기화`); }
+  catch(e){ showToast('저장 실패: '+(e.message||e)); }
+};
+window.toggleAcct = async id => {
+  const u = findAuthUser(id);
+  if(!u || !canManageUser(u) || u.id===authMe.id) return;
+  try{ await saveAuthUser(u, { active: u.active===false }); renderAcctList(); }
+  catch(e){ showToast('저장 실패: '+(e.message||e)); }
+};
+window.setAcctRole = async (id, role) => {
+  const u = findAuthUser(id);
+  if(!u || !canManageUser(u) || u.id===authMe.id || !ROLE_LEVEL[role] || ROLE_LEVEL[role]>lvl(authMe)) { renderAcctList(); return; }
+  try{ await saveAuthUser(u, { role }); renderAcctList(); showToast(`✅ ${u.name} → ${ROLE_LABEL[role]}`); }
+  catch(e){ showToast('저장 실패: '+(e.message||e)); renderAcctList(); }
+};
+
+$a('authGate').addEventListener('keydown', e => {
+  if(e.key!=='Enter') return;
+  if($a('authSetup').style.display!=='none') authSetupSubmit(); else authLoginSubmit();
+});
+
+async function initAuth(){
+  showGate('loading');
+  try{ await loadAuthUsers(); }
+  catch(e){
+    $a('authSub').textContent = '계정 정보를 불러오지 못했습니다';
+    authMsg('authMsg','Firebase 연결 실패: '+(e.message||e)+' — 새로고침해 보세요.');
+    return;
+  }
+  if(!authUsers.length) return showGate('setup');
+  // 저장된 세션: 계정이 사용 중이고 PIN이 그대로일 때만 통과 (PIN 초기화·변경·중지 시 다시 로그인)
+  const sv = readSession();
+  const u = sv && sv.uid ? findAuthUser(sv.uid) : null;
+  if(u && u.active!==false && u.pinHash && sv.h===u.pinHash && ROLE_LEVEL[u.role]){
+    authMe = { id:u.id, name:u.name, role:u.role };
+    return enterApp();
+  }
+  showGate('login');
+}
+
+// ════════════════════════════════════
+// 생산계획·재고 (주간 계획 → 월 합산, 재고·소진시점, 주 단위 결재)
+//  Firestore: prodplan_weeks/{월요일 YYYY-MM-DD}, prodplan_settings/{master|base|meat}
+//  수량 단위: ERP 단위(팩). 파우치 = 팩 × 파우치/팩
+//  원육(kg) = 파우치 × 원육g/파우치 ÷ 1000 ÷ 수율
+// ════════════════════════════════════
+const PP_WEEKS = 'prodplan_weeks', PP_SET = 'prodplan_settings';
+const PP_DAYS = ['월','화','수','목','금','토'];
+const MEAT_GROUP = { su:'냉동 설도+우둔', hong:'냉동 홍두께', none:'원육 없음' };
+const ST_LABEL = { draft:'작성중', submitted:'팀장 결재 대기', reviewed:'본부장 결재 대기', approved:'결재 완료' };
+// 기본 제품 목록: 상품발주(09.28) 품목 순서·ERP코드. 원육g·수율은 2026-10-07 확정값/엑셀 계산식 값
+const PP_DEFAULT_PRODUCTS = [
+  { id:'mini70',    code:'GBB0001A', name:'미니쇠고기장조림 70 (구형)',        packQty:1, meatG:24,   yield:0.56, group:'su',   active:false },
+  { id:'mini70x5',  code:'GBB0002A', name:'미니쇠고기장조림 70(5입)',          packQty:5, meatG:24,   yield:0.56, group:'su',   active:true },
+  { id:'mini70r',   code:'GBB0012A', name:'미니쇠고기장조림 70g 리뉴얼',       packQty:1, meatG:19,   yield:0.56, group:'su',   active:true },
+  { id:'mini70rx5', code:'GBB0013A', name:'미니쇠고기장조림 70(5입) 리뉴얼',   packQty:5, meatG:19,   yield:0.56, group:'su',   active:true },
+  { id:'costco',    code:'GBB0004A', name:'쇠고기장조림 170g 코스트코',        packQty:4, meatG:54,   yield:0.56, group:'su',   active:true },
+  { id:'sig130',    code:'GBB0003A', name:'시그니처 소고기장조림 130g',        packQty:1, meatG:25,   yield:0.56, group:'su',   active:true },
+  { id:'sig130m',   code:'GBB0006A', name:'시그니처 소고기장조림 130g(마트용)', packQty:1, meatG:25,   yield:0.56, group:'su',   active:true },
+  { id:'sig120',    code:'GBB0005A', name:'시그니처 소고기장조림 120g',        packQty:1, meatG:30,   yield:0.56, group:'su',   active:true },
+  { id:'traders',   code:'GBB0007A', name:'소고기장조림 460g (트레이더스)',    packQty:1, meatG:150,  yield:0.56, group:'su',   active:true },
+  { id:'fc3kg',     code:'GBB0010C', name:'[본죽]쇠고기장조림 3kg FC',         packQty:1, meatG:1350, yield:0.55, group:'hong', active:true },
+  { id:'quail',     code:'GBB0009A', name:'메추리알 장조림 180g',              packQty:1, meatG:0,    yield:0.56, group:'none', active:true },
+  { id:'max5',      code:'GBB0011A', name:'[본죽]미니장조림 70(5입) 맥스',     packQty:5, meatG:24,   yield:0.56, group:'su',   active:true },
+];
+// 상품발주(09.28) '1주차' 시트 주초재고(9/27 기준) — 저장 전 기초재고 입력칸에 미리 채우는 값
+// ship4w: 재고소진시점(26.10.01) 시트 '출고수량/4주' — 사이트에 4주 출고 실적이 쌓이기 전까지 일평균 출고에 씀
+const PP_DEFAULT_BASE = { date:'2026-09-28',
+  qty:{ mini70:0, mini70x5:5466, mini70r:18336, mini70rx5:0, costco:7336, sig130:37570, sig130m:2000, sig120:0, traders:8866, fc3kg:1758, quail:4412, max5:0 },
+  ship4w:{ mini70:1, mini70x5:2481, mini70r:10452, mini70rx5:0, costco:56187, sig130:144276, sig130m:10000, sig120:6673, traders:0, fc3kg:9243, quail:0, max5:288 } };
+
+const pp = { master:null, masterSaved:false, base:null, meat:null, weeks:{}, weekId:'', mode:'plan', loading:null };
+window._pp = pp;
+
+// ── 날짜 (로컬 날짜 문자열 YYYY-MM-DD)
+const ppYmd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const ppPd = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const ppAdd = (s,n) => { const d = ppPd(s); d.setDate(d.getDate()+n); return ppYmd(d); };
+const ppMonday = s => { const d = ppPd(s); d.setDate(d.getDate() - (d.getDay()+6)%7); return ppYmd(d); };
+const ppToday = () => window._ppTodayOverride || ppYmd(new Date());
+const ppMD = s => { const d = ppPd(s); return `${d.getMonth()+1}/${d.getDate()}`; };
+const ppMDW = s => { const d = ppPd(s); return `${d.getMonth()+1}/${d.getDate()}(${'일월화수목금토'[d.getDay()]})`; };
+const ppNum = v => { if(v==null || v==='') return 0; const n = Number(String(v).replace(/,/g,'')); return isFinite(n) ? n : 0; };
+const ppHas = v => v!=null && v!=='';
+const ppFmt = (n,d=0) => (n==null || isNaN(n)) ? '—' : Number(n).toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d});
+
+// ── 권한
+const ppRole = () => authMe ? authMe.role : '';
+const ppCanWrite = () => ppRole()==='member' || ppRole()==='leader';
+const ppIsLeader = () => ppRole()==='leader';
+const ppIsDirector = () => ppRole()==='director';
+
+// ── 제품 기준정보
+const ppProducts = () => pp.master || PP_DEFAULT_PRODUCTS;
+const ppProd = pid => ppProducts().find(p => p.id===pid) || PP_DEFAULT_PRODUCTS.find(p => p.id===pid) || { id:pid, name:pid, packQty:1, meatG:0, yield:1, group:'none' };
+// 주간 계획에 저장된 스냅샷(저장 당시 수율·원육g)이 있으면 그 값을 씀 → 결재 후 기준정보가 바뀌어도 그 주 계산은 그대로
+function ppSpec(w, pid){
+  const m = ppProd(pid), sn = w && w.snap && w.snap[pid];
+  return sn ? { ...m, ...sn } : m;
+}
+const ppPouch = (qty, sp) => qty * (sp.packQty || 1);
+const ppMeatKg = (qty, sp) => (sp.group==='none' || !sp.meatG || !sp.yield) ? 0 : qty * (sp.packQty||1) * sp.meatG / 1000 / sp.yield;
+const ppActiveIds = () => ppProducts().filter(p => p.active!==false).map(p => p.id);
+// 계획/실적에 값이 있는 제품은 '사용 안 함'이어도 표에 보여줌
+function ppRowIds(w){
+  const ids = ppActiveIds();
+  ['plan','actual'].forEach(k => Object.entries((w && w[k]) || {}).forEach(([pid,arr]) => { if((arr||[]).some(v => ppNum(v)) && !ids.includes(pid)) ids.push(pid); }));
+  ['shipPlan','shipActual'].forEach(k => Object.entries((w && w[k]) || {}).forEach(([pid,v]) => { if(ppNum(v) && !ids.includes(pid)) ids.push(pid); }));
+  const order = ppProducts().map(p => p.id);
+  return ids.sort((a,b) => order.indexOf(a) - order.indexOf(b));
+}
+
+// ════ 계산 (순수 함수) ════
+// ① 월 합산: 주간 계획의 각 날짜를 해당 월에 넣음
+function ppMonthSummary(ym){
+  const rows = {};
+  Object.values(pp.weeks).forEach(w => {
+    for(let i=0;i<6;i++){
+      const date = ppAdd(w.monday, i);
+      if(date.slice(0,7)!==ym) continue;
+      Object.entries(w.plan || {}).forEach(([pid, arr]) => {
+        const q = ppNum((arr||[])[i]); if(!q) return;
+        const sp = ppSpec(w, pid);
+        const r = rows[pid] || (rows[pid] = { pid, qty:0, pouch:0, kg:0, specs:new Set(), sp });
+        r.qty += q; r.pouch += ppPouch(q, sp); r.kg += ppMeatKg(q, sp);
+        r.specs.add(sp.meatG+'|'+sp.yield);
+      });
+    }
+  });
+  const order = ppProducts().map(p => p.id);
+  return Object.values(rows).sort((a,b) => order.indexOf(a.pid) - order.indexOf(b.pid));
+}
+// 주의 생산: 날짜별로 실적이 있으면 실적, 없으면 계획
+function ppWeekProd(w, pid){
+  let val = 0, est = false;
+  if(!w) return { val, est };
+  const plan = (w.plan||{})[pid] || [], act = (w.actual||{})[pid] || [];
+  for(let i=0;i<6;i++){
+    if(ppHas(act[i])) val += ppNum(act[i]);
+    else { const p = ppNum(plan[i]); if(p){ val += p; est = true; } }
+  }
+  return { val, est };
+}
+// 주의 출고: 실적이 있으면 실적, 없으면 예정
+function ppWeekShip(w, pid){
+  const a = w && w.shipActual && w.shipActual[pid];
+  if(ppHas(a)) return { val:ppNum(a), est:false, actual:true };
+  return { val:ppNum(w && w.shipPlan && w.shipPlan[pid]), est:true, actual:false };
+}
+// ② 재고·소진시점
+function ppInventory(today){
+  const base = pp.base;
+  if(!base || !base.date) return null;
+  let cur = ppMonday(today);
+  if(cur < base.date) cur = base.date;
+  const next = ppAdd(cur, 7), endNext = ppAdd(next, 6);
+  const rows = ppRowIds(pp.weeks[cur]).concat(ppRowIds(pp.weeks[next])).filter((v,i,a) => a.indexOf(v)===i);
+  const ids = ppProducts().map(p => p.id).filter(id => rows.includes(id) || ppNum(base.qty[id]));
+  const out = ids.map(pid => {
+    let stock = ppNum(base.qty[pid]), stockEst = false;
+    for(let m = base.date; m < cur; m = ppAdd(m, 7)){
+      const w = pp.weeks[m], p = ppWeekProd(w, pid), s = ppWeekShip(w, pid);
+      stock += p.val - s.val;
+      if(p.est || !s.actual) stockEst = true;
+    }
+    const pT = ppWeekProd(pp.weeks[cur], pid), pN = ppWeekProd(pp.weeks[next], pid);
+    const sT = ppWeekShip(pp.weeks[cur], pid), sN = ppWeekShip(pp.weeks[next], pid);
+    const remain = stock + pT.val + pN.val - sT.val - sN.val;
+    // 일평균 출고: 이번주 이전 4주. 기초재고일 이전 주는 기초 4주 출고량/4로 채우고,
+    // 이후 주는 출고 실적이 입력된 주만 씀
+    let sum = 0, n = 0, filled = 0;
+    const s4 = base.ship4w && ppHas(base.ship4w[pid]) ? ppNum(base.ship4w[pid]) : null;
+    for(let k=1;k<=4;k++){
+      const m = ppAdd(cur, -7*k);
+      if(m < base.date){ if(s4!=null){ sum += s4/4; n++; filled++; } continue; }
+      const s = ppWeekShip(pp.weeks[m], pid);
+      if(s.actual){ sum += s.val; n++; }
+    }
+    const daily = n ? sum / (n*7) : 0;
+    let deplete = null, daysLeft = null;
+    if(daily > 0){
+      const end = ppPd(endNext).getTime();                     // 다음주 일요일 0시 (= 토요일 출고 후), 엑셀 K1과 같은 기준
+      deplete = new Date(end + remain / daily * 86400000);
+      daysLeft = (deplete.getTime() - ppPd(today).getTime()) / 86400000;
+    }
+    return { pid, stock, stockEst, pT, pN, sT, sN, remain, daily, weeksUsed:n, weeksFilled:filled, deplete, daysLeft };
+  });
+  return { cur, next, rows: out };
+}
+// 원육 일 최대 사용량 (생산계획 기준, 구분별)
+function ppMeatMax(group){
+  let best = { kg:0, date:'' };
+  Object.values(pp.weeks).forEach(w => {
+    for(let i=0;i<6;i++){
+      let kg = 0;
+      Object.entries(w.plan || {}).forEach(([pid, arr]) => {
+        const sp = ppSpec(w, pid);
+        if(sp.group===group) kg += ppMeatKg(ppNum((arr||[])[i]), sp);
+      });
+      if(kg > best.kg) best = { kg, date: ppAdd(w.monday, i) };
+    }
+  });
+  return best;
+}
+// 기준일부터 n번째 생산일(월~금)
+function ppNthWorkday(start, n){
+  let d = start, k = 0;
+  if(n <= 0) return start;
+  for(let guard=0; guard<4000; guard++){
+    const wd = ppPd(d).getDay();
+    if(wd>=1 && wd<=5){ k++; if(k >= Math.ceil(n)) return d; }
+    d = ppAdd(d, 1);
+  }
+  return d;
+}
+window._ppCalc = { ppMonthSummary, ppInventory, ppMeatMax, ppNthWorkday, ppMeatKg, ppMonday };
+
+// ════ 불러오기 ════
+async function ppLoad(){
+  const [m, b, mt, ws] = await Promise.all([
+    getDoc(doc(db, PP_SET, 'master')), getDoc(doc(db, PP_SET, 'base')), getDoc(doc(db, PP_SET, 'meat')),
+    getDocs(collection(db, PP_WEEKS))
+  ]);
+  if(m.exists() && Array.isArray(m.data().products)){
+    // 저장된 목록 + 새로 생긴 기본 제품
+    const saved = m.data().products;
+    pp.master = saved.concat(PP_DEFAULT_PRODUCTS.filter(d => !saved.some(s => s.id===d.id)));
+    pp.masterSaved = true; pp.masterInfo = m.data();
+  } else { pp.master = PP_DEFAULT_PRODUCTS.map(p => ({...p})); pp.masterSaved = false; pp.masterInfo = null; }
+  pp.base = b.exists() ? b.data() : null;
+  pp.meat = mt.exists() ? mt.data() : null;
+  pp.weeks = {};
+  ws.forEach(d => { const w = d.data(); w.monday = w.monday || d.id; pp.weeks[d.id] = w; });
+}
+window.loadPlanTab = async () => {
+  const today = ppToday();
+  if(!document.getElementById('ppMonth').value) document.getElementById('ppMonth').value = today.slice(0,7);
+  if(!pp.weekId) pp.weekId = ppMonday(today);
+  try{ pp.loading = ppLoad(); await pp.loading; }
+  catch(e){ showToast('생산계획 불러오기 실패: '+(e.message||e), 4000); return; }
+  document.body.classList.toggle('can-write', ppCanWrite());
+  ppRenderAll();
+};
+function ppRenderAll(){ renderPlanMonth(); ppRenderInventory(); ppRenderMeat(); ppRenderWeek(); ppRenderMaster(); }
+
+// ════ ① 월단위 ════
+window.renderPlanMonth = () => {
+  const ym = document.getElementById('ppMonth').value || ppToday().slice(0,7);
+  const rows = ppMonthSummary(ym);
+  // 이 달에 걸친 주의 결재 상태
+  const first = ppMonday(ym+'-01'); const chips = [];
+  for(let m = first; m.slice(0,7) <= ym; m = ppAdd(m,7)){
+    if(ppAdd(m,5).slice(0,7) < ym) continue;
+    const w = pp.weeks[m], st = w ? (w.status||'draft') : 'none';
+    chips.push(`<span class="pp-chip st-${st}" title="${ppMD(m)}~${ppMD(ppAdd(m,5))}">${ppMD(m)}주 ${w ? ST_LABEL[st] : '계획 없음'}</span>`);
+  }
+  document.getElementById('ppMonthWeeks').innerHTML = chips.join('');
+  let tq=0, tkg=0; const g = { su:0, hong:0 };
+  const body = rows.map(r => {
+    const sp = r.sp, mixed = r.specs.size > 1;
+    tq += r.qty; tkg += r.kg; if(g[sp.group]!=null) g[sp.group] += r.kg;
+    return `<tr><td class="l">${authEsc(ppProd(r.pid).name)}</td><td class="num">${ppFmt(r.qty)}</td>
+      <td class="num">${(sp.packQty||1)>1 ? ppFmt(r.pouch)+` <span class="pp-sub">(${sp.packQty}입)</span>` : '<span class="sub">—</span>'}</td>
+      <td class="num">${sp.group==='none' ? '—' : (mixed ? '<span title="주마다 기준값이 다름">혼합</span>' : sp.meatG+'g')}</td>
+      <td class="num">${sp.group==='none' ? '—' : (mixed ? '혼합' : (sp.yield*100).toFixed(1)+'%')}</td>
+      <td class="num"><b>${ppFmt(r.kg,1)}</b></td><td class="c">${MEAT_GROUP[sp.group]||'—'}</td></tr>`;
+  }).join('');
+  document.getElementById('ppMonthBody').innerHTML = body
+    ? body + `<tr class="total"><td class="l">합계</td><td class="num">${ppFmt(tq)}</td><td></td><td></td><td></td><td class="num">${ppFmt(tkg,1)}</td><td></td></tr>
+       <tr><td class="l" colspan="5" style="text-align:right;color:#666">냉동 설도+우둔</td><td class="num">${ppFmt(g.su,1)}</td><td></td></tr>
+       <tr><td class="l" colspan="5" style="text-align:right;color:#666">냉동 홍두께</td><td class="num">${ppFmt(g.hong,1)}</td><td></td></tr>`
+    : `<tr><td colspan="7" class="empty">${ym} 생산계획이 없습니다. 아래 ③에서 주간 계획을 입력하세요.</td></tr>`;
+};
+
+// ════ ② 재고 ════
+function ppBadge(days){
+  if(days==null) return '<span class="days-badge d-none">—</span>';
+  const cls = days < 7 ? 'd-red' : days < 14 ? 'd-orange' : 'd-green';
+  return `<span class="days-badge ${cls}">${Math.floor(days)}일</span>`;
+}
+function ppRenderInventory(){
+  const inv = ppInventory(ppToday());
+  const warn = document.getElementById('ppInvWarn'), body = document.getElementById('ppInvBody');
+  if(!inv){
+    document.getElementById('ppInvAsOf').textContent = '';
+    warn.innerHTML = '<div class="warn-box">기초재고가 아직 없습니다. 맨 아래 [제품 기준정보 · 기초재고]에서 팀장이 기초재고를 저장하면 재고가 계산됩니다.</div>';
+    body.innerHTML = '<tr><td colspan="10" class="empty">기초재고 미입력</td></tr>';
+    return;
+  }
+  document.getElementById('ppInvAsOf').textContent = `오늘 ${ppMDW(ppToday())} · 이번주 ${ppMD(inv.cur)}~ · 기초재고 ${ppMD(pp.base.date)}`;
+  warn.innerHTML = '';
+  const star = b => b ? '<b title="계획·예정값 포함">*</b>' : '';
+  const pouchSub = (pid, v) => { const k = ppProd(pid).packQty||1; return k>1 ? `<span class="pp-sub">${ppFmt(v*k)} 파우치</span>` : ''; };
+  body.innerHTML = inv.rows.map(r => `<tr>
+    <td class="l">${authEsc(ppProd(r.pid).name)}</td>
+    <td class="num">${ppFmt(r.stock)}${star(r.stockEst)}${pouchSub(r.pid, r.stock)}</td>
+    <td class="num">${ppFmt(r.pT.val)}${star(r.pT.est)}</td>
+    <td class="num">${ppFmt(r.pN.val)}${star(r.pN.est)}</td>
+    <td class="num">${ppFmt(r.sT.val)}${star(r.sT.est && r.sT.val)}</td>
+    <td class="num">${ppFmt(r.sN.val)}${star(r.sN.est && r.sN.val)}</td>
+    <td class="num"><b class="${r.remain<0?'bad':''}">${ppFmt(r.remain)}</b>${pouchSub(r.pid, r.remain)}</td>
+    <td class="num">${r.weeksUsed ? ppFmt(r.daily,1)+`<span class="pp-sub">${!r.weeksFilled ? r.weeksUsed+'주 실적' : r.weeksUsed===r.weeksFilled ? '기초 '+r.weeksFilled+'주' : (r.weeksUsed-r.weeksFilled)+'주 실적 + 기초 '+r.weeksFilled+'주'}</span>` : '<span class="sub">실적 없음</span>'}</td>
+    <td class="c">${r.deplete ? ppMDW(ppYmd(r.deplete)) : '—'}</td>
+    <td class="c">${ppBadge(r.daysLeft)}</td></tr>`).join('') || '<tr><td colspan="10" class="empty">표시할 제품 없음</td></tr>';
+}
+function ppRenderMeat(){
+  const m = pp.meat || {}, can = ppCanWrite();
+  document.getElementById('ppMeatDate').value = m.date || ppToday();
+  document.getElementById('ppMeatDate').disabled = !can;
+  document.getElementById('ppMeatInfo').textContent = m.updatedBy ? `마지막 저장: ${m.updatedBy} ${fmtDT(m.updatedAt)}` : '아직 저장된 원육 재고 없음';
+  const base = m.date || ppToday();
+  document.getElementById('ppMeatBody').innerHTML = ['su','hong'].map(gk => {
+    const g = m[gk] || {}, mx = ppMeatMax(gk), total = ppNum(g.stock) + ppNum(g.incoming);
+    const n = mx.kg ? total / mx.kg : null;
+    return `<tr><td class="l">${MEAT_GROUP[gk]}</td>
+      <td><input id="ppMeat_${gk}_stock" inputmode="decimal" value="${ppHas(g.stock)?g.stock:''}" ${can?'':'disabled'}></td>
+      <td><input id="ppMeat_${gk}_incoming" inputmode="decimal" value="${ppHas(g.incoming)?g.incoming:''}" ${can?'':'disabled'}></td>
+      <td class="num">${ppFmt(total,1)}</td>
+      <td class="num">${mx.kg ? ppFmt(mx.kg,1)+`<span class="pp-sub">${ppMDW(mx.date)}</span>` : '<span class="sub">계획 없음</span>'}</td>
+      <td class="num">${n==null ? '—' : ppFmt(n,1)+'일'}</td>
+      <td class="c">${n==null || !ppHas(g.stock) ? '—' : ppMDW(ppNthWorkday(base, n))}</td></tr>`;
+  }).join('');
+}
+window.saveMeatStock = async () => {
+  if(!ppCanWrite()) return;
+  const data = { date: document.getElementById('ppMeatDate').value || ppToday(), updatedAt: Date.now(), updatedBy: authMe.name };
+  for(const gk of ['su','hong']){
+    const s = document.getElementById(`ppMeat_${gk}_stock`).value.trim(), i = document.getElementById(`ppMeat_${gk}_incoming`).value.trim();
+    for(const v of [s,i]) if(v && (!isFinite(Number(v.replace(/,/g,''))) || ppNum(v) < 0)){ showToast('원육 재고는 0 이상의 숫자로 입력하세요.'); return; }
+    data[gk] = { stock: s==='' ? null : ppNum(s), incoming: i==='' ? 0 : ppNum(i) };
+  }
+  try{ await setDoc(doc(db, PP_SET, 'meat'), data); pp.meat = data; ppRenderMeat(); showToast('✅ 원육 재고 저장'); }
+  catch(e){ showToast('저장 실패: '+(e.message||e)); }
+};
+
+// ════ ③ 주간 계획·결재 ════
+const ppWeek = () => pp.weeks[pp.weekId] || null;
+window.setPlanWeek = v => { if(!v) return; pp.weekId = ppMonday(v); ppRenderWeek(); };
+window.shiftPlanWeek = n => { pp.weekId = ppAdd(pp.weekId, 7*n); ppRenderWeek(); };
+window.setPlanMode = m => { pp.mode = m; ppRenderWeek(); };
+const ppStatus = w => w ? (w.status || 'draft') : 'draft';
+const ppPlanEditable = () => ppCanWrite() && ppStatus(ppWeek())==='draft';
+
+function ppRenderWeek(){
+  const id = pp.weekId, w = ppWeek(), st = ppStatus(w);
+  document.getElementById('ppWeek').value = id;
+  document.getElementById('ppWeekTitle').textContent = `${ppMDW(id)} ~ ${ppMDW(ppAdd(id,5))} 주간 생산계획`;
+  document.getElementById('ppWeekStatus').innerHTML = `<span class="pp-chip st-${w?st:'none'}">${w ? ST_LABEL[st] : '아직 저장 안 됨'}</span>`
+    + (w && w.lastReject ? ` <span style="font-size:11px;color:var(--bad)">반려: ${authEsc(w.lastReject.by)} — ${authEsc(w.lastReject.comment)}</span>` : '');
+  const stamp = (lbl, s) => `<div><div class="ah">${lbl}</div><div class="ab">${s ? `<b>${authEsc(s.name)}</b><span>${fmtDT(s.at)}</span>` : '<span>—</span>'}</div></div>`;
+  document.getElementById('ppAppr').innerHTML = stamp('작성', w && w.writer) + stamp('팀장', w && w.leader) + stamp('본부장', w && w.director);
+  ['Plan','Act','Ship'].forEach(k => document.getElementById('ppTab'+k).classList.toggle('on', {Plan:'plan',Act:'actual',Ship:'ship'}[k]===pp.mode));
+  const note = {
+    plan: ppPlanEditable() ? '단위: ERP 단위(팩). 저장하면 위 ① 월단위 계획과 ② 재고에 바로 반영됩니다.' : (ppCanWrite() ? `결재가 진행 중이라 계획을 고칠 수 없습니다. 고치려면 ${st==='approved' ? '팀장이 [결재 취소]' : '[회수]'}로 작성중 상태로 돌리세요.` : '본부장은 조회·결재만 합니다.'),
+    actual: '생산 후 날짜별 실적(팩)을 입력하세요. 빈칸은 미입력으로 보고 재고 계산에 계획값을 씁니다. 실적은 결재와 별도로 언제든 입력할 수 있습니다.',
+    ship: '주간 출고 예정량과 실적(팩)을 입력하세요. 실적이 있으면 실적, 없으면 예정으로 재고를 계산합니다. 소진시점의 일평균 출고는 최근 4주 실적만 씁니다.'
+  }[pp.mode];
+  document.getElementById('ppModeNote').textContent = note;
+  ppRenderGrid();
+  ppRenderActions();
+  document.getElementById('ppHist').innerHTML = (w && w.history || []).slice().reverse().map(h =>
+    `${fmtDT(h.at)} · <b>${authEsc(h.by)}</b>(${ROLE_LABEL[h.role]||h.role}) · ${authEsc(h.act)}${h.comment ? ' — '+authEsc(h.comment) : ''}`).join('<br>');
+  document.getElementById('ppMsg').textContent = '';
+}
+
+function ppRenderGrid(){
+  const id = pp.weekId, w = ppWeek(), ids = ppRowIds(w);
+  const dates = PP_DAYS.map((_,i) => ppAdd(id, i));
+  const tbl = document.getElementById('ppGrid');
+  // 계획 칸의 0은 빈칸으로 보여줌 (실적 칸의 0은 '0 생산'이라 그대로)
+  const cell = (pid, k, i, val, dis, cls='') => `<td><input data-pid="${pid}" data-k="${k}" data-i="${i}" inputmode="numeric" class="${cls}" value="${ppHas(val) && !(k==='plan' && ppNum(val)===0) ? val : ''}" ${dis?'disabled':''}></td>`;
+  if(pp.mode==='ship'){
+    const dis = !ppCanWrite();
+    tbl.innerHTML = `<thead><tr><th>제품명</th><th>이번주 생산 계획</th><th>출고 예정</th><th>출고 실적</th></tr></thead><tbody>` +
+      ids.map(pid => `<tr><td class="l">${authEsc(ppProd(pid).name)}</td>
+        <td class="num">${ppFmt(((w&&w.plan||{})[pid]||[]).reduce((a,v)=>a+ppNum(v),0))}</td>
+        ${cell(pid,'shipPlan',-1,w&&w.shipPlan&&w.shipPlan[pid],dis)}${cell(pid,'shipActual',-1,w&&w.shipActual&&w.shipActual[pid],dis,'act-empty')}</tr>`).join('') + '</tbody>';
+  } else {
+    const isPlan = pp.mode==='plan', key = isPlan ? 'plan' : 'actual';
+    const dis = isPlan ? !ppPlanEditable() : !ppCanWrite();
+    const extra = isPlan ? '<th>합계(팩)</th><th>파우치</th><th>원육(kg)</th>' : '<th>실적 합계</th><th>계획 합계</th><th>차이</th>';
+    tbl.innerHTML = `<thead><tr><th>제품명</th>${dates.map((d,i)=>`<th>${PP_DAYS[i]}<span class="pp-sub">${ppMD(d)}</span></th>`).join('')}${extra}</tr></thead><tbody>` +
+      ids.map(pid => `<tr data-row="${pid}"><td class="l">${authEsc(ppProd(pid).name)}</td>${dates.map((_,i) => cell(pid,key,i,((w&&w[key]||{})[pid]||[])[i],dis, isPlan?'':'act-empty')).join('')}
+        <td class="num" data-t="a"></td><td class="num" data-t="b"></td><td class="num" data-t="c"></td></tr>`).join('') +
+      `</tbody><tfoot>` + (isPlan
+        ? `<tr class="total"><td class="l">합계</td>${dates.map((_,i)=>`<td class="num" data-f="${i}"></td>`).join('')}<td class="num" data-f="q"></td><td></td><td class="num" data-f="kg"></td></tr>
+           <tr><td class="l sub">원육 설도+우둔 (kg)</td>${dates.map((_,i)=>`<td class="num sub" data-g="su${i}"></td>`).join('')}<td></td><td></td><td class="num sub" data-g="su"></td></tr>
+           <tr><td class="l sub">원육 홍두께 (kg)</td>${dates.map((_,i)=>`<td class="num sub" data-g="hong${i}"></td>`).join('')}<td></td><td></td><td class="num sub" data-g="hong"></td></tr>`
+        : '') + `</tfoot>`;
+  }
+  tbl.querySelectorAll('input').forEach(el => el.addEventListener('input', ppUpdateTotals));
+  ppUpdateTotals();
+}
+// 입력 중인 값으로 합계 다시 계산 (스냅샷이 있으면 그 기준, 없으면 현재 기준정보)
+function ppGridValues(){
+  const out = {};
+  document.querySelectorAll('#ppGrid input').forEach(el => {
+    const { pid, k, i } = el.dataset;
+    out[k] = out[k] || {};
+    if(+i < 0) out[k][pid] = el.value.trim();
+    else { (out[k][pid] = out[k][pid] || ['','','','','',''])[+i] = el.value.trim(); }
+  });
+  return out;
+}
+function ppUpdateTotals(){
+  if(pp.mode==='ship') return;
+  const w = ppWeek(), v = ppGridValues(), tbl = document.getElementById('ppGrid');
+  const isPlan = pp.mode==='plan';
+  const sp = pid => (isPlan && ppPlanEditable()) ? ppProd(pid) : ppSpec(w, pid);
+  const day = [0,0,0,0,0,0], g = { su:[0,0,0,0,0,0], hong:[0,0,0,0,0,0] }; let tq = 0, tkg = 0;
+  tbl.querySelectorAll('tr[data-row]').forEach(tr => {
+    const pid = tr.dataset.row, s = sp(pid), arr = (v[isPlan?'plan':'actual']||{})[pid] || [];
+    const q = arr.reduce((a,x) => a+ppNum(x), 0);
+    if(isPlan){
+      arr.forEach((x,i) => { const n = ppNum(x); day[i] += n; if(g[s.group]) g[s.group][i] += ppMeatKg(n, s); });
+      const kg = ppMeatKg(q, s); tq += q; tkg += kg;
+      tr.querySelector('[data-t=a]').textContent = ppFmt(q);
+      tr.querySelector('[data-t=b]').textContent = (s.packQty||1)>1 ? ppFmt(q*s.packQty) : '—';
+      tr.querySelector('[data-t=c]').textContent = s.group==='none' ? '—' : ppFmt(kg,1);
+    } else {
+      const plan = ((w&&w.plan||{})[pid]||[]).reduce((a,x)=>a+ppNum(x),0);
+      const entered = arr.some(ppHas);
+      tr.querySelector('[data-t=a]').textContent = entered ? ppFmt(q) : '미입력';
+      tr.querySelector('[data-t=b]').textContent = ppFmt(plan);
+      const diff = q - plan;
+      tr.querySelector('[data-t=c]').innerHTML = entered ? `<span class="${diff<0?'bad':diff>0?'ok':''}">${diff>0?'+':''}${ppFmt(diff)}</span>` : '—';
+    }
+  });
+  if(isPlan){
+    day.forEach((n,i) => tbl.querySelector(`[data-f="${i}"]`).textContent = n ? ppFmt(n) : '');
+    tbl.querySelector('[data-f=q]').textContent = ppFmt(tq);
+    tbl.querySelector('[data-f=kg]').textContent = ppFmt(tkg,1);
+    ['su','hong'].forEach(k => { g[k].forEach((n,i) => tbl.querySelector(`[data-g="${k}${i}"]`).textContent = n ? ppFmt(n,1) : '');
+      tbl.querySelector(`[data-g="${k}"]`).textContent = ppFmt(g[k].reduce((a,b)=>a+b,0),1); });
+  }
+}
+
+function ppRenderActions(){
+  const w = ppWeek(), st = ppStatus(w), r = ppRole(), btn = [];
+  const me = authMe ? authMe.id : '';
+  let needComment = false;
+  if(pp.mode==='plan'){
+    if(st==='draft' && ppCanWrite()){
+      btn.push(`<button class="btn btn-primary" type="button" onclick="ppSavePlan(false)">임시 저장</button>`);
+      btn.push(`<button class="btn btn-ok" type="button" onclick="ppSavePlan(true)">결재 요청</button>`);
+    }
+    if(st==='submitted' && r==='leader'){
+      btn.push(`<button class="btn btn-ok" type="button" onclick="ppAct('leaderOk')">팀장 결재</button>`);
+      btn.push(`<button class="btn btn-bad" type="button" onclick="ppAct('reject')">반려</button>`); needComment = true;
+    }
+    if(st==='submitted' && r==='member' && w.writer && w.writer.uid===me){
+      btn.push(`<button class="btn btn-warn" type="button" onclick="ppAct('recall')">회수</button>`); needComment = true;
+    }
+    if(st==='reviewed' && r==='director'){
+      btn.push(`<button class="btn btn-ok" type="button" onclick="ppAct('directorOk')">본부장 승인</button>`);
+      btn.push(`<button class="btn btn-bad" type="button" onclick="ppAct('reject')">반려</button>`); needComment = true;
+    }
+    if(st==='reviewed' && r==='leader'){
+      btn.push(`<button class="btn btn-warn" type="button" onclick="ppAct('recall')">회수</button>`); needComment = true;
+    }
+    if(st==='approved' && r==='leader'){
+      btn.push(`<button class="btn btn-warn" type="button" onclick="ppAct('cancel')">결재 취소 (수정)</button>`); needComment = true;
+    }
+  } else if(ppCanWrite()){
+    btn.push(`<button class="btn btn-primary" type="button" onclick="ppSaveFacts()">${pp.mode==='ship'?'출고 저장':'실적 저장'}</button>`);
+  }
+  document.getElementById('ppActions').innerHTML = btn.join('');
+  document.getElementById('ppCommentWrap').style.display = needComment ? '' : 'none';
+  document.getElementById('ppComment').value = '';
+}
+
+function ppReadGrid(kind){
+  const v = ppGridValues(), bad = [];
+  const clean = x => { if(x==='') return null; const n = Number(String(x).replace(/,/g,'')); if(!isFinite(n) || n<0) { bad.push(x); return null; } return n; };
+  const res = {};
+  if(kind==='plan'){ res.plan = {}; Object.entries(v.plan||{}).forEach(([pid,arr]) => res.plan[pid] = arr.map(x => clean(x) || 0)); }
+  if(kind==='actual'){ res.actual = {}; Object.entries(v.actual||{}).forEach(([pid,arr]) => res.actual[pid] = arr.map(clean)); }
+  if(kind==='ship'){ res.shipPlan = {}; res.shipActual = {};
+    Object.entries(v.shipPlan||{}).forEach(([pid,x]) => res.shipPlan[pid] = clean(x) || 0);
+    Object.entries(v.shipActual||{}).forEach(([pid,x]) => res.shipActual[pid] = clean(x)); }
+  return { res, bad };
+}
+const ppHist = (w, act, comment) => (w && w.history || []).concat([{ at:Date.now(), by:authMe.name, role:authMe.role, act, comment: comment||'' }]);
+async function ppFresh(id){ const s = await getDoc(doc(db, PP_WEEKS, id)); return s.exists() ? { ...s.data(), monday: id } : null; }
+function ppMsg(t){ document.getElementById('ppMsg').textContent = t; }
+
+window.ppSavePlan = async (submit) => {
+  if(!ppCanWrite()) return;
+  const id = pp.weekId, { res, bad } = ppReadGrid('plan');
+  if(bad.length) return ppMsg('숫자가 아닌 값이 있습니다: '+bad.slice(0,3).join(', '));
+  const total = Object.values(res.plan).reduce((a,arr)=>a+arr.reduce((x,y)=>x+y,0),0);
+  if(submit && !total) return ppMsg('계획 수량이 없습니다. 수량을 입력한 뒤 결재 요청하세요.');
+  try{
+    const cur = await ppFresh(id);
+    if(cur && ppStatus(cur)!=='draft'){ pp.weeks[id] = cur; ppRenderAll(); return ppMsg('그 사이 다른 사람이 결재를 진행해 저장하지 않았습니다. 화면을 새로 불러왔습니다.'); }
+    const snap = {};
+    Object.keys(res.plan).forEach(pid => { const p = ppProd(pid); snap[pid] = { packQty:p.packQty, meatG:p.meatG, yield:p.yield, group:p.group }; });
+    const now = Date.now(), stampMe = { name:authMe.name, uid:authMe.id, at:now };
+    const data = { monday:id, plan:res.plan, snap, status:'draft', updatedAt:now, updatedBy:authMe.name,
+      shipPlan:(cur&&cur.shipPlan)||{}, shipActual:(cur&&cur.shipActual)||{}, actual:(cur&&cur.actual)||{},
+      writer:null, leader:null, director:null, lastReject:(cur&&cur.lastReject)||null,
+      history: ppHist(cur, submit ? '결재 요청' : '임시 저장') };
+    if(submit){
+      data.writer = stampMe; data.lastReject = null;
+      if(authMe.role==='leader'){ data.leader = stampMe; data.status = 'reviewed'; data.history[data.history.length-1].act = '결재 요청 (팀장 작성 → 팀장 결재 포함)'; }
+      else data.status = 'submitted';
+    }
+    await setDoc(doc(db, PP_WEEKS, id), data);
+    pp.weeks[id] = data;
+    ppRenderAll();
+    showToast(submit ? '✅ 결재 요청' : '✅ 임시 저장');
+  }catch(e){ ppMsg('저장 실패: '+(e.message||e)); }
+};
+
+window.ppAct = async (act) => {
+  const id = pp.weekId, comment = document.getElementById('ppComment').value.trim();
+  const need = { reject:true, recall:true, cancel:true }[act];
+  if(need && !comment) return ppMsg('결재 의견을 입력하세요.');
+  try{
+    const cur = await ppFresh(id);
+    if(!cur) return ppMsg('저장된 계획이 없습니다.');
+    const st = ppStatus(cur), r = ppRole(), now = Date.now(), stampMe = { name:authMe.name, uid:authMe.id, at:now };
+    let patch = null, label = '';
+    if(act==='leaderOk' && st==='submitted' && r==='leader'){ patch = { status:'reviewed', leader:stampMe }; label = '팀장 결재'; }
+    else if(act==='directorOk' && st==='reviewed' && r==='director'){ patch = { status:'approved', director:stampMe }; label = '본부장 승인'; }
+    else if(act==='reject' && ((st==='submitted' && r==='leader') || (st==='reviewed' && r==='director'))){
+      patch = { status:'draft', leader:null, director:null, lastReject:{ by:authMe.name, comment, at:now } }; label = '반려'; }
+    else if(act==='recall' && ((st==='submitted' && r==='member' && cur.writer && cur.writer.uid===authMe.id) || (st==='reviewed' && r==='leader'))){
+      patch = { status:'draft', writer:null, leader:null, director:null }; label = '회수'; }
+    else if(act==='cancel' && st==='approved' && r==='leader'){ patch = { status:'draft', writer:null, leader:null, director:null }; label = '결재 취소'; }
+    if(!patch){ pp.weeks[id] = cur; ppRenderAll(); return ppMsg('지금 상태에서는 할 수 없는 작업입니다. 화면을 새로 불러왔습니다.'); }
+    const data = { ...cur, ...patch, updatedAt:now, updatedBy:authMe.name, history: ppHist(cur, label, comment) };
+    await setDoc(doc(db, PP_WEEKS, id), data);
+    pp.weeks[id] = data;
+    ppRenderAll();
+    showToast('✅ '+label);
+  }catch(e){ ppMsg('저장 실패: '+(e.message||e)); }
+};
+
+window.ppSaveFacts = async () => {
+  if(!ppCanWrite()) return;
+  const id = pp.weekId, kind = pp.mode==='ship' ? 'ship' : 'actual';
+  const { res, bad } = ppReadGrid(kind);
+  if(bad.length) return ppMsg('0 이상의 숫자만 입력하세요: '+bad.slice(0,3).join(', '));
+  try{
+    const cur = await ppFresh(id);
+    const now = Date.now();
+    const data = cur ? { ...cur } : { monday:id, plan:{}, snap:{}, status:'draft', writer:null, leader:null, director:null, history:[] };
+    Object.assign(data, res, { updatedAt:now, updatedBy:authMe.name });
+    data.history = ppHist(cur, kind==='ship' ? '출고 저장' : '실적 저장');
+    await setDoc(doc(db, PP_WEEKS, id), data);
+    pp.weeks[id] = data;
+    ppRenderAll();
+    showToast(kind==='ship' ? '✅ 출고 저장' : '✅ 실적 저장');
+  }catch(e){ ppMsg('저장 실패: '+(e.message||e)); }
+};
+
+// ════ 기준정보·기초재고 ════
+function ppRenderMaster(){
+  const lead = ppIsLeader(), base = pp.base || PP_DEFAULT_BASE;
+  document.getElementById('ppBaseDate').value = base.date;
+  document.getElementById('ppBaseDate').disabled = !lead;
+  const info = [];
+  info.push(pp.masterSaved ? `기준정보 저장: ${pp.masterInfo.updatedBy||''} ${fmtDT(pp.masterInfo.updatedAt)}` : '기준정보: 기본값 (아직 저장 안 됨)');
+  info.push(pp.base ? `기초재고 저장: ${pp.base.updatedBy||''} ${fmtDT(pp.base.updatedAt)}` : '기초재고: 엑셀 값(상품발주 09.28 주초재고, 재고소진 10.01 4주 출고량)이 채워져 있음 — 저장해야 적용');
+  document.getElementById('ppMasterInfo').textContent = info.join(' · ');
+  const d = lead ? '' : 'disabled';
+  document.getElementById('ppMasterBody').innerHTML = ppProducts().map(p => `<tr data-mp="${p.id}">
+    <td class="c">${authEsc(p.code||'')}</td><td class="l">${authEsc(p.name)}</td>
+    <td><input data-f="packQty" inputmode="numeric" value="${p.packQty}" ${d}></td>
+    <td><input data-f="meatG" inputmode="decimal" value="${p.meatG}" ${d}></td>
+    <td><input data-f="yield" inputmode="decimal" value="${+(p.yield*100).toFixed(2)}" ${d}></td>
+    <td><select data-f="group" ${d}>${Object.keys(MEAT_GROUP).map(k=>`<option value="${k}"${k===p.group?' selected':''}>${MEAT_GROUP[k]}</option>`).join('')}</select></td>
+    <td class="c"><input type="checkbox" data-f="active" ${p.active!==false?'checked':''} ${d} style="width:auto"></td>
+    <td><input data-f="base" inputmode="numeric" value="${ppHas(base.qty[p.id])?base.qty[p.id]:''}" ${d}></td>
+    <td><input data-f="ship4w" inputmode="numeric" value="${base.ship4w && ppHas(base.ship4w[p.id])?base.ship4w[p.id]:''}" ${d}></td></tr>`).join('');
+}
+window.saveMaster = async () => {
+  if(!ppIsLeader()) return;
+  const bd = document.getElementById('ppBaseDate').value;
+  if(!bd || ppMonday(bd)!==bd) return showToast('기초재고 기준일은 월요일로 정하세요 (주초재고).', 3500);
+  const products = [], qty = {}, ship4w = {}; let err = '';
+  document.querySelectorAll('#ppMasterBody tr[data-mp]').forEach(tr => {
+    const id = tr.dataset.mp, old = ppProd(id), f = k => tr.querySelector(`[data-f=${k}]`);
+    const packQty = Number(f('packQty').value), meatG = Number(f('meatG').value), y = Number(f('yield').value);
+    if(!(packQty>=1 && Number.isInteger(packQty))) err = `${old.name}: 파우치/팩은 1 이상의 정수`;
+    if(!(meatG>=0)) err = `${old.name}: 원육g은 0 이상`;
+    if(!(y>0 && y<=100)) err = `${old.name}: 수율은 0~100%`;
+    products.push({ id, code:old.code, name:old.name, packQty, meatG, yield: +(y/100).toFixed(4), group:f('group').value, active:f('active').checked });
+    const b = f('base').value.trim(); if(b!==''){ const n = Number(b.replace(/,/g,'')); if(!(n>=0)) err = `${old.name}: 기초재고는 0 이상`; qty[id] = n; }
+    const s4 = f('ship4w').value.trim(); if(s4!==''){ const n = Number(s4.replace(/,/g,'')); if(!(n>=0)) err = `${old.name}: 4주 출고량은 0 이상`; ship4w[id] = n; }
+  });
+  if(err) return showToast(err, 3500);
+  try{
+    const now = Date.now();
+    await setDoc(doc(db, PP_SET, 'master'), { products, updatedAt:now, updatedBy:authMe.name });
+    await setDoc(doc(db, PP_SET, 'base'), { date:bd, qty, ship4w, updatedAt:now, updatedBy:authMe.name });
+    pp.master = products; pp.masterSaved = true; pp.masterInfo = { updatedAt:now, updatedBy:authMe.name };
+    pp.base = { date:bd, qty, ship4w, updatedAt:now, updatedBy:authMe.name };
+    ppRenderAll();
+    showToast('✅ 기준정보·기초재고 저장');
+  }catch(e){ showToast('저장 실패: '+(e.message||e)); }
+};
+
+// 초기화 (로그인 뒤 한 번만)
+let appStarted = false;
+function startApp(){
+  if(appStarted) return;
+  appStarted = true;
+  document.getElementById('dashMonth').value=thisMonth();
+  document.getElementById('prodMonth').value=thisMonth();
+  document.getElementById('inputMonth').value=thisMonth();
+  renderBulkPlan();
+  loadDashboard();
+}
+initAuth();
 </script>
 </body>
 </html>
