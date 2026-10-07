@@ -844,10 +844,10 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
       <div class="ro-note" style="margin:6px 0 10px">칸 안: 제품명 / <span class="cal-kg">원육 kg</span> / 생산 ea(파우치) / <span class="cal-kg">팩</span>(코스트코·5입), 맨 아래 그날 원육 총투입량. 일요일 칸에 그 주의 결재 상태를 표시합니다. 원육 kg = 파우치 × 원육g ÷ 수율.</div>
       <details class="pp-sum"><summary>제품별 월 합계 보기</summary>
       <div class="tbl-wrap"><table class="pp-tbl">
-        <thead><tr><th>제품명</th><th>생산수량<span class="pp-sub">(ERP 단위·팩)</span></th><th>파우치</th><th>원육/파우치</th><th>수율</th><th>원육량 (kg)</th><th>원육 구분</th></tr></thead>
+        <thead><tr><th>제품명</th><th>생산수량<span class="pp-sub">(ERP 단위·팩)</span></th><th>파우치</th><th>원육/파우치</th><th>수율</th><th>원육량 (kg)</th><th>원육 구분</th><th>생산횟수<span class="pp-sub">계획</span></th><th>비중</th><th>생산횟수<span class="pp-sub">실적</span></th></tr></thead>
         <tbody id="ppMonthBody"></tbody>
       </table></div>
-      <div class="ro-note" style="margin-top:6px">결재 상태와 관계없이 저장된 주간 계획을 날짜 기준으로 이 달에 합산합니다.</div>
+      <div class="ro-note" style="margin-top:6px">결재 상태와 관계없이 저장된 주간 계획을 날짜 기준으로 이 달에 합산합니다. 생산횟수: 그 제품을 생산한 날마다 1회 — 한 날 두 제품을 생산하면 각각 1회씩 셉니다. 데이터입력 ② 생산횟수 입력 때 참고용입니다(자동 입력 아님). 실적 횟수는 생산실적에 0보다 큰 수량이 입력된 날만 셉니다.</div>
       </details>
     </div>
   </div>
@@ -5040,8 +5040,11 @@ function ppRowIds(w){
 
 // ════ 계산 (순수 함수) ════
 // ① 월 합산: 주간 계획의 각 날짜를 해당 월에 넣음
+// 생산횟수: 그 제품을 생산(계획)한 날마다 1회. 혼합생산일은 제품마다 1회씩 (2026-10-07 확정)
+//  → 총 생산횟수(모수) = 제품별 횟수 합계, 생산일수와 다를 수 있음
 function ppMonthSummary(ym){
-  const rows = {};
+  const rows = {}, days = new Set(), actDays = new Set();
+  const newRow = (pid, sp) => rows[pid] || (rows[pid] = { pid, qty:0, pouch:0, kg:0, runs:0, actRuns:0, actEntered:false, specs:new Set(), sp });
   Object.values(pp.weeks).forEach(w => {
     for(let i=0;i<6;i++){
       const date = ppAdd(w.monday, i);
@@ -5049,14 +5052,23 @@ function ppMonthSummary(ym){
       Object.entries(w.plan || {}).forEach(([pid, arr]) => {
         const q = ppNum((arr||[])[i]); if(!q) return;
         const sp = ppSpec(w, pid);
-        const r = rows[pid] || (rows[pid] = { pid, qty:0, pouch:0, kg:0, specs:new Set(), sp });
-        r.qty += q; r.pouch += ppPouch(q, sp); r.kg += ppMeatKg(q, sp);
+        const r = newRow(pid, sp);
+        r.qty += q; r.pouch += ppPouch(q, sp); r.kg += ppMeatKg(q, sp); r.runs += 1;
         r.specs.add(sp.meatG+'|'+sp.yield);
+        days.add(date);
+      });
+      Object.entries(w.actual || {}).forEach(([pid, arr]) => {
+        const a = (arr||[])[i]; if(!ppHas(a)) return;
+        const r = newRow(pid, ppSpec(w, pid));
+        r.actEntered = true;
+        if(ppNum(a) > 0){ r.actRuns += 1; actDays.add(date); }
       });
     }
   });
   const order = ppProducts().map(p => p.id);
-  return Object.values(rows).sort((a,b) => order.indexOf(a.pid) - order.indexOf(b.pid));
+  const list = Object.values(rows).sort((a,b) => order.indexOf(a.pid) - order.indexOf(b.pid));
+  list.days = days.size; list.actDays = actDays.size;
+  return list;
 }
 // 주의 생산: 날짜별로 실적이 있으면 실적, 없으면 계획
 function ppWeekProd(w, pid){
@@ -5182,20 +5194,24 @@ function ppRenderMonthTable(ym){
   }
   document.getElementById('ppMonthWeeks').innerHTML = chips.join('');
   let tq=0, tkg=0; const g = { su:0, hong:0 };
-  const body = rows.map(r => {
+  const tRuns = rows.reduce((a,r) => a+r.runs, 0), tAct = rows.reduce((a,r) => a+r.actRuns, 0), anyAct = rows.some(r => r.actEntered);
+  const body = rows.filter(r => r.runs || r.actEntered).map(r => {
     const sp = r.sp, mixed = r.specs.size > 1;
     tq += r.qty; tkg += r.kg; if(g[sp.group]!=null) g[sp.group] += r.kg;
     return `<tr><td class="l">${authEsc(ppProd(r.pid).name)}</td><td class="num">${ppFmt(r.qty)}</td>
       <td class="num">${(sp.packQty||1)>1 ? ppFmt(r.pouch)+` <span class="pp-sub">(${sp.packQty}입)</span>` : '<span class="sub">—</span>'}</td>
       <td class="num">${sp.group==='none' ? '—' : (mixed ? '<span title="주마다 기준값이 다름">혼합</span>' : sp.meatG+'g')}</td>
       <td class="num">${sp.group==='none' ? '—' : (mixed ? '혼합' : (sp.yield*100).toFixed(1)+'%')}</td>
-      <td class="num"><b>${ppFmt(r.kg,1)}</b></td><td class="c">${MEAT_GROUP[sp.group]||'—'}</td></tr>`;
+      <td class="num"><b>${ppFmt(r.kg,1)}</b></td><td class="c">${MEAT_GROUP[sp.group]||'—'}</td>
+      <td class="num"><b>${r.runs}</b>회</td><td class="num">${tRuns ? (r.runs/tRuns*100).toFixed(1)+'%' : '—'}</td>
+      <td class="num">${r.actEntered ? r.actRuns+'회' : '<span class="sub">미입력</span>'}</td></tr>`;
   }).join('');
   document.getElementById('ppMonthBody').innerHTML = body
-    ? body + `<tr class="total"><td class="l">합계</td><td class="num">${ppFmt(tq)}</td><td></td><td></td><td></td><td class="num">${ppFmt(tkg,1)}</td><td></td></tr>
-       <tr><td class="l" colspan="5" style="text-align:right;color:#666">냉동 설도+우둔</td><td class="num">${ppFmt(g.su,1)}</td><td></td></tr>
+    ? body + `<tr class="total"><td class="l">합계</td><td class="num">${ppFmt(tq)}</td><td></td><td></td><td></td><td class="num">${ppFmt(tkg,1)}</td><td></td>
+         <td class="num">${tRuns}회</td><td class="num">${tRuns ? '100%' : '—'}</td><td class="num">${anyAct ? tAct+'회' : '—'}</td></tr>
+       <tr><td class="l" colspan="5" style="text-align:right;color:#666">냉동 설도+우둔</td><td class="num">${ppFmt(g.su,1)}</td><td></td><td class="c sub" colspan="3" rowspan="2">생산일수 계획 ${rows.days}일${anyAct ? ` · 실적 ${rows.actDays}일` : ''}<br>총 생산횟수 ${tRuns}회 (경비 배부 모수)</td></tr>
        <tr><td class="l" colspan="5" style="text-align:right;color:#666">냉동 홍두께</td><td class="num">${ppFmt(g.hong,1)}</td><td></td></tr>`
-    : `<tr><td colspan="7" class="empty">${ym} 생산계획이 없습니다. 아래 ③에서 주간 계획을 입력하세요.</td></tr>`;
+    : `<tr><td colspan="10" class="empty">${ym} 생산계획이 없습니다. 아래 ③에서 주간 계획을 입력하세요.</td></tr>`;
 }
 
 // 엑셀 '26년_2공장 생산계획' 달력 양식: 일~토, 칸마다 제품 / 원육kg(빨강) / ea / 팩(빨강)
