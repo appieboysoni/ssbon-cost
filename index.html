@@ -164,6 +164,8 @@ tr.total td{background:var(--light);font-weight:700}
 .cal-p{padding:1px 0}
 .cal-p + .cal-p{border-top:1px dashed #bbb;margin-top:2px;padding-top:2px}
 .cal-kg{color:#e00}
+.cal-tot{border-top:1px solid #777;margin-top:3px;padding-top:2px;font-weight:700;color:#1F3864;font-size:11.5px}
+.cal-tot span{font-weight:400}
 .cal-memo{color:#e00;font-weight:700}
 .cal-memo.big{font-size:16px;text-align:center;padding-top:14px}
 .cal-st{margin-top:6px}
@@ -839,7 +841,7 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     <div class="card-body">
       <div id="ppMonthWeeks" style="display:none"></div>
       <div class="cal-wrap"><div class="cal" id="ppCal"></div></div>
-      <div class="ro-note" style="margin:6px 0 10px">칸 안: 제품명 / <span class="cal-kg">원육 kg</span> / 생산 ea(파우치) / <span class="cal-kg">팩</span>(코스트코·5입). 일요일 칸에 그 주의 결재 상태를 표시합니다. 원육 kg = 파우치 × 원육g ÷ 수율.</div>
+      <div class="ro-note" style="margin:6px 0 10px">칸 안: 제품명 / <span class="cal-kg">원육 kg</span> / 생산 ea(파우치) / <span class="cal-kg">팩</span>(코스트코·5입), 맨 아래 그날 원육 총투입량. 일요일 칸에 그 주의 결재 상태를 표시합니다. 원육 kg = 파우치 × 원육g ÷ 수율.</div>
       <details class="pp-sum"><summary>제품별 월 합계 보기</summary>
       <div class="tbl-wrap"><table class="pp-tbl">
         <thead><tr><th>제품명</th><th>생산수량<span class="pp-sub">(ERP 단위·팩)</span></th><th>파우치</th><th>원육/파우치</th><th>수율</th><th>원육량 (kg)</th><th>원육 구분</th></tr></thead>
@@ -5225,6 +5227,12 @@ window.renderPlanMonth = () => {
           + `${ppFmt(pk ? x.pouch : x.q)}ea`
           + (pk ? `<br><span class="cal-kg">${ppFmt(x.q)}팩</span>` : '') + `</div>`;
       }).join('');
+      // 그날 원육 총투입량 (구분별 합계는 반올림 전 값으로 더한 뒤 반올림)
+      const su = items.filter(x => x.sp.group==='su').reduce((a,x) => a+x.kg, 0);
+      const hong = items.filter(x => x.sp.group==='hong').reduce((a,x) => a+x.kg, 0);
+      if(su && hong) body += `<div class="cal-tot">총 투입원육 ${ppFmt(su+hong)}kg<br><span>(홍두께 ${ppFmt(hong)}kg / 설도·우둔 ${ppFmt(su)}kg)</span></div>`;
+      else if(su)   body += `<div class="cal-tot">설도/우둔 원육 총투입량 ${ppFmt(su)}kg</div>`;
+      else if(hong) body += `<div class="cal-tot">홍두께 원육 총투입량 ${ppFmt(hong)}kg</div>`;
       if(memo) body += `<div class="cal-memo${items.length ? '' : ' big'}">${authEsc(memo)}</div>`;
       if(wd===0){                                                       // 일요일 칸: 이번 줄(월~토) 주의 결재 상태
         const w = pp.weeks[ppAdd(d,1)];
