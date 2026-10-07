@@ -188,11 +188,12 @@ tr.total td{background:var(--light);font-weight:700}
 .appr .ah{background:var(--light);color:var(--primary);font-size:11px;font-weight:700;padding:4px}
 .appr .ab{padding:8px 6px;min-height:44px;font-size:12px}
 .appr .ab b{display:block}.appr .ab span{font-size:10px;color:#888}
+.pp-rev{border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:6px;font-size:12px;background:#fffdf5}
+.pp-rev summary{cursor:pointer}
+.pp-rev-body{margin-top:6px;line-height:1.7;color:#444;font-variant-numeric:tabular-nums}
 .pp-hist{font-size:11px;color:#666;line-height:1.7;max-height:140px;overflow:auto;margin-top:8px}
 .days-badge{display:inline-block;min-width:44px;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:700;text-align:center}
 .d-red{background:#f8d7da;color:#C00000}.d-orange{background:#ffe5cc;color:#B45309}.d-green{background:#d4edda;color:#155724}.d-none{background:#f2f2f2;color:#999}
-body:not(.is-leader) .need-leader{display:none!important}
-body:not(.can-write) .need-writer{display:none!important}
 .ro-note{font-size:11px;color:#888}
 
 /* ── 로그인·계정 ── */
@@ -899,16 +900,17 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
       <div class="tbl-wrap"><table class="pp-tbl" id="ppGrid"></table></div>
       <div class="btn-row" id="ppActions"></div>
       <div class="fg" id="ppCommentWrap" style="margin-top:8px;max-width:520px;display:none">
-        <label for="ppComment">결재 의견 (반려·회수 시 필수)</label><input id="ppComment" autocomplete="off">
+        <label for="ppComment">결재 의견 (반려·결재 취소 시 필수 — 변경 이력에 남음)</label><input id="ppComment" autocomplete="off">
       </div>
       <div class="auth-msg" id="ppMsg" style="margin-top:6px"></div>
+      <div id="ppRevs"></div>
       <div class="pp-hist" id="ppHist"></div>
     </div>
   </div>
 
   <!-- 기준정보 -->
   <div class="card">
-    <div class="card-hdr"><span>제품 기준정보 · 기초재고</span><span class="ro-note" style="color:#dfe7f5">수율·원육중량·입수·기초재고는 팀장만 수정</span></div>
+    <div class="card-hdr"><span>제품 기준정보 · 기초재고</span><span class="ro-note" style="color:#dfe7f5">누구나 수정 가능 · 저장한 사람과 시각이 남습니다</span></div>
     <div class="card-body">
       <div class="tbl-wrap"><table class="pp-tbl">
         <thead><tr><th>ERP코드</th><th>제품명</th><th>파우치/팩</th><th>원육/파우치 (g)</th><th>수율 (%)</th><th>원육 구분</th><th>사용</th><th>기초재고 (팩)</th><th>기초 4주 출고량 (팩)</th></tr></thead>
@@ -948,10 +950,10 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     <div class="ac-body">
       <!-- 처음 사용: 관리 계정 만들기 -->
       <div id="authSetup" style="display:none;flex-direction:column;gap:10px">
-        <div class="auth-note">등록된 계정이 없습니다. 계정을 관리할 첫 계정(팀장 또는 본부장)을 만드세요. 팀원 계정은 로그인 후 [계정 관리]에서 추가합니다.</div>
+        <div class="auth-note">등록된 계정이 없습니다. 첫 계정을 만드세요. 나머지 계정은 로그인 후 오른쪽 위 이름 버튼 → [계정 관리]에서 추가합니다.</div>
         <div class="fg"><label for="suName">이름</label><input id="suName" autocomplete="off" placeholder="예: 홍길동"></div>
         <div class="fg"><label for="suRole">역할</label>
-          <select id="suRole"><option value="leader">팀장</option><option value="director">본부장</option></select></div>
+          <select id="suRole"><option value="member">팀원</option><option value="leader" selected>팀장</option><option value="director">본부장</option></select></div>
         <div class="fg"><label for="suPin">PIN (숫자 4~8자리)</label><input id="suPin" type="password" inputmode="numeric" autocomplete="new-password"></div>
         <div class="fg"><label for="suPin2">PIN 한 번 더</label><input id="suPin2" type="password" inputmode="numeric" autocomplete="new-password"></div>
         <button class="btn btn-primary" id="suOk" type="button" onclick="authSetupSubmit()">계정 만들고 들어가기</button>
@@ -989,8 +991,8 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
       <div class="btn-row"><button class="btn btn-primary btn-sm" type="button" onclick="changeMyPin()">PIN 바꾸기</button><span class="auth-msg" id="myPinMsg" style="align-self:center"></span></div>
     </div>
     <div class="acct-sec" id="acctAdminSec" style="display:none">
-      <h3>계정 관리 <span style="font-weight:400;color:#888">(팀장 이상)</span></h3>
-      <div class="auth-note" style="margin-bottom:8px">PIN은 되돌릴 수 없는 암호값으로만 저장되어 숫자는 볼 수 없습니다. 잊은 경우 [PIN 초기화]를 누르면 그 사람이 다음 로그인 때 새 PIN을 직접 정합니다. 팀장은 팀원·팀장 계정만, 본부장은 모든 계정을 관리합니다.</div>
+      <h3>계정 관리</h3>
+      <div class="auth-note" style="margin-bottom:8px">PIN은 되돌릴 수 없는 암호값으로만 저장되어 숫자는 볼 수 없습니다. 잊은 경우 [PIN 초기화]를 누르면 그 사람이 다음 로그인 때 새 PIN을 직접 정합니다. 역할은 결재란에서 누가 [팀장 결재]·[본부장 승인]을 누를 수 있는지만 정하고, 다른 기능은 모두 같습니다.</div>
       <div class="tbl-wrap"><table class="acct-tbl">
         <thead><tr><th>이름</th><th>역할</th><th>PIN</th><th>상태</th><th>최근 접속</th><th>관리</th></tr></thead>
         <tbody id="acctList"></tbody>
@@ -4720,8 +4722,8 @@ const pinHashOf = (uid,pin) => sha256hex('ssboncost:user:'+uid+':'+pin);
 const pinOk = p => /^\d{4,8}$/.test(p||'');
 const PIN_RULE = 'PIN은 숫자 4~8자리로 정하세요.';
 const lvl = u => u ? (ROLE_LEVEL[u.role]||0) : 0;
-// 내가 이 계정을 관리할 수 있나: 팀장 이상 + 내 등급 이하 계정
-const canManageUser = u => lvl(authMe)>=2 && lvl(u)<=lvl(authMe);
+// 계정 관리는 로그인한 모든 사람이 가능 (역할은 결재란에만 영향)
+const canManageUser = u => !!authMe && !!u;
 window.authMe = () => authMe;
 window.authLevel = () => lvl(authMe);
 
@@ -4787,8 +4789,6 @@ function enterApp(){
   $a('whoBtn').innerHTML = `${authEsc(authMe.name)}<span class="r">${ROLE_LABEL[authMe.role]}</span>`;
   document.body.classList.toggle('lv-leader', lvl(authMe)>=2);
   document.body.classList.toggle('lv-director', lvl(authMe)>=3);
-  document.body.classList.toggle('is-leader', authMe.role==='leader');
-  document.body.classList.toggle('can-write', authMe.role==='member' || authMe.role==='leader');
   startApp();
   if(document.getElementById('tab-plan').classList.contains('active')) loadPlanTab();
 }
@@ -4797,7 +4797,7 @@ window.authSetupSubmit = async () => {
   const name = $a('suName').value.trim(), role = $a('suRole').value;
   const p1 = $a('suPin').value, p2 = $a('suPin2').value;
   if(!name) return authMsg('authMsg','이름을 입력하세요.');
-  if(!(role==='leader'||role==='director')) return authMsg('authMsg','첫 계정은 팀장 또는 본부장이어야 합니다.');
+  if(!ROLE_LEVEL[role]) return authMsg('authMsg','역할을 고르세요.');
   if(!pinOk(p1)) return authMsg('authMsg',PIN_RULE);
   if(p1!==p2) return authMsg('authMsg','두 PIN이 서로 다릅니다.');
   $a('suOk').disabled = true;
@@ -4844,7 +4844,7 @@ window.authLoginSubmit = async () => {
 
 window.authLogout = () => {
   authMe = null; writeSession(null); closeAcct();
-  document.body.classList.remove('lv-leader','lv-director','is-leader','can-write');
+  document.body.classList.remove('lv-leader','lv-director');
   $a('whoBtn').textContent = '로그인';
   authMsg('authMsg','');
   showGate('login');
@@ -4856,11 +4856,11 @@ window.openAcct = () => {
   $a('acctMe').innerHTML = `<b>${authEsc(authMe.name)}</b> · ${ROLE_LABEL[authMe.role]}`;
   ['myPinOld','myPin1','myPin2','nuName','nuPin'].forEach(id=>$a(id).value='');
   authMsg('myPinMsg',''); authMsg('nuMsg','');
-  const admin = lvl(authMe)>=2;
+  const admin = true;
   $a('acctAdminSec').style.display = admin ? '' : 'none';
   $a('acctTitle').textContent = admin ? '내 계정 · 계정 관리' : '내 계정';
   if(admin){
-    $a('nuRole').innerHTML = Object.keys(ROLE_LEVEL).filter(r=>ROLE_LEVEL[r]<=lvl(authMe)).map(r=>`<option value="${r}">${ROLE_LABEL[r]}</option>`).join('');
+    $a('nuRole').innerHTML = Object.keys(ROLE_LEVEL).map(r=>`<option value="${r}">${ROLE_LABEL[r]}</option>`).join('');
     $a('nuRole').value = 'member';
     renderAcctList();
   }
@@ -4874,7 +4874,7 @@ function renderAcctList(){
     const self = u.id===authMe.id, can = canManageUser(u) && !self;
     const off = u.active===false;
     const roleCell = can
-      ? `<select onchange="setAcctRole('${u.id}',this.value)">${Object.keys(ROLE_LEVEL).filter(r=>ROLE_LEVEL[r]<=lvl(authMe)).map(r=>`<option value="${r}"${r===u.role?' selected':''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`
+      ? `<select onchange="setAcctRole('${u.id}',this.value)">${Object.keys(ROLE_LEVEL).map(r=>`<option value="${r}"${r===u.role?' selected':''}>${ROLE_LABEL[r]}</option>`).join('')}</select>`
       : (ROLE_LABEL[u.role]||'?');
     const btns = can
       ? `<button class="btn btn-warn btn-sm" type="button" onclick="resetAcctPin('${u.id}')"${u.pinHash?'':' disabled'}>PIN 초기화</button>
@@ -4903,10 +4903,10 @@ window.changeMyPin = async () => {
 };
 
 window.addAcct = async () => {
-  if(lvl(authMe)<2) return;
+  if(!authMe) return;
   const name = $a('nuName').value.trim(), role = $a('nuRole').value, pin = $a('nuPin').value;
   if(!name) return authMsg('nuMsg','이름을 입력하세요.');
-  if(!ROLE_LEVEL[role] || ROLE_LEVEL[role]>lvl(authMe)) return authMsg('nuMsg','이 역할은 추가할 수 없습니다.');
+  if(!ROLE_LEVEL[role]) return authMsg('nuMsg','역할을 고르세요.');
   if(activeAuthUsers().some(u=>u.name===name)) return authMsg('nuMsg','같은 이름의 사용 중 계정이 있습니다. 구분되게 적어 주세요 (예: 홍길동B).');
   if(pin && !pinOk(pin)) return authMsg('nuMsg',PIN_RULE);
   const u = { id:newUid(), name, role, active:true, createdAt:Date.now(), createdBy:authMe.name, pinHash:'' };
@@ -4935,7 +4935,7 @@ window.toggleAcct = async id => {
 };
 window.setAcctRole = async (id, role) => {
   const u = findAuthUser(id);
-  if(!u || !canManageUser(u) || u.id===authMe.id || !ROLE_LEVEL[role] || ROLE_LEVEL[role]>lvl(authMe)) { renderAcctList(); return; }
+  if(!u || !canManageUser(u) || u.id===authMe.id || !ROLE_LEVEL[role]) { renderAcctList(); return; }
   try{ await saveAuthUser(u, { role }); renderAcctList(); showToast(`✅ ${u.name} → ${ROLE_LABEL[role]}`); }
   catch(e){ showToast('저장 실패: '+(e.message||e)); renderAcctList(); }
 };
@@ -5012,7 +5012,7 @@ const ppFmt = (n,d=0) => (n==null || isNaN(n)) ? '—' : Number(n).toLocaleStrin
 
 // ── 권한
 const ppRole = () => authMe ? authMe.role : '';
-const ppCanWrite = () => ppRole()==='member' || ppRole()==='leader';
+const ppCanWrite = () => !!authMe;   // 기능은 역할과 관계없이 모두 같음 (역할은 결재란에만 씀)
 const ppIsLeader = () => ppRole()==='leader';
 const ppIsDirector = () => ppRole()==='director';
 
@@ -5164,7 +5164,6 @@ window.loadPlanTab = async () => {
   if(!pp.weekId) pp.weekId = ppMonday(today);
   try{ pp.loading = ppLoad(); await pp.loading; }
   catch(e){ showToast('생산계획 불러오기 실패: '+(e.message||e), 4000); return; }
-  document.body.classList.toggle('can-write', ppCanWrite());
   ppRenderAll();
 };
 function ppRenderAll(){ renderPlanMonth(); ppRenderInventory(); ppRenderMeat(); ppRenderWeek(); ppRenderMaster(); }
@@ -5322,7 +5321,7 @@ function ppRenderWeek(){
   document.getElementById('ppAppr').innerHTML = stamp('작성', w && w.writer) + stamp('팀장', w && w.leader) + stamp('본부장', w && w.director);
   ['Plan','Act','Ship'].forEach(k => document.getElementById('ppTab'+k).classList.toggle('on', {Plan:'plan',Act:'actual',Ship:'ship'}[k]===pp.mode));
   const note = {
-    plan: ppPlanEditable() ? '단위: ERP 단위(팩). 저장하면 위 ① 월단위 계획과 ② 재고에 바로 반영됩니다.' : (ppCanWrite() ? `결재가 진행 중이라 계획을 고칠 수 없습니다. 고치려면 ${st==='approved' ? '팀장이 [결재 취소]' : '[회수]'}로 작성중 상태로 돌리세요.` : '본부장은 조회·결재만 합니다.'),
+    plan: ppPlanEditable() ? '단위: ERP 단위(팩). 저장하면 위 ① 월단위 계획과 ② 재고에 바로 반영됩니다.' : `결재가 진행 중이라 계획을 고칠 수 없습니다. 고치려면 ${ {submitted:'작성자', reviewed:'팀장', approved:'본부장'}[st] }이 [결재 취소]로 작성중 상태로 돌려야 합니다. 취소 전 계획은 변경 이력에 남습니다.`,
     actual: '생산 후 날짜별 실적(팩)을 입력하세요. 빈칸은 미입력으로 보고 재고 계산에 계획값을 씁니다. 실적은 결재와 별도로 언제든 입력할 수 있습니다.',
     ship: '주간 출고 예정량과 실적(팩)을 입력하세요. 실적이 있으면 실적, 없으면 예정으로 재고를 계산합니다. 소진시점의 일평균 출고는 최근 4주 실적만 씁니다.'
   }[pp.mode];
@@ -5332,6 +5331,7 @@ function ppRenderWeek(){
   document.getElementById('ppHist').innerHTML = (w && w.history || []).slice().reverse().map(h =>
     `${fmtDT(h.at)} · <b>${authEsc(h.by)}</b>(${ROLE_LABEL[h.role]||h.role}) · ${authEsc(h.act)}${h.comment ? ' — '+authEsc(h.comment) : ''}`).join('<br>');
   document.getElementById('ppMsg').textContent = '';
+  ppRenderRevisions();
 }
 
 function ppRenderGrid(){
@@ -5407,9 +5407,20 @@ function ppUpdateTotals(){
   }
 }
 
+// 결재 규칙 (2026-10-07 확정)
+//  결재 요청: 누구나 / 팀장 결재·반려: 팀장 계정 / 본부장 승인·반려: 본부장 계정
+//  결재 취소: 팀장 결재 전 → 작성자, 본부장 결재 전 → 팀장, 결재 완료 후 → 본부장
+//  취소할 때는 사유 필수, 취소 전 계획(수량·메모·기준값·결재자)을 revisions에 남김
+function ppCanCancel(w){
+  if(!w || !authMe) return false;
+  const st = ppStatus(w), r = ppRole();
+  if(st==='submitted') return !!(w.writer && w.writer.uid===authMe.id);
+  if(st==='reviewed')  return r==='leader';
+  if(st==='approved')  return r==='director';
+  return false;
+}
 function ppRenderActions(){
   const w = ppWeek(), st = ppStatus(w), r = ppRole(), btn = [];
-  const me = authMe ? authMe.id : '';
   let needComment = false;
   if(pp.mode==='plan'){
     if(st==='draft' && ppCanWrite()){
@@ -5420,18 +5431,12 @@ function ppRenderActions(){
       btn.push(`<button class="btn btn-ok" type="button" onclick="ppAct('leaderOk')">팀장 결재</button>`);
       btn.push(`<button class="btn btn-bad" type="button" onclick="ppAct('reject')">반려</button>`); needComment = true;
     }
-    if(st==='submitted' && r==='member' && w.writer && w.writer.uid===me){
-      btn.push(`<button class="btn btn-warn" type="button" onclick="ppAct('recall')">회수</button>`); needComment = true;
-    }
     if(st==='reviewed' && r==='director'){
       btn.push(`<button class="btn btn-ok" type="button" onclick="ppAct('directorOk')">본부장 승인</button>`);
       btn.push(`<button class="btn btn-bad" type="button" onclick="ppAct('reject')">반려</button>`); needComment = true;
     }
-    if(st==='reviewed' && r==='leader'){
-      btn.push(`<button class="btn btn-warn" type="button" onclick="ppAct('recall')">회수</button>`); needComment = true;
-    }
-    if(st==='approved' && r==='leader'){
-      btn.push(`<button class="btn btn-warn" type="button" onclick="ppAct('cancel')">결재 취소 (수정)</button>`); needComment = true;
+    if(ppCanCancel(w)){
+      btn.push(`<button class="btn btn-warn" type="button" onclick="ppAct('cancel')">결재 취소</button>`); needComment = true;
     }
   } else if(ppCanWrite()){
     btn.push(`<button class="btn btn-primary" type="button" onclick="ppSaveFacts()">${pp.mode==='ship'?'출고 저장':'실적 저장'}</button>`);
@@ -5471,7 +5476,7 @@ window.ppSavePlan = async (submit) => {
     const now = Date.now(), stampMe = { name:authMe.name, uid:authMe.id, at:now };
     const data = { monday:id, plan:res.plan, memo:res.memo, snap, status:'draft', updatedAt:now, updatedBy:authMe.name,
       shipPlan:(cur&&cur.shipPlan)||{}, shipActual:(cur&&cur.shipActual)||{}, actual:(cur&&cur.actual)||{},
-      writer:null, leader:null, director:null, lastReject:(cur&&cur.lastReject)||null,
+      writer:null, leader:null, director:null, lastReject:(cur&&cur.lastReject)||null, revisions:(cur&&cur.revisions)||[],
       history: ppHist(cur, submit ? '결재 요청' : '임시 저장') };
     if(submit){
       data.writer = stampMe; data.lastReject = null;
@@ -5487,8 +5492,7 @@ window.ppSavePlan = async (submit) => {
 
 window.ppAct = async (act) => {
   const id = pp.weekId, comment = document.getElementById('ppComment').value.trim();
-  const need = { reject:true, recall:true, cancel:true }[act];
-  if(need && !comment) return ppMsg('결재 의견을 입력하세요.');
+  if((act==='reject' || act==='cancel') && !comment) return ppMsg(act==='cancel' ? '결재 취소 사유를 입력하세요. 변경 이력에 남습니다.' : '반려 사유를 입력하세요.');
   try{
     const cur = await ppFresh(id);
     if(!cur) return ppMsg('저장된 계획이 없습니다.');
@@ -5498,9 +5502,13 @@ window.ppAct = async (act) => {
     else if(act==='directorOk' && st==='reviewed' && r==='director'){ patch = { status:'approved', director:stampMe }; label = '본부장 승인'; }
     else if(act==='reject' && ((st==='submitted' && r==='leader') || (st==='reviewed' && r==='director'))){
       patch = { status:'draft', leader:null, director:null, lastReject:{ by:authMe.name, comment, at:now } }; label = '반려'; }
-    else if(act==='recall' && ((st==='submitted' && r==='member' && cur.writer && cur.writer.uid===authMe.id) || (st==='reviewed' && r==='leader'))){
-      patch = { status:'draft', writer:null, leader:null, director:null }; label = '회수'; }
-    else if(act==='cancel' && st==='approved' && r==='leader'){ patch = { status:'draft', writer:null, leader:null, director:null }; label = '결재 취소'; }
+    else if(act==='cancel' && ppCanCancel(cur)){
+      const revs = cur.revisions || [];
+      const rec = { no: revs.length+1, at:now, by:authMe.name, uid:authMe.id, role:authMe.role, reason:comment, statusBefore:st,
+        plan: cur.plan||{}, memo: cur.memo||[], snap: cur.snap||{}, writer: cur.writer||null, leader: cur.leader||null, director: cur.director||null };
+      patch = { status:'draft', writer:null, leader:null, director:null, lastReject:null, revisions: revs.concat([rec]) };
+      label = `결재 취소 (${ST_LABEL[st]} 상태에서)`;
+    }
     if(!patch){ pp.weeks[id] = cur; ppRenderAll(); return ppMsg('지금 상태에서는 할 수 없는 작업입니다. 화면을 새로 불러왔습니다.'); }
     const data = { ...cur, ...patch, updatedAt:now, updatedBy:authMe.name, history: ppHist(cur, label, comment) };
     await setDoc(doc(db, PP_WEEKS, id), data);
@@ -5509,6 +5517,32 @@ window.ppAct = async (act) => {
     showToast('✅ '+label);
   }catch(e){ ppMsg('저장 실패: '+(e.message||e)); }
 };
+
+// 변경 이력: 결재 취소 전 계획과 그다음 버전(다음 취소 기록 또는 현재 계획)의 차이
+function ppRevisionDiff(fromRev, to, monday){
+  const out = [], ids = new Set([...Object.keys(fromRev.plan||{}), ...Object.keys(to.plan||{})]);
+  const order = ppProducts().map(p => p.id);
+  [...ids].sort((a,b) => order.indexOf(a)-order.indexOf(b)).forEach(pid => {
+    const a = (fromRev.plan||{})[pid] || [], b = (to.plan||{})[pid] || [];
+    for(let i=0;i<6;i++){ const x = ppNum(a[i]), y = ppNum(b[i]); if(x!==y) out.push(`${ppShortName(pid)} ${PP_DAYS[i]} ${ppMD(ppAdd(monday,i))}: ${ppFmt(x)} → ${ppFmt(y)}`); }
+  });
+  for(let i=0;i<6;i++){ const x = ((fromRev.memo||[])[i]||''), y = ((to.memo||[])[i]||''); if(x!==y) out.push(`메모 ${PP_DAYS[i]} ${ppMD(ppAdd(monday,i))}: "${x}" → "${y}"`); }
+  return out;
+}
+function ppRenderRevisions(){
+  const w = ppWeek(), el = document.getElementById('ppRevs');
+  const revs = (w && w.revisions) || [];
+  if(!revs.length){ el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="sec">변경 이력 (결재 취소 전 계획 ${revs.length}건)</div>` + revs.slice().reverse().map(rv => {
+    const idx = revs.indexOf(rv), next = revs[idx+1] || w;
+    const diff = ppRevisionDiff(rv, next, w.monday);
+    const nextLabel = revs[idx+1] ? `${idx+2}차 취소 전 계획` : '현재 계획';
+    const approvers = ['writer','leader','director'].map(k => rv[k] ? `${{writer:'작성',leader:'팀장',director:'본부장'}[k]} ${authEsc(rv[k].name)}` : '').filter(Boolean).join(' · ');
+    return `<details class="pp-rev"><summary><b>${rv.no}차</b> · ${fmtDT(rv.at)} · ${authEsc(rv.by)}(${ROLE_LABEL[rv.role]||rv.role}) 결재 취소 · 취소 전 상태: ${ST_LABEL[rv.statusBefore]||rv.statusBefore} · 사유: <b>${authEsc(rv.reason)}</b></summary>
+      <div class="pp-rev-body">취소 전 결재: ${approvers || '—'}<br>
+      <b>취소 전 → ${nextLabel}</b> ${diff.length ? '<br>'+diff.map(authEsc).join('<br>') : ' : 수량 변경 없음'}</div></details>`;
+  }).join('');
+}
 
 window.ppSaveFacts = async () => {
   if(!ppCanWrite()) return;
@@ -5530,7 +5564,7 @@ window.ppSaveFacts = async () => {
 
 // ════ 기준정보·기초재고 ════
 function ppRenderMaster(){
-  const lead = ppIsLeader(), base = pp.base || PP_DEFAULT_BASE;
+  const lead = ppCanWrite(), base = pp.base || PP_DEFAULT_BASE;
   document.getElementById('ppBaseDate').value = base.date;
   document.getElementById('ppBaseDate').disabled = !lead;
   const info = [];
@@ -5549,7 +5583,7 @@ function ppRenderMaster(){
     <td><input data-f="ship4w" inputmode="numeric" value="${base.ship4w && ppHas(base.ship4w[p.id])?base.ship4w[p.id]:''}" ${d}></td></tr>`).join('');
 }
 window.saveMaster = async () => {
-  if(!ppIsLeader()) return;
+  if(!ppCanWrite()) return;
   const bd = document.getElementById('ppBaseDate').value;
   if(!bd || ppMonday(bd)!==bd) return showToast('기초재고 기준일은 월요일로 정하세요 (주초재고).', 3500);
   const products = [], qty = {}, ship4w = {}; let err = '';
