@@ -151,6 +151,24 @@ tr.total td{background:var(--light);font-weight:700}
 .chart-legend .leg-sq{width:12px;height:10px;border-radius:2px;flex-shrink:0}
 
 /* ── 생산계획·재고 ── */
+.cal-wrap{overflow-x:auto}
+.cal{min-width:760px;border-top:2px solid #2F5496}
+.cal-title{font-size:24px;color:#2F5496;font-weight:400;margin-bottom:2px}
+.cal-head,.cal-row{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-head div{color:#2F5496;font-size:12px;padding:3px 6px;border-bottom:2px solid #2F5496}
+.cal-row{border-left:1px solid #9a9a9a}
+.cal-row.shade .cal-cell{background:#e7e7e7}
+.cal-cell{border-right:1px solid #9a9a9a;border-bottom:1px solid #9a9a9a;min-height:96px;padding:0 6px 4px;font-size:12px;line-height:1.45;background:#fff;color:#111}
+.cal-date{text-align:right;font-weight:700;border-bottom:1px solid #9a9a9a;margin:0 -6px 2px;padding:1px 6px;background:#fff}
+.cal-date.red{color:#e00}.cal-date.out{color:#aaa}
+.cal-p{padding:1px 0}
+.cal-p + .cal-p{border-top:1px dashed #bbb;margin-top:2px;padding-top:2px}
+.cal-kg{color:#e00}
+.cal-memo{color:#e00;font-weight:700}
+.cal-memo.big{font-size:16px;text-align:center;padding-top:14px}
+.cal-st{margin-top:6px}
+.pp-sum summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--mid);margin-bottom:8px}
+.pp-tbl td input.memo{width:72px;text-align:left;background:#fff}
 .pp-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pp-bar input[type=month],.pp-bar input[type=date]{padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--input);font-family:inherit}
 .pp-chip{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
@@ -818,12 +836,16 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     <div class="card-hdr"><span>① 월단위 생산계획</span>
       <div class="pp-bar"><input type="month" id="ppMonth" onchange="renderPlanMonth()"></div></div>
     <div class="card-body">
-      <div id="ppMonthWeeks" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+      <div id="ppMonthWeeks" style="display:none"></div>
+      <div class="cal-wrap"><div class="cal" id="ppCal"></div></div>
+      <div class="ro-note" style="margin:6px 0 10px">칸 안: 제품명 / <span class="cal-kg">원육 kg</span> / 생산 ea(파우치) / <span class="cal-kg">팩</span>(코스트코·5입). 일요일 칸에 그 주의 결재 상태를 표시합니다. 원육 kg = 파우치 × 원육g ÷ 수율.</div>
+      <details class="pp-sum"><summary>제품별 월 합계 보기</summary>
       <div class="tbl-wrap"><table class="pp-tbl">
         <thead><tr><th>제품명</th><th>생산수량<span class="pp-sub">(ERP 단위·팩)</span></th><th>파우치</th><th>원육/파우치</th><th>수율</th><th>원육량 (kg)</th><th>원육 구분</th></tr></thead>
         <tbody id="ppMonthBody"></tbody>
       </table></div>
-      <div class="ro-note" style="margin-top:6px">원육량 = 파우치 수 × 원육/파우치 ÷ 수율. 결재 상태와 관계없이 저장된 주간 계획을 날짜 기준으로 이 달에 합산합니다.</div>
+      <div class="ro-note" style="margin-top:6px">결재 상태와 관계없이 저장된 주간 계획을 날짜 기준으로 이 달에 합산합니다.</div>
+      </details>
     </div>
   </div>
 
@@ -5148,8 +5170,7 @@ window.loadPlanTab = async () => {
 function ppRenderAll(){ renderPlanMonth(); ppRenderInventory(); ppRenderMeat(); ppRenderWeek(); ppRenderMaster(); }
 
 // ════ ① 월단위 ════
-window.renderPlanMonth = () => {
-  const ym = document.getElementById('ppMonth').value || ppToday().slice(0,7);
+function ppRenderMonthTable(ym){
   const rows = ppMonthSummary(ym);
   // 이 달에 걸친 주의 결재 상태
   const first = ppMonday(ym+'-01'); const chips = [];
@@ -5174,7 +5195,53 @@ window.renderPlanMonth = () => {
        <tr><td class="l" colspan="5" style="text-align:right;color:#666">냉동 설도+우둔</td><td class="num">${ppFmt(g.su,1)}</td><td></td></tr>
        <tr><td class="l" colspan="5" style="text-align:right;color:#666">냉동 홍두께</td><td class="num">${ppFmt(g.hong,1)}</td><td></td></tr>`
     : `<tr><td colspan="7" class="empty">${ym} 생산계획이 없습니다. 아래 ③에서 주간 계획을 입력하세요.</td></tr>`;
+}
+
+// 엑셀 '26년_2공장 생산계획' 달력 양식: 일~토, 칸마다 제품 / 원육kg(빨강) / ea / 팩(빨강)
+function ppDayItems(date){
+  const mon = ppMonday(date), w = pp.weeks[mon], i = (ppPd(date).getDay()+6)%7;
+  if(!w || i>5) return { items:[], memo:'' };
+  const order = ppProducts().map(p => p.id);
+  const items = Object.entries(w.plan || {}).map(([pid,arr]) => ({ pid, q: ppNum((arr||[])[i]) }))
+    .filter(x => x.q).sort((a,b) => order.indexOf(a.pid) - order.indexOf(b.pid))
+    .map(x => { const sp = ppSpec(w, x.pid); return { ...x, sp, kg: ppMeatKg(x.q, sp), pouch: ppPouch(x.q, sp) }; });
+  return { items, memo: ((w.memo || [])[i] || '').trim() };
+}
+window.renderPlanMonth = () => {
+  const ym = document.getElementById('ppMonth').value || ppToday().slice(0,7);
+  const [Y, M] = ym.split('-').map(Number);
+  const first = ym + '-01';
+  let d = ppAdd(first, -ppPd(first).getDay());                       // 그 달 1일이 든 주의 일요일
+  let html = `<div class="cal-title">${Y}년 ${M}월</div><div class="cal-head">${['일요일','월요일','화요일','수요일','목요일','금요일','토요일'].map(x=>`<div>${x}</div>`).join('')}</div>`;
+  for(let r=0; r<6; r++){
+    if(r>0 && d.slice(0,7) > ym) break;
+    html += `<div class="cal-row${r%2===0?' shade':''}">`;
+    for(let c=0; c<7; c++, d = ppAdd(d,1)){
+      const dt = ppPd(d), out = d.slice(0,7)!==ym, wd = dt.getDay();
+      const { items, memo } = ppDayItems(d);
+      let body = items.map(x => {
+        const pk = (x.sp.packQty||1) > 1;
+        return `<div class="cal-p">${authEsc(ppShortName(x.pid))}<br>`
+          + (x.sp.group==='none' ? '' : `<span class="cal-kg">${ppFmt(x.kg)}kg</span><br>`)
+          + `${ppFmt(pk ? x.pouch : x.q)}ea`
+          + (pk ? `<br><span class="cal-kg">${ppFmt(x.q)}팩</span>` : '') + `</div>`;
+      }).join('');
+      if(memo) body += `<div class="cal-memo${items.length ? '' : ' big'}">${authEsc(memo)}</div>`;
+      if(wd===0){                                                       // 일요일 칸: 이번 줄(월~토) 주의 결재 상태
+        const w = pp.weeks[ppAdd(d,1)];
+        if(w) body += `<div class="cal-st"><span class="pp-chip st-${ppStatus(w)}">${ST_LABEL[ppStatus(w)]}</span></div>`;
+      }
+      html += `<div class="cal-cell" data-date="${d}"><div class="cal-date${out?' out':(wd===0||wd===6)?' red':''}">${dt.getDate()}</div>${body}</div>`;
+    }
+    html += `</div>`;
+  }
+  document.getElementById('ppCal').innerHTML = html;
+  ppRenderMonthTable(ym);
 };
+// 달력용 짧은 이름 (엑셀 표기)
+const PP_SHORT = { mini70:'미니70', mini70x5:'미니70(5입)', mini70r:'미니70 리뉴얼', mini70rx5:'미니70(5입) 리뉴얼', costco:'코스트코', sig130:'시그니처130g',
+  sig130m:'시그니처130g(마트)', sig120:'시그니처120g', traders:'트레이더스460g', fc3kg:'FC 3kg 장조림', quail:'메추리알180g', max5:'미니70(5입) 맥스' };
+const ppShortName = pid => PP_SHORT[pid] || ppProd(pid).name;
 
 // ════ ② 재고 ════
 function ppBadge(days){
@@ -5284,6 +5351,7 @@ function ppRenderGrid(){
     const dis = isPlan ? !ppPlanEditable() : !ppCanWrite();
     const extra = isPlan ? '<th>합계(팩)</th><th>파우치</th><th>원육(kg)</th>' : '<th>실적 합계</th><th>계획 합계</th><th>차이</th>';
     tbl.innerHTML = `<thead><tr><th>제품명</th>${dates.map((d,i)=>`<th>${PP_DAYS[i]}<span class="pp-sub">${ppMD(d)}</span></th>`).join('')}${extra}</tr></thead><tbody>` +
+      (isPlan ? `<tr><td class="l sub">메모 (휴무·특이사항)</td>${dates.map((_,i) => `<td><input class="memo" data-pid="_" data-k="memo" data-i="${i}" maxlength="20" value="${authEsc(((w&&w.memo)||[])[i]||'')}" ${dis?'disabled':''}></td>`).join('')}<td></td><td></td><td></td></tr>` : '') +
       ids.map(pid => `<tr data-row="${pid}"><td class="l">${authEsc(ppProd(pid).name)}</td>${dates.map((_,i) => cell(pid,key,i,((w&&w[key]||{})[pid]||[])[i],dis, isPlan?'':'act-empty')).join('')}
         <td class="num" data-t="a"></td><td class="num" data-t="b"></td><td class="num" data-t="c"></td></tr>`).join('') +
       `</tbody><tfoot>` + (isPlan
@@ -5377,7 +5445,8 @@ function ppReadGrid(kind){
   const v = ppGridValues(), bad = [];
   const clean = x => { if(x==='') return null; const n = Number(String(x).replace(/,/g,'')); if(!isFinite(n) || n<0) { bad.push(x); return null; } return n; };
   const res = {};
-  if(kind==='plan'){ res.plan = {}; Object.entries(v.plan||{}).forEach(([pid,arr]) => res.plan[pid] = arr.map(x => clean(x) || 0)); }
+  if(kind==='plan'){ res.plan = {}; Object.entries(v.plan||{}).forEach(([pid,arr]) => res.plan[pid] = arr.map(x => clean(x) || 0));
+    res.memo = ((v.memo||{})._ || ['','','','','','']).map(x => String(x||'').slice(0,20)); }
   if(kind==='actual'){ res.actual = {}; Object.entries(v.actual||{}).forEach(([pid,arr]) => res.actual[pid] = arr.map(clean)); }
   if(kind==='ship'){ res.shipPlan = {}; res.shipActual = {};
     Object.entries(v.shipPlan||{}).forEach(([pid,x]) => res.shipPlan[pid] = clean(x) || 0);
@@ -5400,7 +5469,7 @@ window.ppSavePlan = async (submit) => {
     const snap = {};
     Object.keys(res.plan).forEach(pid => { const p = ppProd(pid); snap[pid] = { packQty:p.packQty, meatG:p.meatG, yield:p.yield, group:p.group }; });
     const now = Date.now(), stampMe = { name:authMe.name, uid:authMe.id, at:now };
-    const data = { monday:id, plan:res.plan, snap, status:'draft', updatedAt:now, updatedBy:authMe.name,
+    const data = { monday:id, plan:res.plan, memo:res.memo, snap, status:'draft', updatedAt:now, updatedBy:authMe.name,
       shipPlan:(cur&&cur.shipPlan)||{}, shipActual:(cur&&cur.shipActual)||{}, actual:(cur&&cur.actual)||{},
       writer:null, leader:null, director:null, lastReject:(cur&&cur.lastReject)||null,
       history: ppHist(cur, submit ? '결재 요청' : '임시 저장') };
