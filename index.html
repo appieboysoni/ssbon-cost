@@ -5266,11 +5266,21 @@ async function ppLoad(){
 window.loadPlanTab = async () => {
   const today = ppToday();
   if(!document.getElementById('ppMonth').value) document.getElementById('ppMonth').value = today.slice(0,7);
-  if(!pp.weekId) pp.weekId = ppMonday(today);
+  const first = !pp.weekId;
+  if(first) pp.weekId = ppMonday(today);
   try{ pp.loading = ppLoad(); await pp.loading; }
   catch(e){ showToast('생산계획 불러오기 실패: '+(e.message||e), 4000); return; }
+  if(first) pp.weekId = ppDefaultWeek(today);
   ppRenderAll();
 };
+// 처음 열 때 보여줄 주: 이번 주 이후로 본부장 결재까지 끝난 가장 늦은 주의 다음 주 (계획 작성할 주).
+// 이번 주 이후 결재 완료된 주가 없으면 이번 주.
+function ppDefaultWeek(today){
+  const cur = ppMonday(today);
+  const done = Object.keys(pp.weeks).filter(id => id >= cur && ppStatus(pp.weeks[id])==='approved').sort();
+  return done.length ? ppAdd(done[done.length-1], 7) : cur;
+}
+window._ppDefaultWeek = ppDefaultWeek;
 function ppRenderAll(){ renderPlanMonth(); ppRenderInventory(); ppRenderMeat(); ppRenderWeek(); ppRenderMaster(); }
 
 // ════ ① 월단위 ════
@@ -5630,8 +5640,10 @@ window.ppAct = async (act) => {
     const data = { ...cur, ...patch, updatedAt:now, updatedBy:authMe.name, history: ppHist(cur, label, comment) };
     await setDoc(doc(db, PP_WEEKS, id), data);
     pp.weeks[id] = data;
+    // 본부장 승인 = 확정 → 다음 주(계획 작성할 주)로 이동
+    if(data.status==='approved'){ pp.weekId = ppAdd(id, 7); pp.mode = 'plan'; }
     ppRenderAll();
-    showToast('✅ '+label);
+    showToast(data.status==='approved' ? `✅ ${label} — ${ppMD(id)}주 확정, 다음 주(${ppMD(ppAdd(id,7))}~)로 이동` : '✅ '+label);
   }catch(e){ ppMsg('저장 실패: '+(e.message||e)); }
 };
 
