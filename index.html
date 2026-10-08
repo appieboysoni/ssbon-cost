@@ -175,7 +175,7 @@ tr.total td{background:var(--light);font-weight:700}
 .pp-bar input[type=month],.pp-bar input[type=date]{padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;background:var(--input);font-family:inherit}
 .pp-chip{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
 .st-draft{background:#eceff3;color:#555}.st-submitted{background:#fff3cd;color:#856404}.st-reviewed{background:#dbe8fb;color:#1F3864}.st-approved{background:#d4edda;color:#155724}.st-none{background:#f6f6f6;color:#aaa}
-.pp-tbl td input{width:72px;padding:4px 5px;border:1px solid var(--border);border-radius:4px;text-align:right;font-size:12px;font-family:inherit;background:var(--input)}
+.pp-tbl td input{width:80px;padding:4px 5px;border:1px solid var(--border);border-radius:4px;text-align:right;font-size:12px;font-family:inherit;background:var(--input)}
 .pp-tbl td input:disabled{background:transparent;border-color:transparent;color:#222}
 .pp-tbl td input.act-empty{background:#fff}
 .pp-tbl td.l{text-align:left}.pp-tbl td.sub{color:#888;font-size:11px}
@@ -347,6 +347,7 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
         <tbody id="unitcost-body"></tbody>
       </table></div>
 
+      <div id="unitcost-site-note"></div>
       <div class="sec" style="margin-top:16px">월별 개당 제조원가 추이 (원/EA)</div>
       <div class="tbl-wrap"><table>
         <thead><tr id="unitcost-month-head"></tr></thead>
@@ -623,6 +624,7 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
         <thead><tr id="histmix-head"></tr></thead>
         <tbody id="histmix-body"></tbody>
       </table></div>
+      <div id="histmix-site-note"></div>
     </div>
   </div>
 </div>
@@ -852,34 +854,9 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     </div>
   </div>
 
-  <!-- ② 제품별 재고·소진시점 -->
+  <!-- ② 주간 생산계획 입력·결재 -->
   <div class="card">
-    <div class="card-hdr"><span>② 제품별 재고 · 예상 소진시점</span><span id="ppInvAsOf" style="font-weight:400"></span></div>
-    <div class="card-body">
-      <div id="ppInvWarn"></div>
-      <div class="tbl-wrap"><table class="pp-tbl">
-        <thead><tr><th>제품명</th><th>이번주 주초재고</th><th>이번주 생산</th><th>다음주 생산</th><th>이번주 출고</th><th>다음주 출고</th><th>차주 예상 잔여</th><th>일평균 출고<span class="pp-sub">(최근 4주 실적)</span></th><th>예상 소진일</th><th>남은 일수</th></tr></thead>
-        <tbody id="ppInvBody"></tbody>
-      </table></div>
-      <div class="ro-note" style="margin-top:6px">생산·출고는 실적이 입력된 값은 실적, 없으면 계획(예정)으로 계산합니다. <b>*</b> 표시는 계획·예정값이 섞인 숫자입니다. 남은 일수: <span class="days-badge d-red">7일 미만</span> <span class="days-badge d-orange">14일 미만</span> <span class="days-badge d-green">14일 이상</span></div>
-
-      <div class="sec">원육 재고 · 소진시점 <span style="font-weight:400;color:#888">(수기 입력, 참고용)</span></div>
-      <div class="tbl-wrap"><table class="pp-tbl">
-        <thead><tr><th>원육</th><th>재고 (kg)</th><th>입고예정 (kg)</th><th>합계 (kg)</th><th>일 최대 사용량 (kg)<span class="pp-sub">생산계획 중 가장 많은 날</span></th><th>가용 생산일</th><th>예상 소진일<span class="pp-sub">기준일부터 월~금 계산</span></th></tr></thead>
-        <tbody id="ppMeatBody"></tbody>
-      </table></div>
-      <div class="pp-bar" style="margin-top:8px">
-        <label style="font-size:12px;font-weight:700;color:var(--primary)" for="ppMeatDate">재고 기준일</label>
-        <input type="date" id="ppMeatDate">
-        <button class="btn btn-primary btn-sm need-writer" type="button" onclick="saveMeatStock()">원육 재고 저장</button>
-        <span class="ro-note" id="ppMeatInfo"></span>
-      </div>
-    </div>
-  </div>
-
-  <!-- ③ 주간 생산계획 입력·결재 -->
-  <div class="card">
-    <div class="card-hdr"><span>③ 주간 생산계획 · 결재</span>
+    <div class="card-hdr"><span>② 주간 생산계획 · 결재</span>
       <div class="pp-bar">
         <button class="btn btn-sm" style="background:#fff;color:var(--primary)" type="button" onclick="shiftPlanWeek(-1)">◀</button>
         <input type="date" id="ppWeek" onchange="setPlanWeek(this.value)">
@@ -907,6 +884,31 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
       <div class="auth-msg" id="ppMsg" style="margin-top:6px"></div>
       <div id="ppRevs"></div>
       <div class="pp-hist" id="ppHist"></div>
+    </div>
+  </div>
+
+  <!-- ③ 제품별 재고·소진시점 -->
+  <div class="card">
+    <div class="card-hdr"><span>③ 제품별 재고 · 예상 소진시점</span><span id="ppInvAsOf" style="font-weight:400"></span></div>
+    <div class="card-body">
+      <div id="ppInvWarn"></div>
+      <div class="tbl-wrap"><table class="pp-tbl">
+        <thead><tr><th>제품명</th><th>이번주 주초재고</th><th>이번주 생산</th><th>다음주 생산</th><th>이번주 출고</th><th>다음주 출고</th><th>차주 예상 잔여</th><th>일평균 출고<span class="pp-sub">(최근 4주 실적)</span></th><th>예상 소진일</th><th>남은 일수</th></tr></thead>
+        <tbody id="ppInvBody"></tbody>
+      </table></div>
+      <div class="ro-note" style="margin-top:6px">생산·출고는 실적이 입력된 값은 실적, 없으면 계획(예정)으로 계산합니다. <b>*</b> 표시는 계획·예정값이 섞인 숫자입니다. 남은 일수: <span class="days-badge d-red">7일 미만</span> <span class="days-badge d-orange">14일 미만</span> <span class="days-badge d-green">14일 이상</span></div>
+
+      <div class="sec">원육 재고 · 소진시점 <span style="font-weight:400;color:#888">(수기 입력, 참고용)</span></div>
+      <div class="tbl-wrap"><table class="pp-tbl">
+        <thead><tr><th>원육</th><th>재고 (kg)</th><th>입고예정 (kg)</th><th>합계 (kg)</th><th>일 최대 사용량 (kg)<span class="pp-sub">생산계획 중 가장 많은 날</span></th><th>가용 생산일</th><th>예상 소진일<span class="pp-sub">기준일부터 월~금 계산</span></th></tr></thead>
+        <tbody id="ppMeatBody"></tbody>
+      </table></div>
+      <div class="pp-bar" style="margin-top:8px">
+        <label style="font-size:12px;font-weight:700;color:var(--primary)" for="ppMeatDate">재고 기준일</label>
+        <input type="date" id="ppMeatDate">
+        <button class="btn btn-primary btn-sm need-writer" type="button" onclick="saveMeatStock()">원육 재고 저장</button>
+        <span class="ro-note" id="ppMeatInfo"></span>
+      </div>
     </div>
   </div>
 
@@ -1054,6 +1056,9 @@ const fmtP = n => (n==null||isNaN(n)) ? '—' : (n*100).toFixed(1)+'%';
 const rC = r => !r||isNaN(r) ? '' : r>=1 ? 'bad' : r>=0.85 ? 'warn' : 'ok';
 const badge = r => !r||isNaN(r) ? '' : r>=1 ? '<span class="badge b-bad">🔴 검토필요</span>' : r>=0.85 ? '<span class="badge b-warn">🟡 주의</span>' : '<span class="badge b-ok">🟢 양호</span>';
 const thisMonth = () => { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
+// 실적 조회 기본월 = 전월 (당월 실적은 월말 마감 후에 들어옴)
+const prevMonth = () => { const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
+window._prevMonth = prevMonth;
 
 window.showToast = (msg,dur=2500) => {
   const t=document.getElementById('toast');
@@ -1072,8 +1077,8 @@ window.goTab = (name,btn) => {
   if(name==='history')   loadHistory();
   if(name==='settings')  { loadMaster(); loadBomProductList(); loadTargetCostList(); }
   if(name==='input')     loadExistingData();
-  if(name==='report')    { document.getElementById('reportMonth').value = document.getElementById('dashMonth').value || thisMonth(); }
-  if(name==='exec') { document.getElementById('execMonth').value = document.getElementById('execMonth').value || document.getElementById('dashMonth').value || thisMonth(); renderExecPreview(); loadExecMemos(); }
+  if(name==='report')    { document.getElementById('reportMonth').value = document.getElementById('dashMonth').value || prevMonth(); }
+  if(name==='exec') { document.getElementById('execMonth').value = document.getElementById('execMonth').value || document.getElementById('dashMonth').value || prevMonth(); renderExecPreview(); loadExecMemos(); }
   if(name==='plan')      loadPlanTab();
   if(name==='capa') {
     const frame = document.getElementById('capa-frame');
@@ -2870,6 +2875,63 @@ const PRODUCT_UNITCOST = [
   {n:"[본죽]미니쇠고기장조림 70g_낱개_리뉴얼",t:0.357143,cum:{q:0,c:0,a:0,r:0,u:0},m:{7:{q:48104,c:64282476,a:134691200,r:0.477258,u:1336}}}
 ];
 
+// ── 기획실 확정치 + 사이트 계산값 병합 (2026-10-08)
+//  기획실 확정치가 있는 달은 그대로 쓰고, 없는 달(9월~)은 저장된 월 데이터(costData)를
+//  사이트 원가 계산(computeMonthCost)으로 제품별 집계해 채운다.
+//  사이트 계산 월: 수량 = 생산실적(erpQty), 제조원가 = 사이트 배부 결과,
+//                  생산금액 = 공급단가(설정탭, 중량×원/g) × 수량. 제품명은 부위 표기 (설도)/(우둔)/(홍두께) 제거 후 합산.
+//  누적은 표시되는 모든 달의 합으로 다시 계산.
+const PRODUCT_UNITCOST_BASE = JSON.parse(JSON.stringify(PRODUCT_UNITCOST));
+window._ucSiteMonths = [];
+function mergeUnitCost(docs){
+  PRODUCT_UNITCOST.length = 0;
+  PRODUCT_UNITCOST_BASE.forEach(p => PRODUCT_UNITCOST.push(JSON.parse(JSON.stringify(p))));
+  const baseMonths = new Set();
+  PRODUCT_UNITCOST.forEach(p => Object.entries(p.m||{}).forEach(([m,v]) => { if(v && v.q) baseMonths.add(+m); }));
+  const masterMap = {}; (window._masters||[]).forEach(m => masterMap[m.code] = m);
+  const site = [], noPrice = new Set();
+  (docs||[]).forEach(d => {
+    const [y, mm] = String(d.month||'').split('-'); const m = +mm;
+    if(y!=='2026' || !m || baseMonths.has(m)) return;
+    const cc = computeMonthCost(d, window._bom);
+    if(!cc.rows.length) return;
+    const agg = {};
+    cc.rows.forEach(r => {
+      const mt = masterMap[r.code];
+      const g = (mt ? mt.name : r.code).replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
+      const sp = mt ? (mt.supplyPrice||0) : 0;
+      if(!sp) noPrice.add(g);
+      const x = agg[g] || (agg[g] = { q:0, c:0, a:0 });
+      x.q += r.qty; x.c += r.totalCost; x.a += sp * r.qty;
+    });
+    Object.entries(agg).forEach(([g,x]) => {
+      let p = PRODUCT_UNITCOST.find(p => p.n===g);
+      if(!p){ p = { n:g, t:null, cum:{q:0,c:0,a:0,r:0,u:0}, m:{} }; PRODUCT_UNITCOST.push(p); }
+      p.m[m] = { q:x.q, c:x.c, a:x.a, r: x.a ? x.c/x.a : 0, u: x.q ? Math.round(x.c/x.q) : 0, src:'site' };
+    });
+    site.push(m);
+  });
+  PRODUCT_UNITCOST.forEach(p => {
+    let q=0, c=0, a=0;
+    Object.values(p.m||{}).forEach(v => { if(v && v.q){ q+=v.q; c+=v.c; a+=v.a; } });
+    p.cum = { q, c, a, r: a ? c/a : 0, u: q ? Math.round(c/q) : 0 };
+  });
+  window._ucSiteMonths = site.sort((a,b)=>a-b);
+  window._ucNoPrice = [...noPrice];
+  return window._ucSiteMonths;
+}
+window._mergeUnitCost = mergeUnitCost;
+const ucIsSite = m => (window._ucSiteMonths||[]).includes(+m);
+const ucMonthLabel = m => ucIsSite(m) ? `${m}월*` : `${m}월`;
+const ucMonthTh = m => ucIsSite(m) ? `<th title="기획실 확정치 없음 — 사이트 계산값">${m}월<br><span style="font-size:10px;font-weight:400">사이트</span></th>` : `<th>${m}월</th>`;
+function ucSiteNote(){
+  const sm = window._ucSiteMonths||[];
+  if(!sm.length) return '';
+  const np = (window._ucNoPrice||[]);
+  return `<div class="warn-box" style="margin-top:8px">* ${sm.map(m=>m+'월').join('·')}: 기획실 확정치가 없어 <b>사이트 계산값</b>입니다 (생산실적·재고평가·BOM·배부 기준, 생산금액 = 공급단가 × 수량). 기획실 확정치를 받으면 그 값으로 교체하세요.`
+    + (np.length ? `<br>⚠️ 공급단가 미등록 제품 — 생산금액 0으로 집계: ${np.join(', ')}` : '') + `</div>`;
+}
+
 function renderUnitCostTables() {
   const body = document.getElementById('unitcost-body');
   if(!body) return;
@@ -2901,7 +2963,8 @@ function renderUnitCostTables() {
   for(let m=1;m<=12;m++){
     if(PRODUCT_UNITCOST.some(p=>p.m[m]&&p.m[m].q>0)) activeMonths.push(m);
   }
-  const monthCols = activeMonths.map(m=>`<th>${m}월</th>`).join('');
+  const monthCols = activeMonths.map(ucMonthTh).join('');
+  const noteEl = document.getElementById('unitcost-site-note'); if(noteEl) noteEl.innerHTML = ucSiteNote();
 
   // ② 월별 개당 제조원가 — 제품명 옆에 목표 제조원가 열 추가
   document.getElementById('unitcost-month-head').innerHTML =
@@ -2984,7 +3047,7 @@ async function renderQuarterChart() {
 }
 
 window.loadProducts = async () => {
-  const month=document.getElementById('prodMonth').value||thisMonth();
+  const month=document.getElementById('prodMonth').value||prevMonth();
   document.getElementById('prodMonth').value=month;
   await ensureMasters();
   await ensureBom();
@@ -3184,7 +3247,7 @@ if(!Chart.registry.plugins.get('histBarLabels')) Chart.registry.plugins.register
 function renderHistoryCharts(){
   const { months, byMonth } = histAggregate();
   if(!months.length) return;
-  const labels = months.map(m=>`${m}월`);
+  const labels = months.map(ucMonthLabel);
   const totalsByMonth = {};
   months.forEach(m=>{ totalsByMonth[m]=HIST_GROUPS.reduce((s,k)=>s+(byMonth[m][k]||0),0); });
   const totalsArr = months.map(m=>Math.round(totalsByMonth[m]/1000000));
@@ -3277,8 +3340,9 @@ function renderHistoryCharts(){
   const W = v => Math.round(v/1000000).toLocaleString('ko-KR')+'백만';
   const head = document.getElementById('histmix-head');
   if(head) head.innerHTML = '<th style="min-width:110px">제품군</th>'
-    + months.map(m=>`<th>${m}월</th>`).join('')
+    + months.map(ucMonthTh).join('')
     + '<th style="background:#1F3864;color:#fff">누적</th>';
+  const hn = document.getElementById('histmix-site-note'); if(hn) hn.innerHTML = ucSiteNote();
   const body = document.getElementById('histmix-body');
   if(body){
     const grand = Object.values(totalsByMonth).reduce((s,v)=>s+v,0);
@@ -3306,7 +3370,9 @@ window.loadHistory = async () => {
   const snap=await getDocs(q);
   const rows=[]; snap.forEach(d=>rows.push(d.data()));
   const tbody=document.getElementById('history-body');
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="15" class="empty">데이터가 없습니다.</td></tr>';return;}
+  await ensureMasters();
+  mergeUnitCost(rows);
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="15" class="empty">데이터가 없습니다.</td></tr>';renderHistoryCharts();return;}
   const calc=rows.map(r=>computeMonthCost(r, window._bom));
   tbody.innerHTML=rows.map((r,i)=>{
     const c=calc[i].sum;
@@ -3357,7 +3423,7 @@ window.deleteHistoryMonth = async (month) => {
 // 대시보드
 // ════════════════════════════════════
 window.loadDashboard = async () => {
-  const month=document.getElementById('dashMonth').value||thisMonth();
+  const month=document.getElementById('dashMonth').value||prevMonth();
   document.getElementById('dashMonth').value=month;
   document.getElementById('hdrMonth').textContent=month+' 기준';
   await ensureMasters();
@@ -3378,7 +3444,8 @@ window.loadDashboard = async () => {
   renderCostRateChart(trendRows);
   renderProductionChart(trendRows);
 
-  // 제품별 분기 비교 차트 + 제조단가 요약표 (기획실 확정값 기준)
+  // 제품별 분기 비교 차트 + 제조단가 요약표 (기획실 확정값 + 확정치 없는 달은 사이트 계산값)
+  mergeUnitCost(allMonthsData);
   await renderQuarterChart();
   renderUnitCostTables();
 
@@ -3909,7 +3976,9 @@ function execBlank(){ return Array(12).fill(null); }
 
 async function execCollect(){
   await ensureBom();
+  await ensureMasters();
   const snap = await getDocs(query(collection(db,'costData'), orderBy('month')));
+  { const _all = []; snap.forEach(dd => _all.push(dd.data())); mergeUnitCost(_all); }
   const byMonth = {};
   snap.forEach(dd=>{
     const d=dd.data();
@@ -5012,6 +5081,28 @@ const ppNum = v => { if(v==null || v==='') return 0; const n = Number(String(v).
 const ppHas = v => v!=null && v!=='';
 const ppFmt = (n,d=0) => (n==null || isNaN(n)) ? '—' : Number(n).toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d});
 
+// ── 숫자 칸 천 단위 쉼표: 화면에는 1,234 / 저장할 때는 쉼표를 빼고 숫자로 읽음
+function ppComma(v){
+  const t = String(v==null ? '' : v).replace(/,/g,'').trim();
+  if(t==='' || !/^-?\d*\.?\d*$/.test(t)) return String(v==null ? '' : v);
+  const [ip, dp] = t.split('.');
+  const neg = ip.startsWith('-'), digits = neg ? ip.slice(1) : ip;
+  const withC = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (neg?'-':'') + withC + (dp!==undefined ? '.'+dp : '');
+}
+function ppCommaInput(el){
+  const old = el.value, pos = el.selectionStart==null ? old.length : el.selectionStart;
+  const digitsBefore = old.slice(0, pos).replace(/[^\d.]/g,'').length;   // 커서 앞 숫자 개수
+  const nv = ppComma(old);
+  if(nv===old) return;
+  el.value = nv;
+  let k = 0, p = 0;
+  while(p < nv.length && k < digitsBefore){ if(/[\d.]/.test(nv[p])) k++; p++; }
+  try{ el.setSelectionRange(p, p); }catch(e){}
+}
+function ppBindComma(root){ root.querySelectorAll('input.num-in').forEach(el => el.addEventListener('input', () => ppCommaInput(el))); }
+window._ppComma = ppComma;
+
 // ── 권한
 const ppRole = () => authMe ? authMe.role : '';
 const ppCanWrite = () => !!authMe;   // 기능은 역할과 관계없이 모두 같음 (역할은 결재란에만 씀)
@@ -5211,7 +5302,7 @@ function ppRenderMonthTable(ym){
          <td class="num">${tRuns}회</td><td class="num">${tRuns ? '100%' : '—'}</td><td class="num">${anyAct ? tAct+'회' : '—'}</td></tr>
        <tr><td class="l" colspan="5" style="text-align:right;color:#666">냉동 설도+우둔</td><td class="num">${ppFmt(g.su,1)}</td><td></td><td class="c sub" colspan="3" rowspan="2">생산일수 계획 ${rows.days}일${anyAct ? ` · 실적 ${rows.actDays}일` : ''}<br>총 생산횟수 ${tRuns}회 (경비 배부 모수)</td></tr>
        <tr><td class="l" colspan="5" style="text-align:right;color:#666">냉동 홍두께</td><td class="num">${ppFmt(g.hong,1)}</td><td></td></tr>`
-    : `<tr><td colspan="10" class="empty">${ym} 생산계획이 없습니다. 아래 ③에서 주간 계획을 입력하세요.</td></tr>`;
+    : `<tr><td colspan="10" class="empty">${ym} 생산계획이 없습니다. 아래 ②에서 주간 계획을 입력하세요.</td></tr>`;
 }
 
 // 엑셀 '26년_2공장 생산계획' 달력 양식: 일~토, 칸마다 제품 / 원육kg(빨강) / ea / 팩(빨강)
@@ -5266,7 +5357,7 @@ const PP_SHORT = { mini70:'미니70', mini70x5:'미니70(5입)', mini70r:'미니
   sig130m:'시그니처130g(마트)', sig120:'시그니처120g', traders:'트레이더스460g', fc3kg:'FC 3kg 장조림', quail:'메추리알180g', max5:'미니70(5입) 맥스' };
 const ppShortName = pid => PP_SHORT[pid] || ppProd(pid).name;
 
-// ════ ② 재고 ════
+// ════ ③ 재고 ════
 function ppBadge(days){
   if(days==null) return '<span class="days-badge d-none">—</span>';
   const cls = days < 7 ? 'd-red' : days < 14 ? 'd-orange' : 'd-green';
@@ -5307,13 +5398,14 @@ function ppRenderMeat(){
     const g = m[gk] || {}, mx = ppMeatMax(gk), total = ppNum(g.stock) + ppNum(g.incoming);
     const n = mx.kg ? total / mx.kg : null;
     return `<tr><td class="l">${MEAT_GROUP[gk]}</td>
-      <td><input id="ppMeat_${gk}_stock" inputmode="decimal" value="${ppHas(g.stock)?g.stock:''}" ${can?'':'disabled'}></td>
-      <td><input id="ppMeat_${gk}_incoming" inputmode="decimal" value="${ppHas(g.incoming)?g.incoming:''}" ${can?'':'disabled'}></td>
+      <td><input id="ppMeat_${gk}_stock" class="num-in" inputmode="decimal" value="${ppHas(g.stock)?ppComma(g.stock):''}" ${can?'':'disabled'}></td>
+      <td><input id="ppMeat_${gk}_incoming" class="num-in" inputmode="decimal" value="${ppHas(g.incoming)?ppComma(g.incoming):''}" ${can?'':'disabled'}></td>
       <td class="num">${ppFmt(total,1)}</td>
       <td class="num">${mx.kg ? ppFmt(mx.kg,1)+`<span class="pp-sub">${ppMDW(mx.date)}</span>` : '<span class="sub">계획 없음</span>'}</td>
       <td class="num">${n==null ? '—' : ppFmt(n,1)+'일'}</td>
       <td class="c">${n==null || !ppHas(g.stock) ? '—' : ppMDW(ppNthWorkday(base, n))}</td></tr>`;
   }).join('');
+  ppBindComma(document.getElementById('ppMeatBody'));
 }
 window.saveMeatStock = async () => {
   if(!ppCanWrite()) return;
@@ -5327,7 +5419,7 @@ window.saveMeatStock = async () => {
   catch(e){ showToast('저장 실패: '+(e.message||e)); }
 };
 
-// ════ ③ 주간 계획·결재 ════
+// ════ ② 주간 계획·결재 ════
 const ppWeek = () => pp.weeks[pp.weekId] || null;
 window.setPlanWeek = v => { if(!v) return; pp.weekId = ppMonday(v); ppRenderWeek(); };
 window.shiftPlanWeek = n => { pp.weekId = ppAdd(pp.weekId, 7*n); ppRenderWeek(); };
@@ -5345,7 +5437,7 @@ function ppRenderWeek(){
   document.getElementById('ppAppr').innerHTML = stamp('작성', w && w.writer) + stamp('팀장', w && w.leader) + stamp('본부장', w && w.director);
   ['Plan','Act','Ship'].forEach(k => document.getElementById('ppTab'+k).classList.toggle('on', {Plan:'plan',Act:'actual',Ship:'ship'}[k]===pp.mode));
   const note = {
-    plan: ppPlanEditable() ? '단위: ERP 단위(팩). 저장하면 위 ① 월단위 계획과 ② 재고에 바로 반영됩니다.' : `결재가 진행 중이라 계획을 고칠 수 없습니다. 고치려면 ${ {submitted:'작성자', reviewed:'팀장', approved:'본부장'}[st] }이 [결재 취소]로 작성중 상태로 돌려야 합니다. 취소 전 계획은 변경 이력에 남습니다.`,
+    plan: ppPlanEditable() ? '단위: ERP 단위(팩). 저장하면 위 ① 월단위 계획과 아래 ③ 재고에 바로 반영됩니다.' : `결재가 진행 중이라 계획을 고칠 수 없습니다. 고치려면 ${ {submitted:'작성자', reviewed:'팀장', approved:'본부장'}[st] }이 [결재 취소]로 작성중 상태로 돌려야 합니다. 취소 전 계획은 변경 이력에 남습니다.`,
     actual: '생산 후 날짜별 실적(팩)을 입력하세요. 빈칸은 미입력으로 보고 재고 계산에 계획값을 씁니다. 실적은 결재와 별도로 언제든 입력할 수 있습니다.',
     ship: '주간 출고 예정량과 실적(팩)을 입력하세요. 실적이 있으면 실적, 없으면 예정으로 재고를 계산합니다. 소진시점의 일평균 출고는 최근 4주 실적만 씁니다.'
   }[pp.mode];
@@ -5363,7 +5455,7 @@ function ppRenderGrid(){
   const dates = PP_DAYS.map((_,i) => ppAdd(id, i));
   const tbl = document.getElementById('ppGrid');
   // 계획 칸의 0은 빈칸으로 보여줌 (실적 칸의 0은 '0 생산'이라 그대로)
-  const cell = (pid, k, i, val, dis, cls='') => `<td><input data-pid="${pid}" data-k="${k}" data-i="${i}" inputmode="numeric" class="${cls}" value="${ppHas(val) && !(k==='plan' && ppNum(val)===0) ? val : ''}" ${dis?'disabled':''}></td>`;
+  const cell = (pid, k, i, val, dis, cls='') => `<td><input data-pid="${pid}" data-k="${k}" data-i="${i}" inputmode="numeric" class="num-in ${cls}" value="${ppHas(val) && !(k==='plan' && ppNum(val)===0) ? ppComma(val) : ''}" ${dis?'disabled':''}></td>`;
   if(pp.mode==='ship'){
     const dis = !ppCanWrite();
     tbl.innerHTML = `<thead><tr><th>제품명</th><th>이번주 생산 계획</th><th>출고 예정</th><th>출고 실적</th></tr></thead><tbody>` +
@@ -5385,6 +5477,7 @@ function ppRenderGrid(){
         : '') + `</tfoot>`;
   }
   tbl.querySelectorAll('input').forEach(el => el.addEventListener('input', ppUpdateTotals));
+  ppBindComma(tbl);
   ppUpdateTotals();
 }
 // 입력 중인 값으로 합계 다시 계산 (스냅샷이 있으면 그 기준, 없으면 현재 기준정보)
@@ -5603,8 +5696,9 @@ function ppRenderMaster(){
     <td><input data-f="yield" inputmode="decimal" value="${+(p.yield*100).toFixed(2)}" ${d}></td>
     <td><select data-f="group" ${d}>${Object.keys(MEAT_GROUP).map(k=>`<option value="${k}"${k===p.group?' selected':''}>${MEAT_GROUP[k]}</option>`).join('')}</select></td>
     <td class="c"><input type="checkbox" data-f="active" ${p.active!==false?'checked':''} ${d} style="width:auto"></td>
-    <td><input data-f="base" inputmode="numeric" value="${ppHas(base.qty[p.id])?base.qty[p.id]:''}" ${d}></td>
-    <td><input data-f="ship4w" inputmode="numeric" value="${base.ship4w && ppHas(base.ship4w[p.id])?base.ship4w[p.id]:''}" ${d}></td></tr>`).join('');
+    <td><input data-f="base" class="num-in" inputmode="numeric" value="${ppHas(base.qty[p.id])?ppComma(base.qty[p.id]):''}" ${d}></td>
+    <td><input data-f="ship4w" class="num-in" inputmode="numeric" value="${base.ship4w && ppHas(base.ship4w[p.id])?ppComma(base.ship4w[p.id]):''}" ${d}></td></tr>`).join('');
+  ppBindComma(document.getElementById('ppMasterBody'));
 }
 window.saveMaster = async () => {
   if(!ppCanWrite()) return;
@@ -5638,9 +5732,9 @@ let appStarted = false;
 function startApp(){
   if(appStarted) return;
   appStarted = true;
-  document.getElementById('dashMonth').value=thisMonth();
-  document.getElementById('prodMonth').value=thisMonth();
-  document.getElementById('inputMonth').value=thisMonth();
+  document.getElementById('dashMonth').value=prevMonth();
+  document.getElementById('prodMonth').value=prevMonth();
+  document.getElementById('inputMonth').value=prevMonth();
   renderBulkPlan();
   loadDashboard();
 }
