@@ -295,6 +295,18 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     </div>
   </div>
 
+  <!-- ── 수율 트렌드 ── -->
+  <div class="chart-card" style="margin-bottom:14px">
+    <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>🥩 수율 트렌드 (완제품 고기중량 ÷ 원육 투입량)</span><span id="yieldCum" style="font-weight:400"></span></div>
+    <div class="chart-wrap"><canvas id="chartYield"></canvas></div>
+    <div class="chart-legend">
+      <div class="leg-item"><div class="leg-dot" style="background:#1F3864"></div><span>전체</span></div>
+      <div class="leg-item"><div class="leg-dot" style="background:#C00000"></div><span>홍두께 (FC 3kg)</span></div>
+      <div class="leg-item"><div class="leg-dot" style="background:#2E7D32"></div><span>설도·우둔 (그 외 제품)</span></div>
+    </div>
+    <div style="padding:0 16px 12px;font-size:11px;color:#888">완제품 고기중량 = 생산수량 × BOM 제품당 고기중량, 원육 투입량 = 재고평가 원육 출고수량. 월말에 출고된 원육이 다음 달 제품이 되면 월별 값이 출렁일 수 있어 누적값을 함께 봅니다.</div>
+  </div>
+
   <!-- ── 원가 구성 테이블 ── -->
   <div class="card">
     <div class="card-hdr">📋 원가 구성 (당월 vs 전월)</div>
@@ -1053,7 +1065,7 @@ window._bom = {};
 window._parsed = { inv: null, erp: null, erpQty: null, runs: null, welfare: null, stmt: null };
 
 // ── 차트 인스턴스 저장
-window._charts = { costRate: null, production: null, quarter: null, histAmt: null, histMix: null, histRate: null };
+window._charts = { costRate: null, production: null, quarter: null, histAmt: null, histMix: null, histRate: null, yield: null };
 
 // ── 유틸
 const fmt = (n,d=2) => (n==null||isNaN(n)) ? '—' : Number(n).toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -2519,6 +2531,91 @@ if(!Chart.registry.plugins.get('costRateLabels')) {
 // ════════════════════════════════════
 // 생산량 트렌드 차트 (이중축)
 // ════════════════════════════════════
+// ════ 수율 트렌드 ════
+// 1~8월: 공급단가고정 파일(재고평가 원육 출고 / 자재이론총사용량 원육)에서 읽은 값 (2026-10-09)
+// 9월부터: 사이트에 저장된 월 데이터로 계산, 계산할 수 없으면 아래 값 사용(9월만 있음)
+const YIELD_BASE = {"1": {"hong": {"fin": 154.9, "inp": 304.9}, "su": {"fin": 6917.1, "inp": 14113.7}}, "2": {"hong": {"fin": 0, "inp": 0}, "su": {"fin": 5954.1, "inp": 12167.4}}, "3": {"hong": {"fin": 0, "inp": 0}, "su": {"fin": 10287.4, "inp": 20309.5}}, "4": {"hong": {"fin": 1720.8, "inp": 3621.0}, "su": {"fin": 9269.3, "inp": 17700.8}}, "5": {"hong": {"fin": 6656.9, "inp": 13507.6}, "su": {"fin": 5472.5, "inp": 10537.4}}, "6": {"hong": {"fin": 19650.6, "inp": 40922.1}, "su": {"fin": 6995.1, "inp": 12141.7}}, "7": {"hong": {"fin": 6600.2, "inp": 12404.3}, "su": {"fin": 9957.3, "inp": 16382.9}}, "8": {"hong": {"fin": 11903.0, "inp": 19630.3}, "su": {"fin": 11100.6, "inp": 16848.8}}, "9": {"hong": {"fin": 13955.0, "inp": 26316}, "su": {"fin": 14394.7, "inp": 23658.1}}};
+const YIELD_MEAT_RE = /쇠고기|원육|설도|홍두께|홍두깨|우둔/;
+const yieldGroup = n => /홍두께|홍두깨/.test(String(n||'')) ? 'hong' : 'su';
+function yieldFromDoc(d, bomFallback){
+  const o = { hong:{fin:0,inp:0}, su:{fin:0,inp:0} };
+  (d.invData||[]).forEach(it => {
+    const n = String(it.name||'');
+    const isMeat = /^1000(00|01|25)$/.test(String(it.code)) || (String(it.code)[0]==='1' && YIELD_MEAT_RE.test(n) && !/육수/.test(n));
+    if(isMeat) o[yieldGroup(n)].inp += (+it.outQty||0);
+  });
+  const bom = (d.bomSnapshot && Object.keys(d.bomSnapshot).length) ? d.bomSnapshot : (bomFallback||{});
+  for(const [code, qty] of Object.entries(d.erpQty||{})){
+    if(!(qty>0)) continue;
+    const b = bom[code]; if(!b) continue;
+    for(const m of (b.mats||[])){
+      const mn = String(m.mname||'');
+      if(String(m.mcode)[0]==='1' && YIELD_MEAT_RE.test(mn) && !/육수/.test(mn)) o[yieldGroup(mn)].fin += (m.perEa||0)*qty;
+    }
+  }
+  const fin = o.hong.fin + o.su.fin, inp = o.hong.inp + o.su.inp;
+  return (fin>0 && inp>0) ? o : null;
+}
+function yieldSeries(docs){
+  const byM = {}, src = {};
+  for(const [m, v] of Object.entries(YIELD_BASE)){ byM[+m] = v; src[+m] = 'file'; }
+  (docs||[]).forEach(d => {
+    const [y, mm] = String(d.month||'').split('-'); const m = +mm;
+    if(y!=='2026' || !m || m<=8) return;           // 1~8월은 파일 값 고정
+    const v = yieldFromDoc(d, window._bom);
+    if(v){ byM[m] = v; src[m] = 'site'; }
+  });
+  const months = Object.keys(byM).map(Number).sort((a,b)=>a-b);
+  const pct = (f,i) => i>0 ? +(f/i*100).toFixed(1) : null;
+  const rows = months.map(m => {
+    const v = byM[m], fin = v.hong.fin+v.su.fin, inp = v.hong.inp+v.su.inp;
+    return { m, fin, inp, all:pct(fin,inp), hong:pct(v.hong.fin,v.hong.inp), su:pct(v.su.fin,v.su.inp), v, src:src[m] };
+  });
+  const cum = rows.reduce((a,r)=>({fin:a.fin+r.fin, inp:a.inp+r.inp, hf:a.hf+r.v.hong.fin, hi:a.hi+r.v.hong.inp, sf:a.sf+r.v.su.fin, si:a.si+r.v.su.inp}), {fin:0,inp:0,hf:0,hi:0,sf:0,si:0});
+  return { rows, cum: { all:pct(cum.fin,cum.inp), hong:pct(cum.hf,cum.hi), su:pct(cum.sf,cum.si), fin:cum.fin, inp:cum.inp } };
+}
+window._yieldSeries = yieldSeries;
+function renderYieldChart(docs){
+  destroyChart('yield');
+  const { rows, cum } = yieldSeries(docs);
+  const el = document.getElementById('yieldCum');
+  const p1 = v => v==null ? '—' : Number(v).toFixed(1)+'%';
+  if(el) el.textContent = rows.length ? `${rows[0].m}~${rows[rows.length-1].m}월 누적 ${p1(cum.all)} · 홍두께 ${p1(cum.hong)} · 설도·우둔 ${p1(cum.su)}` : '';
+  const canvas = document.getElementById('chartYield');
+  if(!canvas || !rows.length) return;
+  const kg = v => Math.round(v).toLocaleString('ko-KR');
+  const ds = (label, key, color, width, dash) => ({
+    type:'line', label, data: rows.map(r => r[key]), _key:key,
+    borderColor:color, backgroundColor:color, borderWidth:width, borderDash:dash||[],
+    pointRadius: key==='all' ? 5 : 3, pointBackgroundColor:color, fill:false, tension:0.2, spanGaps:false
+  });
+  window._charts.yield = new Chart(canvas.getContext('2d'), {
+    data: { labels: rows.map(r => r.m+'월'), datasets: [
+      ds('전체','all','#1F3864',3), ds('홍두께','hong','#C00000',1.8,[5,4]), ds('설도·우둔','su','#2E7D32',1.8,[5,4]) ] },
+    options: {
+      responsive:true, maintainAspectRatio:false, layout:{ padding:{ top:18, right:28, left:8 } },
+      interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label: c => {
+          const r = rows[c.dataIndex], k = c.dataset._key;
+          if(c.parsed.y==null) return null;
+          const f = k==='all' ? r.fin : r.v[k].fin, i = k==='all' ? r.inp : r.v[k].inp;
+          return `${c.dataset.label}: ${Number(c.parsed.y).toFixed(1)}% (완제품 고기 ${kg(f)}kg / 원육 투입 ${kg(i)}kg)`;
+        } } } },
+      scales:{
+        x:{ grid:{display:false}, ticks:{font:{size:11}} },
+        y:{ suggestedMin:40, suggestedMax:70, ticks:{ callback:v=>v+'%', font:{size:11} }, grid:{color:'#f0f0f0'} }
+      }
+    },
+    plugins:[{ id:'yieldLabels', afterDatasetsDraw(chart){
+      const meta = chart.getDatasetMeta(0), ctx = chart.ctx;
+      ctx.save(); ctx.font='bold 11px Malgun Gothic, Arial'; ctx.fillStyle='#1F3864'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+      meta.data.forEach((pt,i) => { const v = chart.data.datasets[0].data[i]; if(v!=null) ctx.fillText(Number(v).toFixed(1)+'%', pt.x, pt.y-8); });
+      ctx.restore();
+    } }]
+  });
+}
+
 function renderProductionChart(allRows) {
   destroyChart('production');
   const canvas = document.getElementById('chartProduction');
@@ -3512,6 +3609,7 @@ window.loadDashboard = async () => {
   // 차트 렌더
   renderCostRateChart(trendRows);
   renderProductionChart(trendRows);
+  renderYieldChart(allMonthsData);
 
   // 제품별 분기 비교 차트 + 제조단가 요약표 (기획실 확정값 + 확정치 없는 달은 사이트 계산값)
   mergeUnitCost(allMonthsData);
