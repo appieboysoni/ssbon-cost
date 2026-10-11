@@ -857,7 +857,7 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
   <!-- ① 월단위 생산계획 -->
   <div class="card">
     <div class="card-hdr"><span>① 월단위 생산계획</span>
-      <div class="pp-bar"><input type="month" id="ppMonth" onchange="renderPlanMonth()"></div></div>
+      <div class="pp-bar"><button class="btn btn-sm" id="ppCopyBtn" type="button" style="background:#fff;color:var(--primary)" onclick="copyPlanCalendar(this)" title="달력을 그림으로 복사 → 그룹웨어 대화창에 Ctrl+V">📋 계획표 복사</button><input type="month" id="ppMonth" onchange="renderPlanMonth()"></div></div>
     <div class="card-body">
       <div id="ppMonthWeeks" style="display:none"></div>
       <div class="cal-wrap"><div class="cal" id="ppCal"></div></div>
@@ -5623,6 +5623,56 @@ window.renderPlanMonth = () => {
   document.getElementById('ppCal').innerHTML = html;
   ppRenderMonthTable(ym);
 };
+// ── 계획표 복사: 달력을 PNG 그림으로 만들어 클립보드에 넣음 → 그룹웨어 대화창에 Ctrl+V
+//  html2canvas는 처음 누를 때만 불러옴. 클립보드 쓰기가 막히면 그림 창을 띄워 '이미지 복사'로 받게 함
+const H2C_URL = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+function ppLoadH2C(){
+  if(window.html2canvas) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const sc = document.createElement('script'); sc.src = H2C_URL;
+    sc.onload = () => res(); sc.onerror = () => rej(new Error('그림 변환 도구를 불러오지 못했습니다'));
+    document.head.appendChild(sc);
+  });
+}
+async function ppCalendarBlob(){
+  await ppLoadH2C();
+  const el = document.getElementById('ppCal');
+  const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', width: el.scrollWidth, windowWidth: Math.max(el.scrollWidth + 40, 1200), logging: false });
+  return await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('그림 만들기 실패')), 'image/png'));
+}
+function ppShowImageFallback(blob, why){
+  const url = URL.createObjectURL(blob);
+  let box = document.getElementById('ppImgBox');
+  if(!box){
+    box = document.createElement('div'); box.id = 'ppImgBox';
+    box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+    box.addEventListener('click', e => { if(e.target === box) box.remove(); });
+    document.body.appendChild(box);
+  }
+  box.innerHTML = `<div style="background:#fff;border-radius:10px;max-width:96vw;max-height:92vh;overflow:auto;padding:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
+      <b style="color:var(--primary)">그림에서 마우스 오른쪽 → '이미지 복사' 후 그룹웨어에 붙여넣기</b>
+      <button class="btn btn-sm btn-primary" type="button" onclick="document.getElementById('ppImgBox').remove()">닫기</button></div>
+    <div style="font-size:11px;color:#888;margin-bottom:8px">${authEsc(why||'')}</div>
+    <img src="${url}" alt="생산계획 달력" style="max-width:100%;border:1px solid #ddd"></div>`;
+}
+window.copyPlanCalendar = async (btn) => {
+  const label = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = '복사 중…'; }
+  const blobP = ppCalendarBlob();
+  try{
+    if(!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)) throw new Error('이 브라우저는 그림 복사를 지원하지 않습니다');
+    // 클릭 직후 바로 write를 불러야 브라우저가 허용함 → 그림은 Promise로 넘김
+    await navigator.clipboard.write([ new ClipboardItem({ 'image/png': blobP }) ]);
+    showToast('✅ 계획표를 그림으로 복사했습니다 — 그룹웨어 대화창에서 Ctrl+V', 3500);
+  }catch(e){
+    try{ ppShowImageFallback(await blobP, '자동 복사가 막혀 그림 창을 띄웠습니다 (' + (e.message||e) + ')'); }
+    catch(e2){ showToast('계획표 복사 실패: ' + (e2.message||e2), 4000); }
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = label; }
+  }
+};
+
 // 달력용 짧은 이름 (엑셀 표기)
 const PP_SHORT = { mini70:'미니70', mini70x5:'미니70(5입)', mini70r:'미니70 리뉴얼', mini70rx5:'미니70(5입) 리뉴얼', costco:'코스트코', sig130:'시그니처130g',
   sig130m:'시그니처130g(마트)', sig120:'시그니처120g', traders:'트레이더스460g', fc3kg:'FC 3kg 장조림', quail:'메추리알180g', max5:'미니70(5입) 맥스' };
