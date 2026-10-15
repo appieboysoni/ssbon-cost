@@ -938,7 +938,7 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     <div class="card-hdr"><span>제품 기준정보 · 기초재고</span><span class="ro-note" style="color:#dfe7f5">누구나 수정 가능 · 저장한 사람과 시각이 남습니다</span></div>
     <div class="card-body">
       <div class="tbl-wrap"><table class="pp-tbl">
-        <thead><tr><th>ERP코드</th><th>제품명</th><th>달력 표시명</th><th>파우치/팩</th><th>원육/파우치 (g)</th><th>수율 (%)</th><th>원육 구분</th><th>사용</th><th>기초재고 (팩)</th><th>기초 4주 출고량 (팩)</th><th></th></tr></thead>
+        <thead><tr><th>ERP코드</th><th>제품명</th><th>달력 표시명</th><th title="체크하면 팩 단위(여러 파우치 묶음) 제품">팩 단위</th><th>파우치/팩</th><th>원육 g<br><small>(파우치 1개당)</small></th><th>수율 (%)</th><th>원육 구분</th><th>사용</th><th>기초재고<br><small>(ERP 단위)</small></th><th>기초 4주 출고량<br><small>(ERP 단위)</small></th><th></th></tr></thead>
         <tbody id="ppMasterBody"></tbody>
       </table></div>
       <details class="pp-newprod need-writer" id="ppNewWrap" style="margin-top:10px">
@@ -947,15 +947,15 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
           <label>ERP코드 *<input id="npCode" placeholder="예: GBB0014A"></label>
           <label>제품명 *<input id="npName" placeholder="ERP 품목명"></label>
           <label>달력 표시명<input id="npShort" placeholder="비우면 제품명"></label>
-          <label>파우치/팩 *<input id="npPack" inputmode="numeric" value="1"></label>
-          <label>원육/파우치 (g) *<input id="npMeatG" inputmode="decimal" placeholder="예: 25"></label>
+          <label>팩 단위 <span style="font-weight:400"><input type="checkbox" id="npPackOn" style="width:auto;vertical-align:middle" onchange="ppPackToggle(this)"> 여러 파우치를 한 팩으로</span><input id="npPack" inputmode="numeric" value="" placeholder="팩당 파우치 수" disabled></label>
+          <label>원육 g (파우치 1개당) *<input id="npMeatG" inputmode="decimal" placeholder="예: 24"></label>
           <label>수율 (%) *<input id="npYield" inputmode="decimal" value="56"></label>
           <label>원육 구분 *<select id="npGroup"><option value="su">냉동 설도+우둔</option><option value="hong">냉동 홍두께</option><option value="none">원육 없음</option></select></label>
-          <label>기초재고 (팩)<input id="npBase" class="num-in" inputmode="numeric" placeholder="비우면 0"></label>
+          <label>기초재고 (ERP 단위)<input id="npBase" class="num-in" inputmode="numeric" placeholder="비우면 0"></label>
         </div>
         <div class="pp-bar" style="margin-top:6px">
           <button class="btn btn-ok btn-sm" type="button" onclick="ppAddProduct()">신제품 등록</button>
-          <span class="ro-note">등록하면 위 표의 기준정보·기초재고도 함께 저장됩니다. 주간 계획·달력·재고에 바로 나옵니다.</span>
+          <span class="ro-note">원육 g은 항상 파우치 1개 기준입니다(팩 단위면 팩 전체 아님). 등록하면 위 표의 기준정보·기초재고도 함께 저장되고, 주간 계획·달력·재고에 바로 나옵니다.</span>
         </div>
       </details>
       <div class="pp-bar" style="margin-top:8px">
@@ -5391,12 +5391,15 @@ const ppIsLeader = () => ppRole()==='leader';
 const ppIsDirector = () => ppRole()==='director';
 
 // ── 제품 기준정보
-const ppProducts = () => pp.master || PP_DEFAULT_PRODUCTS;
-const ppProd = pid => ppProducts().find(p => p.id===pid) || PP_DEFAULT_PRODUCTS.find(p => p.id===pid) || { id:pid, name:pid, packQty:1, meatG:0, yield:1, group:'none' };
-// 주간 계획에 저장된 스냅샷(저장 당시 수율·원육g)이 있으면 그 값을 씀 → 결재 후 기준정보가 바뀌어도 그 주 계산은 그대로
+// ppAllProducts: 삭제(deleted)된 제품까지 — 지난 계획 표시용 / ppProducts: 삭제 안 된 제품 — 목록·표·입력용
+const ppAllProducts = () => pp.master || PP_DEFAULT_PRODUCTS;
+const ppProducts = () => ppAllProducts().filter(p => !p.deleted);
+const ppProd = pid => ppAllProducts().find(p => p.id===pid) || PP_DEFAULT_PRODUCTS.find(p => p.id===pid) || { id:pid, name:pid, packQty:1, meatG:0, yield:1, group:'none' };
+// 결재 요청 이후(팀장 대기·본부장 대기·결재 완료)인 주는 결재 요청 때 저장한 스냅샷(파우치/팩·원육g·수율)을 씀
+// → 결재 중·결재 후 기준정보가 바뀌어도 그 주 계산은 그대로. 작성중인 주는 현재 기준정보로 계산.
 function ppSpec(w, pid){
   const m = ppProd(pid), sn = w && w.snap && w.snap[pid];
-  return sn ? { ...m, ...sn } : m;
+  return (sn && ppStatus(w)!=='draft') ? { ...m, ...sn } : m;
 }
 const ppPouch = (qty, sp) => qty * (sp.packQty || 1);
 const ppMeatKg = (qty, sp) => (sp.group==='none' || !sp.meatG || !sp.yield) ? 0 : qty * (sp.packQty||1) * sp.meatG / 1000 / sp.yield;
@@ -5406,7 +5409,7 @@ function ppRowIds(w){
   const ids = ppActiveIds();
   ['plan','actual'].forEach(k => Object.entries((w && w[k]) || {}).forEach(([pid,arr]) => { if((arr||[]).some(v => ppNum(v)) && !ids.includes(pid)) ids.push(pid); }));
   ['shipPlan','shipActual'].forEach(k => Object.entries((w && w[k]) || {}).forEach(([pid,v]) => { if(ppNum(v) && !ids.includes(pid)) ids.push(pid); }));
-  const order = ppProducts().map(p => p.id);
+  const order = ppAllProducts().map(p => p.id);
   return ids.sort((a,b) => order.indexOf(a) - order.indexOf(b));
 }
 
@@ -5437,7 +5440,7 @@ function ppMonthSummary(ym){
       });
     }
   });
-  const order = ppProducts().map(p => p.id);
+  const order = ppAllProducts().map(p => p.id);
   const list = Object.values(rows).sort((a,b) => order.indexOf(a.pid) - order.indexOf(b.pid));
   list.days = days.size; list.actDays = actDays.size;
   return list;
@@ -5467,7 +5470,7 @@ function ppInventory(today){
   if(cur < base.date) cur = base.date;
   const next = ppAdd(cur, 7), endNext = ppAdd(next, 6);
   const rows = ppRowIds(pp.weeks[cur]).concat(ppRowIds(pp.weeks[next])).filter((v,i,a) => a.indexOf(v)===i);
-  const ids = ppProducts().map(p => p.id).filter(id => rows.includes(id) || ppNum(base.qty[id]));
+  const ids = ppAllProducts().filter(p => rows.includes(p.id) || (!p.deleted && ppNum(base.qty[p.id]))).map(p => p.id);
   const out = ids.map(pid => {
     let stock = ppNum(base.qty[pid]), stockEst = false;
     for(let m = base.date; m < cur; m = ppAdd(m, 7)){
@@ -5600,7 +5603,7 @@ function ppRenderMonthTable(ym){
 function ppDayItems(date){
   const mon = ppMonday(date), w = pp.weeks[mon], i = (ppPd(date).getDay()+6)%7;
   if(!w || i>5) return { items:[], memo:'' };
-  const order = ppProducts().map(p => p.id);
+  const order = ppAllProducts().map(p => p.id);
   const items = Object.entries(w.plan || {}).map(([pid,arr]) => ({ pid, q: ppNum((arr||[])[i]) }))
     .filter(x => x.q).sort((a,b) => order.indexOf(a.pid) - order.indexOf(b.pid))
     .map(x => { const sp = ppSpec(w, x.pid); return { ...x, sp, kg: ppMeatKg(x.q, sp), pouch: ppPouch(x.q, sp) }; });
@@ -5981,7 +5984,7 @@ window.ppAct = async (act) => {
 // 변경 이력: 결재 취소 전 계획과 그다음 버전(다음 취소 기록 또는 현재 계획)의 차이
 function ppRevisionDiff(fromRev, to, monday){
   const out = [], ids = new Set([...Object.keys(fromRev.plan||{}), ...Object.keys(to.plan||{})]);
-  const order = ppProducts().map(p => p.id);
+  const order = ppAllProducts().map(p => p.id);
   [...ids].sort((a,b) => order.indexOf(a)-order.indexOf(b)).forEach(pid => {
     const a = (fromRev.plan||{})[pid] || [], b = (to.plan||{})[pid] || [];
     for(let i=0;i<6;i++){ const x = ppNum(a[i]), y = ppNum(b[i]); if(x!==y) out.push(`${ppShortName(pid)} ${PP_DAYS[i]} ${ppMD(ppAdd(monday,i))}: ${ppFmt(x)} → ${ppFmt(y)}`); }
@@ -6030,54 +6033,80 @@ function ppRenderMaster(){
   const info = [];
   info.push(pp.masterSaved ? `기준정보 저장: ${pp.masterInfo.updatedBy||''} ${fmtDT(pp.masterInfo.updatedAt)}` : '기준정보: 기본값 (아직 저장 안 됨)');
   info.push(pp.base ? `기초재고 저장: ${pp.base.updatedBy||''} ${fmtDT(pp.base.updatedAt)}` : '기초재고: 엑셀 값(상품발주 09.28 주초재고, 재고소진 10.01 4주 출고량)이 채워져 있음 — 저장해야 적용');
+  const del = ppAllProducts().filter(p => p.deleted);
+  if(del.length) info.push(`삭제한 제품 ${del.length}개: ${del.map(p => p.name).join(', ')} (지난 계획에는 그대로 표시)`);
   document.getElementById('ppMasterInfo').textContent = info.join(' · ');
   const d = lead ? '' : 'disabled';
-  const used = ppUsedIds();
-  document.getElementById('ppMasterBody').innerHTML = ppProducts().map(p => `<tr data-mp="${p.id}">
-    ${p.custom ? `<td><input data-f="code" value="${authEsc(p.code||'')}" ${d} style="min-width:90px"></td><td><input data-f="name" value="${authEsc(p.name)}" ${d} style="min-width:200px"></td>`
-               : `<td class="c">${authEsc(p.code||'')}</td><td class="l">${authEsc(p.name)}</td>`}
-    <td><input data-f="shortName" value="${authEsc((p.shortName||'').trim())}" placeholder="${authEsc(PP_SHORT[p.id]||p.name)}" ${d} style="min-width:110px"></td>
-    <td><input data-f="packQty" inputmode="numeric" value="${p.packQty}" ${d}></td>
+  document.getElementById('ppMasterBody').innerHTML = ppProducts().map(p => { const pk = (p.packQty||1) > 1; return `<tr data-mp="${p.id}">
+    <td><input data-f="code" value="${authEsc(p.code||'')}" ${d} style="min-width:90px;text-align:left"></td>
+    <td><input data-f="name" value="${authEsc(p.name)}" ${d} style="min-width:220px;text-align:left"></td>
+    <td><input data-f="shortName" value="${authEsc((p.shortName||'').trim())}" placeholder="${authEsc(PP_SHORT[p.id]||p.name)}" ${d} style="min-width:110px;text-align:left"></td>
+    <td class="c"><input type="checkbox" data-f="packOn" ${pk?'checked':''} ${d} style="width:auto" onchange="ppPackToggle(this)"></td>
+    <td><input data-f="packQty" inputmode="numeric" value="${pk ? p.packQty : ''}" placeholder="—" ${pk && lead ? '' : 'disabled'}></td>
     <td><input data-f="meatG" inputmode="decimal" value="${p.meatG}" ${d}></td>
     <td><input data-f="yield" inputmode="decimal" value="${+(p.yield*100).toFixed(2)}" ${d}></td>
     <td><select data-f="group" ${d}>${Object.keys(MEAT_GROUP).map(k=>`<option value="${k}"${k===p.group?' selected':''}>${MEAT_GROUP[k]}</option>`).join('')}</select></td>
     <td class="c"><input type="checkbox" data-f="active" ${p.active!==false?'checked':''} ${d} style="width:auto"></td>
     <td><input data-f="base" class="num-in" inputmode="numeric" value="${ppHas(base.qty[p.id])?ppComma(base.qty[p.id]):''}" ${d}></td>
     <td><input data-f="ship4w" class="num-in" inputmode="numeric" value="${base.ship4w && ppHas(base.ship4w[p.id])?ppComma(base.ship4w[p.id]):''}" ${d}></td>
-    <td class="c">${p.custom ? (used.has(p.id) ? '<span class="ro-note" title="계획·실적·출고에 쓰인 제품은 지울 수 없습니다. 사용 체크를 끄세요.">사용 이력 있음</span>'
-                                               : `<button class="btn btn-bad btn-sm" type="button" onclick="ppDelProduct('${p.id}')" ${d}>삭제</button>`) : ''}</td></tr>`).join('');
+    <td class="c"><button class="btn btn-bad btn-sm" type="button" onclick="ppDelProduct('${p.id}')" ${d}>삭제</button></td></tr>`; }).join('');
   ppBindComma(document.getElementById('ppMasterBody'));
 }
+// 팩 단위 체크 → 파우치/팩 칸 켜기. 끄면 칸을 비우고 막음(저장 시 1)
+window.ppPackToggle = el => {
+  const inp = el.id==='npPackOn' ? document.getElementById('npPack') : el.closest('tr').querySelector('[data-f=packQty]');
+  inp.disabled = !el.checked;
+  if(!el.checked) inp.value = '';
+  else { if(!inp.value) inp.value = ''; inp.focus && inp.focus(); }
+};
+// 팩 단위 칸 읽기: 체크 안 하면 1, 체크하면 2 이상의 정수
+function ppReadPack(on, val){
+  if(!on) return { packQty:1 };
+  const n = Number(String(val).trim());
+  if(String(val).trim()==='' || !(Number.isInteger(n) && n>=2)) return { err:'팩 단위면 팩당 파우치 수를 2 이상의 정수로 넣으세요' };
+  return { packQty:n };
+}
+const ppNameKey = n => String(n||'').replace(/\s/g,'');
+
 // 제품마스터 탭의 window.saveMaster(제품 단가)와 이름이 겹치지 않게 ppSaveMaster로 둠
-// extra: 신제품 등록 시 덧붙일 제품 {prod, base}, removeId: 삭제할 신제품 id
+// extra: 신제품 {prod, base} / removeId: 삭제할 제품 id (기록은 남기고 deleted 표시)
 async function ppSaveMasterCore(extra, removeId){
   if(!ppCanWrite()) return false;
   const bd = document.getElementById('ppBaseDate').value;
-  if(!bd || ppMonday(bd)!==bd) return showToast('기초재고 기준일은 월요일로 정하세요 (주초재고).', 3500);
+  if(!bd || ppMonday(bd)!==bd){ showToast('기초재고 기준일은 월요일로 정하세요 (주초재고).', 3500); return false; }
   const products = [], qty = {}, ship4w = {}; let err = '';
   document.querySelectorAll('#ppMasterBody tr[data-mp]').forEach(tr => {
     const id = tr.dataset.mp, old = ppProd(id), f = k => tr.querySelector(`[data-f=${k}]`);
-    if(id===removeId) return;
-    const packQty = Number(f('packQty').value), meatG = Number(f('meatG').value), y = Number(f('yield').value);
-    if(!(packQty>=1 && Number.isInteger(packQty))) err = `${old.name}: 파우치/팩은 1 이상의 정수`;
-    if(!(meatG>=0)) err = `${old.name}: 원육g은 0 이상`;
-    if(!(y>0 && y<=100)) err = `${old.name}: 수율은 0~100%`;
-    const code = old.custom ? f('code').value.trim() : old.code, name = old.custom ? f('name').value.trim() : old.name;
-    if(old.custom && (!code || !name)) err = `${old.name}: ERP코드·제품명은 비울 수 없음`;
-    const pr = { id, code, name, packQty, meatG, yield: +(y/100).toFixed(4), group:f('group').value, active:f('active').checked };
+    const code = f('code').value.trim(), name = f('name').value.trim();
+    const label = name || old.name;
+    const meatG = Number(f('meatG').value), y = Number(f('yield').value);
+    const pk = ppReadPack(f('packOn').checked, f('packQty').value);
+    if(!code || !name) err = err || `${label}: ERP코드·제품명은 비울 수 없음`;
+    if(pk.err) err = err || `${label}: ${pk.err}`;
+    if(f('meatG').value.trim()==='' || !(meatG>=0)) err = err || `${label}: 원육g은 0 이상`;
+    if(!(y>0 && y<=100)) err = err || `${label}: 수율은 0~100%`;
+    const pr = { ...old, id, code, name, packQty:pk.packQty||1, meatG, yield: +(y/100).toFixed(4), group:f('group').value, active:f('active').checked };
+    delete pr.shortName;
     const sn = f('shortName').value.trim(); if(sn) pr.shortName = sn;
-    if(old.custom){ pr.custom = true; pr.createdBy = old.createdBy||''; pr.createdAt = old.createdAt||0; }
+    if(id===removeId){ pr.deleted = true; pr.active = false; pr.deletedBy = authMe.name; pr.deletedAt = Date.now(); }
     products.push(pr);
-    const b = f('base').value.trim(); if(b!==''){ const n = Number(b.replace(/,/g,'')); if(!(n>=0)) err = `${old.name}: 기초재고는 0 이상`; qty[id] = n; }
-    const s4 = f('ship4w').value.trim(); if(s4!==''){ const n = Number(s4.replace(/,/g,'')); if(!(n>=0)) err = `${old.name}: 4주 출고량은 0 이상`; ship4w[id] = n; }
+    if(id===removeId) return;
+    const b = f('base').value.trim(); if(b!==''){ const n = Number(b.replace(/,/g,'')); if(!(n>=0)) err = err || `${label}: 기초재고는 0 이상`; qty[id] = n; }
+    const s4 = f('ship4w').value.trim(); if(s4!==''){ const n = Number(s4.replace(/,/g,'')); if(!(n>=0)) err = err || `${label}: 4주 출고량은 0 이상`; ship4w[id] = n; }
   });
+  // 이미 삭제한 제품은 표에 없지만 목록에는 남김 (지난 계획 표시용, 기본 제품이 다시 생기지 않게)
+  ppAllProducts().filter(p => p.deleted && !products.some(x => x.id===p.id)).forEach(p => products.push({ ...p }));
   if(extra){
     products.push(extra.prod);
     if(extra.base!=null) qty[extra.prod.id] = extra.base;
   }
   if(!err){
-    const seen = {};
-    products.forEach(p => { const k = String(p.code||'').toUpperCase(); if(k){ if(seen[k]) err = `ERP코드 ${p.code} 가 두 제품에 있음 (${seen[k]} / ${p.name})`; seen[k] = p.name; } });
+    const seenC = {}, seenN = {};
+    products.filter(p => !p.deleted).forEach(p => {
+      const k = String(p.code||'').toUpperCase(), nk = ppNameKey(p.name);
+      if(k){ if(seenC[k]) err = err || `ERP코드 ${p.code} 가 두 제품에 있음 (${seenC[k]} / ${p.name})`; seenC[k] = p.name; }
+      if(nk){ if(seenN[nk]) err = err || `제품명이 겹침: ${p.name}`; seenN[nk] = 1; }
+    });
   }
   if(err){ showToast(err, 3500); return false; }
   try{
@@ -6087,7 +6116,7 @@ async function ppSaveMasterCore(extra, removeId){
     pp.master = products; pp.masterSaved = true; pp.masterInfo = { updatedAt:now, updatedBy:authMe.name };
     pp.base = { date:bd, qty, ship4w, updatedAt:now, updatedBy:authMe.name };
     ppRenderAll();
-    showToast(extra ? `✅ 신제품 등록: ${extra.prod.name}` : removeId ? '✅ 신제품 삭제' : '✅ 기준정보·기초재고 저장');
+    showToast(extra ? `✅ 신제품 등록: ${extra.prod.name}` : removeId ? `✅ 삭제: ${ppProd(removeId).name}` : '✅ 기준정보·기초재고 저장');
     return true;
   }catch(e){ showToast('저장 실패: '+(e.message||e)); return false; }
 }
@@ -6096,9 +6125,10 @@ window.ppSaveMaster = () => ppSaveMasterCore();
 // 주간 계획·실적·출고에 한 번이라도 수량이 들어간 제품
 function ppUsedIds(){
   const s = new Set();
-  Object.values(pp.weeks).forEach(w => ['plan','act','ship'].forEach(k => Object.entries(w[k]||{}).forEach(([pid, arr]) => {
-    if((arr||[]).some(v => ppHas(v) && ppNum(v)!==0)) s.add(pid);
-  })));
+  Object.values(pp.weeks).forEach(w => {
+    ['plan','actual'].forEach(k => Object.entries(w[k]||{}).forEach(([pid, arr]) => { if((arr||[]).some(v => ppNum(v))) s.add(pid); }));
+    ['shipPlan','shipActual'].forEach(k => Object.entries(w[k]||{}).forEach(([pid, v]) => { if(ppNum(v)) s.add(pid); }));
+  });
   return s;
 }
 window._ppUsedIds = ppUsedIds;
@@ -6107,34 +6137,38 @@ window.ppAddProduct = async () => {
   if(!ppCanWrite()) return;
   const g = id => document.getElementById(id).value.trim();
   const code = g('npCode'), name = g('npName'), shortName = g('npShort');
-  const packQty = Number(g('npPack')), meatG = Number(g('npMeatG')), y = Number(g('npYield')), group = document.getElementById('npGroup').value;
+  const meatG = Number(g('npMeatG')), y = Number(g('npYield')), group = document.getElementById('npGroup').value;
+  const pk = ppReadPack(document.getElementById('npPackOn').checked, g('npPack'));
   const bs = g('npBase').replace(/,/g,''), base = bs==='' ? 0 : Number(bs);
   if(!code || !name) return showToast('ERP코드와 제품명을 넣으세요.', 3000);
-  if(g('npMeatG')==='') return showToast('원육/파우치(g)를 넣으세요. 원육이 없으면 0.', 3000);
-  if(!(packQty>=1 && Number.isInteger(packQty))) return showToast('파우치/팩은 1 이상의 정수', 3000);
+  if(pk.err) return showToast(pk.err, 3000);
+  if(g('npMeatG')==='') return showToast('원육 g(파우치 1개당)을 넣으세요. 원육이 없으면 0.', 3000);
   if(!(meatG>=0)) return showToast('원육g은 0 이상', 3000);
   if(!(y>0 && y<=100)) return showToast('수율은 0~100%', 3000);
   if(!(base>=0)) return showToast('기초재고는 0 이상', 3000);
   if(group!=='none' && meatG===0) return showToast('원육 구분이 있는데 원육g이 0입니다. 원육이 없으면 구분을 "원육 없음"으로.', 3500);
   const dupC = ppProducts().find(p => String(p.code||'').toUpperCase()===code.toUpperCase());
   if(dupC) return showToast(`이미 있는 ERP코드: ${dupC.name}`, 3500);
-  const dupN = ppProducts().find(p => p.name.replace(/\s/g,'')===name.replace(/\s/g,''));
+  const dupN = ppProducts().find(p => ppNameKey(p.name)===ppNameKey(name));
   if(dupN) return showToast(`이미 있는 제품명: ${dupN.name}`, 3500);
-  let id; do { id = 'np' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); } while(ppProducts().some(p => p.id===id));
-  const prod = { id, code, name, packQty, meatG, yield:+(y/100).toFixed(4), group, active:true, custom:true, createdBy:authMe.name, createdAt:Date.now() };
+  let id; do { id = 'np' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); } while(ppAllProducts().some(p => p.id===id));
+  const prod = { id, code, name, packQty:pk.packQty, meatG, yield:+(y/100).toFixed(4), group, active:true, custom:true, createdBy:authMe.name, createdAt:Date.now() };
   if(shortName) prod.shortName = shortName;
   const ok = await ppSaveMasterCore({ prod, base });
   if(ok){
-    ['npCode','npName','npShort','npMeatG','npBase'].forEach(i => document.getElementById(i).value = '');
-    document.getElementById('npPack').value = '1'; document.getElementById('npYield').value = '56'; document.getElementById('npGroup').value = 'su';
+    ['npCode','npName','npShort','npMeatG','npBase','npPack'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('npPackOn').checked = false; document.getElementById('npPack').disabled = true;
+    document.getElementById('npYield').value = '56'; document.getElementById('npGroup').value = 'su';
   }
 };
+// 삭제: 목록·표·재고에서 빠지고, 이미 저장된 주간 계획·결재 기록에는 그대로 남음
 window.ppDelProduct = async pid => {
   if(!ppCanWrite()) return;
-  const p = ppProd(pid);
-  if(!p.custom) return showToast('기본 제품은 삭제할 수 없습니다. 사용 체크를 끄세요.', 3000);
-  if(ppUsedIds().has(pid)) return showToast('계획·실적·출고에 쓰인 제품은 삭제할 수 없습니다. 사용 체크를 끄세요.', 3500);
-  if(!confirm(`${p.name} 을(를) 삭제할까요? 위 표에서 고친 내용도 함께 저장됩니다.`)) return;
+  const p = ppProd(pid), used = ppUsedIds().has(pid);
+  const msg = `${p.name} 을(를) 삭제할까요?\n`
+    + (used ? '이 제품이 들어간 지난 주간 계획·결재 기록은 그대로 남고, 앞으로 목록·주간 계획 표·재고에서 빠집니다.\n' : '')
+    + '위 표에서 고친 내용도 함께 저장됩니다.';
+  if(!confirm(msg)) return;
   await ppSaveMasterCore(null, pid);
 };
 
