@@ -163,6 +163,14 @@ tr.total td{background:var(--light);font-weight:700}
 .cal-head div{color:#2F5496;font-size:12px;padding:3px 6px;border-bottom:2px solid #2F5496}
 .cal-row{border-left:1px solid #9a9a9a}
 .cal-row.shade .cal-cell{background:#e7e7e7}
+.cal-row.st-row-submitted .cal-cell,.cal-legend.st-row-submitted{background:#fff3c4}
+.cal-row.st-row-reviewed .cal-cell,.cal-legend.st-row-reviewed{background:#d6e6fb}
+.cal-row.st-row-submitted .cal-cell:first-child{box-shadow:inset 4px 0 0 #e0a800}
+.cal-row.st-row-reviewed .cal-cell:first-child{box-shadow:inset 4px 0 0 #2e5aa8}
+.cal-legend{display:inline-block;padding:0 6px;border-radius:3px;color:#333}
+.cal-sign{font-size:10.5px;color:#555;line-height:1.35;margin-top:3px}
+.cal-act{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.cal-act .btn{padding:3px 7px;font-size:11px}
 .cal-cell{border-right:1px solid #9a9a9a;border-bottom:1px solid #9a9a9a;min-height:96px;padding:0 6px 4px;font-size:12px;line-height:1.45;background:#fff;color:#111}
 .cal-date{text-align:right;font-weight:700;border-bottom:1px solid #9a9a9a;margin:0 -6px 2px;padding:1px 6px;background:#fff}
 .cal-date.red{color:#e00}.cal-date.out{color:#aaa}
@@ -245,7 +253,8 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
 </header>
 <nav>
   <button class="active" onclick="goTab('dashboard',this)">📊 대시보드</button>
-  <button onclick="goTab('plan',this)">📋 생산계획·재고</button>
+  <button onclick="goTab('plan',this)">📋 생산계획</button>
+  <button onclick="goTab('stock',this)">🗂️ 재고관리</button>
   <button onclick="goTab('input',this)">📥 데이터 입력</button>
   <button onclick="goTab('products',this)">📦 제품별 원가</button>
   <button onclick="goTab('history',this)">📅 월별 이력</button>
@@ -864,7 +873,7 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     <div class="card-body">
       <div id="ppMonthWeeks" style="display:none"></div>
       <div class="cal-wrap"><div class="cal" id="ppCal"></div></div>
-      <div class="ro-note" style="margin:6px 0 10px">칸 안: 제품명 / <span class="cal-kg">원육 kg</span> / 생산 ea(파우치) / <span class="cal-kg">팩</span>(코스트코·5입), 맨 아래 그날 원육 총투입량. 일요일 칸에 그 주의 결재 상태를 표시합니다. 원육 kg = 파우치 × 원육g ÷ 수율.</div>
+      <div class="ro-note" style="margin:6px 0 10px">칸 안: 제품명 / <span class="cal-kg">원육 kg</span> / 생산 ea(파우치) / <span class="cal-kg">팩</span>(코스트코·5입), 맨 아래 그날 원육 총투입량. 일요일 칸에 그 주의 결재 상태와 결재 버튼을 표시합니다. 줄 색: <span class="cal-legend st-row-submitted">팀장 결재 대기</span> <span class="cal-legend st-row-reviewed">본부장 결재 대기</span>. 원육 kg = 파우치 × 원육g ÷ 수율.</div>
       <details class="pp-sum"><summary>제품별 월 합계 보기</summary>
       <div class="tbl-wrap"><table class="pp-tbl">
         <thead><tr><th>제품명</th><th>생산수량<span class="pp-sub">(ERP 단위·팩)</span></th><th>파우치</th><th>원육/파우치</th><th>수율</th><th>원육량 (kg)</th><th>원육 구분</th><th>생산횟수<span class="pp-sub">계획</span></th><th>비중</th><th>생산횟수<span class="pp-sub">실적</span></th></tr></thead>
@@ -875,9 +884,27 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     </div>
   </div>
 
-  <!-- ② 주간 생산계획 입력·결재 -->
+  <!-- ② 제품별 재고·소진시점 -->
   <div class="card">
-    <div class="card-hdr"><span>② 주간 생산계획 · 결재</span>
+    <div class="card-hdr"><span>② 제품별 재고 · 예상 소진시점</span><span id="ppInvAsOf" style="font-weight:400"></span></div>
+    <div class="card-body">
+      <div id="ppInvWarn"></div>
+      <div class="tbl-wrap"><table class="pp-tbl">
+        <thead><tr><th>제품명</th><th>이번주 주초재고</th><th>이번주 생산</th><th>다음주 생산</th><th>이번주 출고</th><th>다음주 출고</th><th>차주 예상 잔여</th><th>일평균 출고<span class="pp-sub">(최근 4주 실적)</span></th><th>예상 소진일</th><th>남은 일수</th></tr></thead>
+        <tbody id="ppInvBody"></tbody>
+      </table></div>
+      <div class="ro-note" style="margin-top:6px">생산·출고는 실적이 입력된 값은 실적, 없으면 계획(예정)으로 계산합니다. <b>*</b> 표시는 계획·예정값이 섞인 숫자입니다. 남은 일수: <span class="days-badge d-red">7일 미만</span> <span class="days-badge d-orange">14일 미만</span> <span class="days-badge d-green">14일 이상</span></div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ 재고관리: 주간 계획 입력·실적·출고, 원육 재고, 제품 기준정보 ══ -->
+<div id="tab-stock" class="tab">
+  <!-- 주간 생산계획 입력·실적·출고 (결재 요청은 여기서, 팀장·본부장 결재는 생산계획 탭 달력에서도 가능) -->
+  <div class="card">
+    <div class="card-hdr"><span>주간 생산계획 · 실적 · 출고</span>
       <div class="pp-bar">
         <button class="btn btn-sm" style="background:#fff;color:var(--primary)" type="button" onclick="shiftPlanWeek(-1)">◀</button>
         <input type="date" id="ppWeek" onchange="setPlanWeek(this.value)">
@@ -908,18 +935,10 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     </div>
   </div>
 
-  <!-- ③ 제품별 재고·소진시점 -->
+  <!-- 원육 재고 -->
   <div class="card">
-    <div class="card-hdr"><span>③ 제품별 재고 · 예상 소진시점</span><span id="ppInvAsOf" style="font-weight:400"></span></div>
+    <div class="card-hdr"><span>원육 재고 · 소진시점</span><span class="ro-note" style="color:#dfe7f5">수기 입력, 참고용</span></div>
     <div class="card-body">
-      <div id="ppInvWarn"></div>
-      <div class="tbl-wrap"><table class="pp-tbl">
-        <thead><tr><th>제품명</th><th>이번주 주초재고</th><th>이번주 생산</th><th>다음주 생산</th><th>이번주 출고</th><th>다음주 출고</th><th>차주 예상 잔여</th><th>일평균 출고<span class="pp-sub">(최근 4주 실적)</span></th><th>예상 소진일</th><th>남은 일수</th></tr></thead>
-        <tbody id="ppInvBody"></tbody>
-      </table></div>
-      <div class="ro-note" style="margin-top:6px">생산·출고는 실적이 입력된 값은 실적, 없으면 계획(예정)으로 계산합니다. <b>*</b> 표시는 계획·예정값이 섞인 숫자입니다. 남은 일수: <span class="days-badge d-red">7일 미만</span> <span class="days-badge d-orange">14일 미만</span> <span class="days-badge d-green">14일 이상</span></div>
-
-      <div class="sec">원육 재고 · 소진시점 <span style="font-weight:400;color:#888">(수기 입력, 참고용)</span></div>
       <div class="tbl-wrap"><table class="pp-tbl">
         <thead><tr><th>원육</th><th>재고 (kg)</th><th>입고예정 (kg)</th><th>합계 (kg)</th><th>일 최대 사용량 (kg)<span class="pp-sub">생산계획 중 가장 많은 날</span></th><th>가용 생산일</th><th>예상 소진일<span class="pp-sub">기준일부터 월~금 계산</span></th></tr></thead>
         <tbody id="ppMeatBody"></tbody>
@@ -1117,7 +1136,7 @@ window.goTab = (name,btn) => {
   if(name==='input')     loadExistingData();
   if(name==='report')    { document.getElementById('reportMonth').value = document.getElementById('dashMonth').value || prevMonth(); }
   if(name==='exec') { document.getElementById('execMonth').value = document.getElementById('execMonth').value || document.getElementById('dashMonth').value || prevMonth(); renderExecPreview(); loadExecMemos(); }
-  if(name==='plan')      loadPlanTab();
+  if(name==='plan' || name==='stock') loadPlanTab();
   if(name==='capa') {
     const frame = document.getElementById('capa-frame');
     if(!frame.src || frame.src === window.location.href) {
@@ -5142,7 +5161,7 @@ function enterApp(){
   document.body.classList.toggle('lv-leader', lvl(authMe)>=2);
   document.body.classList.toggle('lv-director', lvl(authMe)>=3);
   startApp();
-  if(document.getElementById('tab-plan').classList.contains('active')) loadPlanTab();
+  if(document.getElementById('tab-plan').classList.contains('active') || document.getElementById('tab-stock').classList.contains('active')) loadPlanTab();
 }
 
 window.authSetupSubmit = async () => {
@@ -5617,7 +5636,9 @@ window.renderPlanMonth = () => {
   let html = `<div class="cal-title">${Y}년 ${M}월</div><div class="cal-head">${['일요일','월요일','화요일','수요일','목요일','금요일','토요일'].map(x=>`<div>${x}</div>`).join('')}</div>`;
   for(let r=0; r<6; r++){
     if(r>0 && d.slice(0,7) > ym) break;
-    html += `<div class="cal-row${r%2===0?' shade':''}">`;
+    const rowW = pp.weeks[ppAdd(d,1)], rowSt = rowW ? ppStatus(rowW) : '';
+    const pend = rowSt==='submitted' || rowSt==='reviewed';
+    html += `<div class="cal-row${pend ? ' st-row-'+rowSt : (r%2===0?' shade':'')}" data-week="${ppAdd(d,1)}">`;
     for(let c=0; c<7; c++, d = ppAdd(d,1)){
       const dt = ppPd(d), out = d.slice(0,7)!==ym, wd = dt.getDay();
       const { items, memo } = ppDayItems(d);
@@ -5637,7 +5658,7 @@ window.renderPlanMonth = () => {
       if(memo) body += `<div class="cal-memo${items.length ? '' : ' big'}">${authEsc(memo)}</div>`;
       if(wd===0){                                                       // 일요일 칸: 이번 줄(월~토) 주의 결재 상태
         const w = pp.weeks[ppAdd(d,1)];
-        if(w) body += `<div class="cal-st"><span class="pp-chip st-${ppStatus(w)}">${ST_LABEL[ppStatus(w)]}</span></div>`;
+        if(w) body += ppCalApprHtml(ppAdd(d,1), w);
       }
       html += `<div class="cal-cell" data-date="${d}"><div class="cal-date${out?' out':(wd===0||wd===6)?' red':''}">${dt.getDate()}</div>${body}</div>`;
     }
@@ -5646,6 +5667,57 @@ window.renderPlanMonth = () => {
   document.getElementById('ppCal').innerHTML = html;
   ppRenderMonthTable(ym);
 };
+// 일요일 칸: 결재 상태 + 결재자 + (내가 할 수 있는) 결재 버튼. 버튼은 계획표 복사 그림에서 뺌
+function ppCalApprHtml(monday, w){
+  const st = ppStatus(w), r = ppRole(), acts = [];
+  if(st==='submitted' && r==='leader') acts.push(['leaderOk','팀장 결재','btn-ok'], ['reject','반려','btn-bad']);
+  if(st==='reviewed' && r==='director') acts.push(['directorOk','본부장 승인','btn-ok'], ['reject','반려','btn-bad']);
+  if(ppCanCancel(w)) acts.push(['cancel','결재 취소','btn-warn']);
+  const sign = [['작성', w.writer], ['팀장', w.leader], ['본부장', w.director]].filter(x => x[1]).map(x => `${x[0]} ${authEsc(x[1].name)}`).join('<br>');
+  return `<div class="cal-st"><span class="pp-chip st-${st}">${ST_LABEL[st]}</span>`
+    + (sign ? `<div class="cal-sign">${sign}</div>` : '')
+    + (acts.length ? `<div class="cal-act" data-html2canvas-ignore="true">${acts.map(([a,l,c]) => `<button class="btn ${c}" type="button" onclick="ppApprOpen('${monday}','${a}')">${l}</button>`).join('')}</div>` : '')
+    + `</div>`;
+}
+// 달력에서 결재: 그 주 계획 요약을 보여주고 확인 → ppAct
+const PP_ACT_LABEL = { leaderOk:'팀장 결재', directorOk:'본부장 승인', reject:'반려', cancel:'결재 취소' };
+window.ppApprOpen = (monday, act) => {
+  const w = pp.weeks[monday]; if(!w) return;
+  const rows = {};
+  for(let i=0;i<6;i++) Object.entries(w.plan||{}).forEach(([pid, arr]) => {
+    const q = ppNum((arr||[])[i]); if(!q) return;
+    const sp = ppSpec(w, pid), x = rows[pid] || (rows[pid] = { q:0, kg:0, days:[] });
+    x.q += q; x.kg += ppMeatKg(q, sp); x.days.push(PP_DAYS[i]);
+  });
+  const order = ppAllProducts().map(p => p.id);
+  const ids = Object.keys(rows).sort((a,b) => order.indexOf(a)-order.indexOf(b));
+  const totKg = ids.reduce((a,id) => a+rows[id].kg, 0);
+  const needC = act==='reject' || act==='cancel';
+  let box = document.getElementById('ppApprBox');
+  if(!box){ box = document.createElement('div'); box.id = 'ppApprBox';
+    box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+    box.addEventListener('click', e => { if(e.target===box) box.remove(); }); document.body.appendChild(box); }
+  box.innerHTML = `<div style="background:#fff;border-radius:10px;width:min(560px,96vw);max-height:90vh;overflow:auto;padding:16px">
+    <div style="font-size:15px;font-weight:700;color:var(--primary)">${ppMDW(monday)} ~ ${ppMDW(ppAdd(monday,5))} 주간 생산계획</div>
+    <div style="margin:4px 0 10px"><span class="pp-chip st-${ppStatus(w)}">${ST_LABEL[ppStatus(w)]}</span>
+      ${w.writer ? `<span style="font-size:11px;color:#666">작성 ${authEsc(w.writer.name)} ${fmtDT(w.writer.at)}</span>` : ''}</div>
+    <table class="pp-tbl" style="width:100%"><thead><tr><th>제품</th><th>생산일</th><th>수량 (ERP 단위)</th><th>원육 (kg)</th></tr></thead><tbody>
+      ${ids.map(id => `<tr><td class="l">${authEsc(ppShortName(id))}</td><td class="c">${rows[id].days.join('·')}</td><td class="num">${ppFmt(rows[id].q)}</td><td class="num">${ppFmt(rows[id].kg,1)}</td></tr>`).join('') || '<tr><td colspan="4" class="c">계획 수량 없음</td></tr>'}
+      <tr style="font-weight:700"><td class="l" colspan="3">원육 합계</td><td class="num">${ppFmt(totKg,1)}</td></tr></tbody></table>
+    <div class="fg" style="margin-top:10px"><label for="ppApprComment">${needC ? (act==='cancel' ? '결재 취소 사유 (필수 — 변경 이력에 남음)' : '반려 사유 (필수)') : '의견 (선택)'}</label><input id="ppApprComment" autocomplete="off"></div>
+    <div class="auth-msg" id="ppApprMsg" style="margin-top:4px"></div>
+    <div class="btn-row" style="margin-top:10px;justify-content:flex-end">
+      <button class="btn" type="button" onclick="document.getElementById('ppApprBox').remove()">닫기</button>
+      <button class="btn ${act==='reject'?'btn-bad':act==='cancel'?'btn-warn':'btn-ok'}" type="button" id="ppApprGo" onclick="ppApprGo('${monday}','${act}')">${PP_ACT_LABEL[act]}</button></div></div>`;
+  const inp = document.getElementById('ppApprComment'); if(inp.focus) inp.focus();
+};
+window.ppApprGo = async (monday, act) => {
+  const comment = document.getElementById('ppApprComment').value.trim();
+  const msgEl = document.getElementById('ppApprMsg');
+  const ok = await ppAct(act, { id: monday, comment, msg: t => { msgEl.textContent = t; }, keepWeek: true });
+  if(ok){ const b = document.getElementById('ppApprBox'); if(b) b.remove(); }
+};
+
 // ── 계획표 복사: 달력을 PNG 그림으로 만들어 클립보드에 넣음 → 그룹웨어 대화창에 Ctrl+V
 //  html2canvas는 처음 누를 때만 불러옴. 클립보드 쓰기가 막히면 그림 창을 띄워 '이미지 복사'로 받게 함
 const H2C_URL = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
@@ -5781,7 +5853,7 @@ function ppRenderWeek(){
   document.getElementById('ppAppr').innerHTML = stamp('작성', w && w.writer) + stamp('팀장', w && w.leader) + stamp('본부장', w && w.director);
   ['Plan','Act','Ship'].forEach(k => document.getElementById('ppTab'+k).classList.toggle('on', {Plan:'plan',Act:'actual',Ship:'ship'}[k]===pp.mode));
   const note = {
-    plan: ppPlanEditable() ? '단위: ERP 단위(팩). 저장하면 위 ① 월단위 계획과 아래 ③ 재고에 바로 반영됩니다.' : `결재가 진행 중이라 계획을 고칠 수 없습니다. 고치려면 ${ {submitted:'작성자', reviewed:'팀장', approved:'본부장'}[st] }이 [결재 취소]로 작성중 상태로 돌려야 합니다. 취소 전 계획은 변경 이력에 남습니다.`,
+    plan: ppPlanEditable() ? '단위: ERP 단위(팩). 저장하면 생산계획 탭의 월단위 달력과 재고·예상 소진시점에 바로 반영됩니다. 결재는 생산계획 탭 달력의 일요일 칸에서도 할 수 있습니다.' : `결재가 진행 중이라 계획을 고칠 수 없습니다. 고치려면 ${ {submitted:'작성자', reviewed:'팀장', approved:'본부장'}[st] }이 [결재 취소]로 작성중 상태로 돌려야 합니다. 취소 전 계획은 변경 이력에 남습니다.`,
     actual: '생산 후 날짜별 실적(팩)을 입력하세요. 빈칸은 미입력으로 보고 재고 계산에 계획값을 씁니다. 실적은 결재와 별도로 언제든 입력할 수 있습니다.',
     ship: '주간 출고 예정량과 실적(팩)을 입력하세요. 실적이 있으면 실적, 없으면 예정으로 재고를 계산합니다. 소진시점의 일평균 출고는 최근 4주 실적만 씁니다.'
   }[pp.mode];
@@ -5922,6 +5994,7 @@ function ppReadGrid(kind){
 const ppHist = (w, act, comment) => (w && w.history || []).concat([{ at:Date.now(), by:authMe.name, role:authMe.role, act, comment: comment||'' }]);
 async function ppFresh(id){ const s = await getDoc(doc(db, PP_WEEKS, id)); return s.exists() ? { ...s.data(), monday: id } : null; }
 function ppMsg(t){ document.getElementById('ppMsg').textContent = t; }
+window._ppMsgDefault = ppMsg;
 
 window.ppSavePlan = async (submit) => {
   if(!ppCanWrite()) return;
@@ -5951,12 +6024,16 @@ window.ppSavePlan = async (submit) => {
   }catch(e){ ppMsg('저장 실패: '+(e.message||e)); }
 };
 
-window.ppAct = async (act) => {
-  const id = pp.weekId, comment = document.getElementById('ppComment').value.trim();
-  if((act==='reject' || act==='cancel') && !comment) return ppMsg(act==='cancel' ? '결재 취소 사유를 입력하세요. 변경 이력에 남습니다.' : '반려 사유를 입력하세요.');
+// opts(달력에서 결재할 때): { id: 주 월요일, comment, msg: 메시지 표시 함수, keepWeek: 재고관리 탭의 주 이동 안 함 }
+// 성공하면 true
+window.ppAct = async (act, opts) => {
+  opts = opts || {};
+  const id = opts.id || pp.weekId, comment = opts.comment!=null ? opts.comment : document.getElementById('ppComment').value.trim();
+  const ppMsg = opts.msg || window._ppMsgDefault;
+  if((act==='reject' || act==='cancel') && !comment){ ppMsg(act==='cancel' ? '결재 취소 사유를 입력하세요. 변경 이력에 남습니다.' : '반려 사유를 입력하세요.'); return false; }
   try{
     const cur = await ppFresh(id);
-    if(!cur) return ppMsg('저장된 계획이 없습니다.');
+    if(!cur){ ppMsg('저장된 계획이 없습니다.'); return false; }
     const st = ppStatus(cur), r = ppRole(), now = Date.now(), stampMe = { name:authMe.name, uid:authMe.id, at:now };
     let patch = null, label = '';
     if(act==='leaderOk' && st==='submitted' && r==='leader'){ patch = { status:'reviewed', leader:stampMe }; label = '팀장 결재'; }
@@ -5970,15 +6047,16 @@ window.ppAct = async (act) => {
       patch = { status:'draft', writer:null, leader:null, director:null, lastReject:null, revisions: revs.concat([rec]) };
       label = `결재 취소 (${ST_LABEL[st]} 상태에서)`;
     }
-    if(!patch){ pp.weeks[id] = cur; ppRenderAll(); return ppMsg('지금 상태에서는 할 수 없는 작업입니다. 화면을 새로 불러왔습니다.'); }
+    if(!patch){ pp.weeks[id] = cur; ppRenderAll(); ppMsg('지금 상태에서는 할 수 없는 작업입니다. 화면을 새로 불러왔습니다.'); return false; }
     const data = { ...cur, ...patch, updatedAt:now, updatedBy:authMe.name, history: ppHist(cur, label, comment) };
     await setDoc(doc(db, PP_WEEKS, id), data);
     pp.weeks[id] = data;
     // 본부장 승인 = 확정 → 다음 주(계획 작성할 주)로 이동
-    if(data.status==='approved'){ pp.weekId = ppAdd(id, 7); pp.mode = 'plan'; }
+    if(data.status==='approved' && !opts.keepWeek){ pp.weekId = ppAdd(id, 7); pp.mode = 'plan'; }
     ppRenderAll();
-    showToast(data.status==='approved' ? `✅ ${label} — ${ppMD(id)}주 확정, 다음 주(${ppMD(ppAdd(id,7))}~)로 이동` : '✅ '+label);
-  }catch(e){ ppMsg('저장 실패: '+(e.message||e)); }
+    showToast(data.status==='approved' ? (opts.keepWeek ? `✅ ${label} — ${ppMD(id)}주 확정` : `✅ ${label} — ${ppMD(id)}주 확정, 다음 주(${ppMD(ppAdd(id,7))}~)로 이동`) : '✅ '+label);
+    return true;
+  }catch(e){ ppMsg('저장 실패: '+(e.message||e)); return false; }
 };
 
 // 변경 이력: 결재 취소 전 계획과 그다음 버전(다음 취소 기록 또는 현재 계획)의 차이
