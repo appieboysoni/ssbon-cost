@@ -167,6 +167,21 @@ tr.total td{background:var(--light);font-weight:700}
 .cal-row.st-row-reviewed .cal-cell,.cal-legend.st-row-reviewed{background:#d6e6fb}
 .cal-row.st-row-submitted .cal-cell:first-child{box-shadow:inset 4px 0 0 #e0a800}
 .cal-row.st-row-reviewed .cal-cell:first-child{box-shadow:inset 4px 0 0 #2e5aa8}
+.cal-apprbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid #9a9a9a;border-top:none;border-left-width:5px}
+.cal-apprbar.st-bar-submitted{background:#fffbe8;border-left-color:#e0a800}
+.cal-apprbar.st-bar-reviewed{background:#eef4fd;border-left-color:#2e5aa8}
+.cab-title{font-size:15px;font-weight:700;color:var(--primary);margin-bottom:4px}
+.cab-sum{font-size:12px;color:#444;margin-left:4px}
+.cab-link{font-size:12px;margin-left:8px;color:var(--primary)}
+.cal-appr{background:#fff;border-width:2px}
+.cal-appr > div{min-width:128px}
+.cal-appr .ah{font-size:13px;padding:6px}
+.cal-appr .ab{min-height:74px;padding:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.cal-appr .ab b{font-size:15px;color:#111}.cal-appr .ab span{font-size:11px}
+.ca-btns{display:flex;gap:4px;justify-content:center}
+.ca-btns .btn{padding:5px 12px;font-size:12px}
+.ca-wait{color:#999 !important;font-size:12px !important}
+.ca-me{color:var(--bad) !important;font-weight:700}
 .cal-legend{display:inline-block;padding:0 6px;border-radius:3px;color:#333}
 .cal-sign{font-size:10.5px;color:#555;line-height:1.35;margin-top:3px}
 .cal-act{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
@@ -5638,6 +5653,7 @@ window.renderPlanMonth = () => {
     if(r>0 && d.slice(0,7) > ym) break;
     const rowW = pp.weeks[ppAdd(d,1)], rowSt = rowW ? ppStatus(rowW) : '';
     const pend = rowSt==='submitted' || rowSt==='reviewed';
+    if(pend) html += ppCalApprBar(ppAdd(d,1), rowW);                // 결재 대기 주: 그 주 바로 위에 결재란
     html += `<div class="cal-row${pend ? ' st-row-'+rowSt : (r%2===0?' shade':'')}" data-week="${ppAdd(d,1)}">`;
     for(let c=0; c<7; c++, d = ppAdd(d,1)){
       const dt = ppPd(d), out = d.slice(0,7)!==ym, wd = dt.getDay();
@@ -5668,8 +5684,34 @@ window.renderPlanMonth = () => {
   ppRenderMonthTable(ym);
 };
 // 일요일 칸: 결재 상태 + 결재자 + (내가 할 수 있는) 결재 버튼. 버튼은 계획표 복사 그림에서 뺌
+// 결재 대기 주 위에 띄우는 결재란 (엑셀 결재란 모양: 작성 | 팀장 | 본부장)
+// 서명된 칸: 이름·일시 / 내 차례 칸: [결재][반려] / 다른 사람 차례: 대기 / 취소 권한이 있는 칸: [결재 취소]
+function ppCalApprBar(monday, w){
+  const st = ppStatus(w), r = ppRole();
+  let kg = 0, n = new Set();
+  for(let i=0;i<6;i++) Object.entries(w.plan||{}).forEach(([pid, arr]) => { const q = ppNum((arr||[])[i]); if(q){ kg += ppMeatKg(q, ppSpec(w, pid)); n.add(pid); } });
+  const btn = (a, l, c) => `<button class="btn ${c}" type="button" onclick="ppApprOpen('${monday}','${a}')">${l}</button>`;
+  const cell = (key, label) => {
+    const s = w[key];
+    let body;
+    if(s) body = `<b>${authEsc(s.name)}</b><span>${fmtDT(s.at)}</span>`;
+    else if(key==='leader' && st==='submitted') body = r==='leader' ? `<div class="ca-btns" data-html2canvas-ignore="true">${btn('leaderOk','결재','btn-ok')}${btn('reject','반려','btn-bad')}</div><span class="ca-wait ca-me">결재 차례</span>` : '<span class="ca-wait">결재 대기</span>';
+    else if(key==='director' && st==='reviewed') body = r==='director' ? `<div class="ca-btns" data-html2canvas-ignore="true">${btn('directorOk','승인','btn-ok')}${btn('reject','반려','btn-bad')}</div><span class="ca-wait ca-me">결재 차례</span>` : '<span class="ca-wait">결재 대기</span>';
+    else body = '<span class="ca-wait">—</span>';
+    // 결재 취소: 팀장 결재 전 → 작성자 칸, 본부장 결재 전 → 팀장 칸
+    const cancelHere = ppCanCancel(w) && ((st==='submitted' && key==='writer') || (st==='reviewed' && key==='leader'));
+    if(cancelHere) body += `<div class="ca-btns" data-html2canvas-ignore="true">${btn('cancel','결재 취소','btn-warn')}</div>`;
+    return `<div><div class="ah">${label}</div><div class="ab">${body}</div></div>`;
+  };
+  return `<div class="cal-apprbar st-bar-${st}" data-week="${monday}">
+    <div class="cab-info"><div class="cab-title">${ppMDW(monday)} ~ ${ppMDW(ppAdd(monday,5))} 주간 생산계획</div>
+      <div><span class="pp-chip st-${st}">${ST_LABEL[st]}</span> <span class="cab-sum">${n.size}개 품목 · 원육 ${ppFmt(kg)}kg</span>
+      <a href="javascript:void(0)" class="cab-link" data-html2canvas-ignore="true" onclick="ppApprOpen('${monday}','view')">계획 상세 보기</a></div></div>
+    <div class="appr cal-appr">${cell('writer','작성')}${cell('leader','팀장')}${cell('director','본부장')}</div></div>`;
+}
 function ppCalApprHtml(monday, w){
   const st = ppStatus(w), r = ppRole(), acts = [];
+  if(st==='submitted' || st==='reviewed') return `<div class="cal-st"><span class="pp-chip st-${st}">${ST_LABEL[st]}</span><div class="cal-sign">결재란은 위에 ▲</div></div>`;
   if(st==='submitted' && r==='leader') acts.push(['leaderOk','팀장 결재','btn-ok'], ['reject','반려','btn-bad']);
   if(st==='reviewed' && r==='director') acts.push(['directorOk','본부장 승인','btn-ok'], ['reject','반려','btn-bad']);
   if(ppCanCancel(w)) acts.push(['cancel','결재 취소','btn-warn']);
@@ -5692,7 +5734,7 @@ window.ppApprOpen = (monday, act) => {
   const order = ppAllProducts().map(p => p.id);
   const ids = Object.keys(rows).sort((a,b) => order.indexOf(a)-order.indexOf(b));
   const totKg = ids.reduce((a,id) => a+rows[id].kg, 0);
-  const needC = act==='reject' || act==='cancel';
+  const needC = act==='reject' || act==='cancel', view = act==='view';
   let box = document.getElementById('ppApprBox');
   if(!box){ box = document.createElement('div'); box.id = 'ppApprBox';
     box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
@@ -5704,12 +5746,12 @@ window.ppApprOpen = (monday, act) => {
     <table class="pp-tbl" style="width:100%"><thead><tr><th>제품</th><th>생산일</th><th>수량 (ERP 단위)</th><th>원육 (kg)</th></tr></thead><tbody>
       ${ids.map(id => `<tr><td class="l">${authEsc(ppShortName(id))}</td><td class="c">${rows[id].days.join('·')}</td><td class="num">${ppFmt(rows[id].q)}</td><td class="num">${ppFmt(rows[id].kg,1)}</td></tr>`).join('') || '<tr><td colspan="4" class="c">계획 수량 없음</td></tr>'}
       <tr style="font-weight:700"><td class="l" colspan="3">원육 합계</td><td class="num">${ppFmt(totKg,1)}</td></tr></tbody></table>
-    <div class="fg" style="margin-top:10px"><label for="ppApprComment">${needC ? (act==='cancel' ? '결재 취소 사유 (필수 — 변경 이력에 남음)' : '반려 사유 (필수)') : '의견 (선택)'}</label><input id="ppApprComment" autocomplete="off"></div>
+    ${view ? '' : `<div class="fg" style="margin-top:10px"><label for="ppApprComment">${needC ? (act==='cancel' ? '결재 취소 사유 (필수 — 변경 이력에 남음)' : '반려 사유 (필수)') : '의견 (선택)'}</label><input id="ppApprComment" autocomplete="off"></div>`}
     <div class="auth-msg" id="ppApprMsg" style="margin-top:4px"></div>
     <div class="btn-row" style="margin-top:10px;justify-content:flex-end">
       <button class="btn" type="button" onclick="document.getElementById('ppApprBox').remove()">닫기</button>
-      <button class="btn ${act==='reject'?'btn-bad':act==='cancel'?'btn-warn':'btn-ok'}" type="button" id="ppApprGo" onclick="ppApprGo('${monday}','${act}')">${PP_ACT_LABEL[act]}</button></div></div>`;
-  const inp = document.getElementById('ppApprComment'); if(inp.focus) inp.focus();
+      ${view ? '' : `<button class="btn ${act==='reject'?'btn-bad':act==='cancel'?'btn-warn':'btn-ok'}" type="button" id="ppApprGo" onclick="ppApprGo('${monday}','${act}')">${PP_ACT_LABEL[act]}</button>`}</div></div>`;
+  const inp = document.getElementById('ppApprComment'); if(inp && inp.focus) inp.focus();
 };
 window.ppApprGo = async (monday, act) => {
   const comment = document.getElementById('ppApprComment').value.trim();
@@ -5732,7 +5774,9 @@ function ppLoadH2C(){
 async function ppCalendarBlob(){
   await ppLoadH2C();
   const el = document.getElementById('ppCal');
-  const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', width: el.scrollWidth, windowWidth: Math.max(el.scrollWidth + 40, 1200), logging: false });
+  const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', width: el.scrollWidth, windowWidth: Math.max(el.scrollWidth + 40, 1200), logging: false,
+    // 복사 그림은 보는 사람과 관계없이 같게: '결재 차례'(내 차례 표시) → '결재 대기'
+    onclone: cd => cd.querySelectorAll('.ca-me').forEach(e => { e.textContent = '결재 대기'; e.classList.remove('ca-me'); }) });
   return await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error('그림 만들기 실패')), 'image/png'));
 }
 function ppShowImageFallback(blob, why){
