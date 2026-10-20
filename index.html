@@ -256,6 +256,11 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
 .auth-msg{font-size:12px;min-height:16px;color:var(--bad)}
 .auth-msg.info{color:var(--mid)}
 .auth-note{font-size:11px;color:#777;line-height:1.5}
+.auth-keep{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;font-size:13px;font-weight:600;color:#1F3864;cursor:pointer;white-space:nowrap}
+.auth-keep input{width:auto;margin:0}
+.auth-keep span{flex-basis:100%;padding-left:20px;font-weight:400;font-size:11px;color:#888;white-space:normal}
+.idle-warn{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:4000;background:#fff;border:2px solid var(--bad);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);padding:12px 16px;display:flex;align-items:center;gap:12px;font-size:14px;color:#222}
+.idle-warn b{color:var(--bad)}
 .acct-modal{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
 .acct-box{background:#fff;border-radius:10px;width:100%;max-width:720px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
 .acct-box .card-hdr button{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1}
@@ -1050,6 +1055,7 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
           <select id="suRole"><option value="member">팀원</option><option value="leader" selected>팀장</option><option value="director">본부장</option></select></div>
         <div class="fg"><label for="suPin">PIN (숫자 4~8자리)</label><input id="suPin" type="password" inputmode="numeric" autocomplete="new-password"></div>
         <div class="fg"><label for="suPin2">PIN 한 번 더</label><input id="suPin2" type="password" inputmode="numeric" autocomplete="new-password"></div>
+        <label class="auth-keep"><input type="checkbox" id="suKeep"> 이 PC에서 로그인 유지 <span>(개인 PC만 — 공용 PC는 체크하지 마세요)</span></label>
         <button class="btn btn-primary" id="suOk" type="button" onclick="authSetupSubmit()">계정 만들고 들어가기</button>
       </div>
       <!-- 로그인 -->
@@ -1057,6 +1063,8 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
         <div class="fg"><label for="lgUser">이름</label><select id="lgUser" onchange="authUserPicked()"></select></div>
         <div class="fg" id="lgPinWrap"><label for="lgPin" id="lgPinLabel">PIN</label><input id="lgPin" type="password" inputmode="numeric" autocomplete="current-password"></div>
         <div class="fg" id="lgPin2Wrap" style="display:none"><label for="lgPin2">PIN 한 번 더</label><input id="lgPin2" type="password" inputmode="numeric" autocomplete="new-password"></div>
+        <label class="auth-keep"><input type="checkbox" id="lgKeep"> 이 PC에서 로그인 유지 <span>(개인 PC만 — 공용 PC는 체크하지 마세요)</span></label>
+        <div class="auth-note" id="lgKeepNote">체크하지 않으면 창을 닫거나 30분 동안 사용하지 않을 때 자동으로 로그아웃됩니다.</div>
         <button class="btn btn-primary" id="lgOk" type="button" onclick="authLoginSubmit()">로그인</button>
       </div>
       <div class="auth-msg" id="authMsg"></div>
@@ -5157,8 +5165,29 @@ const canManageUser = u => !!authMe && !!u;
 window.authMe = () => authMe;
 window.authLevel = () => lvl(authMe);
 
-function readSession(){ try{ return JSON.parse(localStorage.getItem(SESSION_KEY)||'null'); }catch(e){ return null; } }
-function writeSession(v){ try{ v ? localStorage.setItem(SESSION_KEY, JSON.stringify(v)) : localStorage.removeItem(SESSION_KEY); }catch(e){} }
+// 로그인 저장 (2026-10-20 변경)
+//  · '이 PC에서 로그인 유지' 체크 → localStorage {uid,h,keep:true,v:2}: 브라우저를 껐다 켜도 유지, 자동 로그아웃 없음
+//  · 체크 안 함(공용 PC) → sessionStorage {uid,h,v:2,last}: 창(탭)을 닫으면 사라짐 + 30분 무조작 시 자동 로그아웃
+//  · 예전 방식 세션(v 없음)은 지움 → 업데이트 후 모든 PC에서 한 번 다시 로그인
+const TAB_SESSION_KEY = 'ssboncost_tab';
+const AUTH_IDLE_MS = 30*60*1000, AUTH_WARN_MS = 60*1000;
+let authKeep = false, authLastActive = 0;
+const authNow = () => window._authNow ? window._authNow() : Date.now();
+function readSession(){
+  let local = null, tab = null;
+  try{ local = JSON.parse(localStorage.getItem(SESSION_KEY)||'null'); }catch(e){}
+  if(local && !(local.v===2 && local.keep)){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} local = null; }
+  if(local) return local;
+  try{ tab = JSON.parse(sessionStorage.getItem(TAB_SESSION_KEY)||'null'); }catch(e){}
+  return tab && tab.v===2 ? { ...tab, keep:false } : null;
+}
+function writeSession(v, keep){
+  try{
+    if(!v){ localStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(TAB_SESSION_KEY); return; }
+    if(keep){ localStorage.setItem(SESSION_KEY, JSON.stringify({ uid:v.uid, h:v.h, keep:true, v:2 })); sessionStorage.removeItem(TAB_SESSION_KEY); }
+    else { sessionStorage.setItem(TAB_SESSION_KEY, JSON.stringify({ uid:v.uid, h:v.h, v:2, last:authNow() })); localStorage.removeItem(SESSION_KEY); }
+  }catch(e){}
+}
 function newUid(){ return 'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function findAuthUser(id){ return authUsers.find(u=>u.id===id)||null; }
 function activeAuthUsers(){ return authUsers.filter(u=>u.active!==false); }
@@ -5204,9 +5233,10 @@ window.authUserPicked = () => {
   if(u) setTimeout(()=>$a('lgPin').focus(),0);
 };
 
-function finishLogin(u){
+function finishLogin(u, keep){
   authMe = { id:u.id, name:u.name, role:u.role };
-  writeSession({ uid:u.id, h:u.pinHash });
+  authKeep = !!keep; authLastActive = authNow();
+  writeSession({ uid:u.id, h:u.pinHash }, authKeep);
   authFails = 0;
   setDoc(doc(db, USERS_COL, u.id), { lastLoginAt: Date.now(), loginCount: (u.loginCount||0)+1 }, { merge:true })
     .then(()=>{ u.lastLoginAt=Date.now(); u.loginCount=(u.loginCount||0)+1; })
@@ -5239,7 +5269,7 @@ window.authSetupSubmit = async () => {
     await setDoc(doc(db, USERS_COL, u.id), { name:u.name, role:u.role, active:true, pinHash:u.pinHash, createdAt:u.createdAt, createdBy:name, updatedAt:Date.now(), updatedBy:name });
     authUsers.push(u);
     $a('suOk').disabled = false;
-    finishLogin(u);
+    finishLogin(u, $a('suKeep').checked);
   }catch(e){ $a('suOk').disabled=false; authMsg('authMsg','저장 실패: '+(e.message||e)); }
 };
 
@@ -5256,7 +5286,7 @@ window.authLoginSubmit = async () => {
       const h = pinHashOf(u.id, p1);
       await setDoc(doc(db, USERS_COL, u.id), { pinHash:h, updatedAt:Date.now(), updatedBy:u.name }, { merge:true });
       u.pinHash = h; $a('lgOk').disabled = false;
-      finishLogin(u);
+      finishLogin(u, $a('lgKeep').checked);
     }catch(e){ $a('lgOk').disabled=false; authMsg('authMsg','PIN 저장 실패: '+(e.message||e)); }
     return;
   }
@@ -5269,11 +5299,12 @@ window.authLoginSubmit = async () => {
     $a('lgPin').value = '';
     return;
   }
-  finishLogin(u);
+  finishLogin(u, $a('lgKeep').checked);
 };
 
 window.authLogout = () => {
-  authMe = null; writeSession(null); closeAcct();
+  authMe = null; authKeep = false; writeSession(null); closeAcct(); idleWarn(false);
+  if($a('lgKeep')) $a('lgKeep').checked = false;
   document.body.classList.remove('lv-leader','lv-director');
   $a('whoBtn').textContent = '로그인';
   authMsg('authMsg','');
@@ -5325,7 +5356,7 @@ window.changeMyPin = async () => {
   if(p1!==p2) return authMsg('myPinMsg','두 PIN이 서로 다릅니다.');
   try{
     await saveAuthUser(u, { pinHash: pinHashOf(u.id, p1) });
-    writeSession({ uid:u.id, h:u.pinHash });
+    writeSession({ uid:u.id, h:u.pinHash }, authKeep);
     ['myPinOld','myPin1','myPin2'].forEach(id=>$a(id).value='');
     authMsg('myPinMsg','PIN을 바꿨습니다.',true);
     showToast('✅ PIN 변경 완료');
@@ -5387,12 +5418,53 @@ async function initAuth(){
   // 저장된 세션: 계정이 사용 중이고 PIN이 그대로일 때만 통과 (PIN 초기화·변경·중지 시 다시 로그인)
   const sv = readSession();
   const u = sv && sv.uid ? findAuthUser(sv.uid) : null;
+  if(sv && !sv.keep && authNow() - (sv.last||0) >= AUTH_IDLE_MS){      // 공용 PC: 탭이 복원돼도 30분 지났으면 로그아웃
+    writeSession(null); showGate('login');
+    return authMsg('authMsg','30분 동안 사용하지 않아 자동 로그아웃됐습니다. 다시 로그인하세요.', true);
+  }
   if(u && u.active!==false && u.pinHash && sv.h===u.pinHash && ROLE_LEVEL[u.role]){
     authMe = { id:u.id, name:u.name, role:u.role };
+    authKeep = !!sv.keep; authLastActive = authNow();
+    if(!authKeep) writeSession({ uid:u.id, h:u.pinHash }, false);
     return enterApp();
   }
   showGate('login');
 }
+
+// ── 자동 로그아웃 (로그인 유지 안 한 경우만): 클릭·키 입력·터치·휠이 없으면 30분 뒤 로그아웃, 1분 전 안내
+function authTouch(){
+  if(!authMe || authKeep) return;
+  const now = authNow();
+  if(now - authLastActive < 5000 && !$a('idleWarn')) return;         // 너무 자주 저장하지 않게
+  authLastActive = now;
+  writeSession({ uid:authMe.id, h:(findAuthUser(authMe.id)||{}).pinHash }, false);
+  idleWarn(false);
+}
+function idleWarn(show, secLeft){
+  let el = $a('idleWarn');
+  if(!show){ if(el) el.remove(); return; }
+  if(!el){
+    el = document.createElement('div'); el.id = 'idleWarn'; el.className = 'idle-warn';
+    el.innerHTML = '<span>⏱ 사용이 없어 <b id="idleSec"></b>초 뒤 자동 로그아웃됩니다.</span><button class="btn btn-primary btn-sm" type="button">계속 사용</button>';
+    document.body.appendChild(el);
+  }
+  $a('idleSec').textContent = Math.max(0, Math.ceil(secLeft));
+}
+function authIdleCheck(){
+  if(!authMe || authKeep) return;
+  const idle = authNow() - authLastActive;
+  if(idle >= AUTH_IDLE_MS){
+    authLogout();
+    authMsg('authMsg','30분 동안 사용하지 않아 자동 로그아웃됐습니다. 다시 로그인하세요.', true);
+    return;
+  }
+  if(idle >= AUTH_IDLE_MS - AUTH_WARN_MS) idleWarn(true, (AUTH_IDLE_MS - idle)/1000);
+  else idleWarn(false);
+}
+window._authIdleCheck = authIdleCheck;
+window._authKeep = () => authKeep;
+['mousedown','keydown','touchstart','wheel'].forEach(ev => document.addEventListener(ev, authTouch, { capture:true, passive:true }));
+setInterval(authIdleCheck, 1000);
 
 // ════════════════════════════════════
 // 생산계획·재고 (주간 계획 → 월 합산, 재고·소진시점, 주 단위 결재)
