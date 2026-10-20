@@ -21,9 +21,22 @@ header h1{font-size:16px;font-weight:700}
 .hdr-month{font-size:12px;background:rgba(255,255,255,.15);padding:3px 10px;border-radius:12px}
 nav{background:var(--mid);display:flex;overflow-x:auto;scrollbar-width:none;position:sticky;top:52px;z-index:99;box-shadow:0 2px 4px rgba(0,0,0,.18)}
 nav::-webkit-scrollbar{display:none}
-nav button{flex-shrink:0;padding:11px 18px;background:none;border:none;color:rgba(255,255,255,.7);font-size:12px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;font-family:inherit}
-nav button.active{color:#fff;border-bottom-color:#FFC000;font-weight:700}
-nav button:hover{color:#fff;background:rgba(255,255,255,.1)}
+/* 상단 탭 6개: 탭마다 색 (--nc). 제조원가는 누르면 아래로 목록 */
+nav .c-dash{--nc:#4FC3F7} nav .c-prod{--nc:#81C784} nav .c-stock{--nc:#FF8A65} nav .c-cost{--nc:#FFC000} nav .c-capa{--nc:#CE93D8} nav .c-set{--nc:#B0BEC5}
+nav .nav-grp{display:flex;flex-shrink:0}
+nav button{font-family:inherit;cursor:pointer;white-space:nowrap}
+nav .nav-top{flex-shrink:0;display:flex;align-items:center;gap:6px;padding:12px 22px;background:none;border:none;border-bottom:4px solid transparent;color:rgba(255,255,255,.82);font-size:14.5px;font-weight:600}
+nav .nav-top::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--nc);flex-shrink:0}
+nav .nav-top:hover{color:#fff;background:rgba(255,255,255,.08)}
+nav .nav-top.active,nav .nav-grp.open > .nav-top{color:#fff;font-weight:700;border-bottom-color:var(--nc);background:rgba(255,255,255,.1)}
+nav .nav-sub{font-size:12.5px;font-weight:600;color:var(--nc)}
+nav .nav-sub:not(:empty)::before{content:'›';margin:0 5px;color:rgba(255,255,255,.6)}
+nav .nav-caret{font-size:11px;opacity:.75;margin-left:2px}
+nav .nav-menu{display:none;position:fixed;z-index:200;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25);border-top:4px solid var(--nc);padding:6px 0;min-width:200px}
+nav .nav-grp.open .nav-menu{display:block}
+nav .nav-menu button{display:block;width:100%;text-align:left;padding:10px 18px;background:none;border:none;font-size:14px;color:#1F3864}
+nav .nav-menu button:hover{background:#eef3fb}
+nav .nav-menu button.active{font-weight:700;background:#f3f6fb;box-shadow:inset 4px 0 0 var(--nc)}
 main{max-width:1280px;margin:0 auto;padding:16px}
 .tab{display:none}.tab.active{display:block}
 .card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:14px;overflow:hidden}
@@ -267,16 +280,21 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
   </div>
 </header>
 <nav>
-  <button class="active" onclick="goTab('dashboard',this)">📊 대시보드</button>
-  <button onclick="goTab('plan',this)">📋 생산계획</button>
-  <button onclick="goTab('stock',this)">🗂️ 재고관리</button>
-  <button onclick="goTab('input',this)">📥 데이터 입력</button>
-  <button onclick="goTab('products',this)">📦 제품별 원가</button>
-  <button onclick="goTab('history',this)">📅 월별 이력</button>
-  <button onclick="goTab('settings',this)">⚙️ 설정</button>
-  <button onclick="goTab('report',this)">📄 보고서</button>
-  <button onclick="goTab('exec',this)">📊 경영보고 PPT</button>
-  <button onclick="goTab('capa',this)">🏭 CAPA 분석</button>
+  <button class="nav-top c-dash active" data-tab="dashboard" onclick="goTab('dashboard',this)">📊 대시보드</button>
+  <button class="nav-top c-prod" data-tab="plan" onclick="goTab('plan',this)">📋 생산계획</button>
+  <button class="nav-top c-stock" data-tab="stock" onclick="goTab('stock',this)">🗂️ 재고관리</button>
+  <div class="nav-grp c-cost">
+    <button class="nav-top" type="button" onclick="navMenu(this)">💰 제조원가<span class="nav-sub"></span><span class="nav-caret">▾</span></button>
+    <div class="nav-menu">
+      <button data-tab="input" onclick="goTab('input',this)">📥 데이터 입력</button>
+      <button data-tab="products" onclick="goTab('products',this)">📦 제품별 원가</button>
+      <button data-tab="history" onclick="goTab('history',this)">📅 월별 이력</button>
+      <button data-tab="report" onclick="goTab('report',this)">📄 보고서</button>
+      <button data-tab="exec" onclick="goTab('exec',this)">📊 경영보고 PPT</button>
+    </div>
+  </div>
+  <button class="nav-top c-capa" data-tab="capa" onclick="goTab('capa',this)">🏭 CAPA 시뮬레이터</button>
+  <button class="nav-top c-set" data-tab="settings" onclick="goTab('settings',this)">⚙️ 설정</button>
 </nav>
 <main>
 
@@ -1139,11 +1157,38 @@ window.showToast = (msg,dur=2500) => {
 };
 
 // ── 탭
+// 상단 탭 표시: 누른 버튼 + (목록 안 버튼이면) 그 그룹 버튼을 켜고, 그룹 버튼 옆에 지금 화면 이름
+function navActivate(name){
+  const btn = document.querySelector(`nav button[data-tab="${name}"]`);
+  document.querySelectorAll('nav button').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('nav .nav-sub').forEach(e=>e.textContent='');
+  navClose();
+  if(!btn) return;
+  btn.classList.add('active');
+  const grp = btn.closest('.nav-grp');
+  if(grp){ grp.querySelector('.nav-top').classList.add('active'); grp.querySelector('.nav-sub').textContent = btn.textContent.replace(/^\S+\s/, '').trim(); }
+}
+function navClose(){ document.querySelectorAll('nav .nav-grp.open').forEach(g => g.classList.remove('open')); }
+window.navMenu = top => {
+  const grp = top.closest('.nav-grp'), was = grp.classList.contains('open');
+  navClose();
+  if(was) return;
+  grp.classList.add('open'); navPlace(grp);
+  requestAnimationFrame(() => navPlace(grp));     // 폭이 좁아 탭 줄이 옆으로 밀린 뒤 위치 다시 맞춤
+};
+function navPlace(grp){
+  const r = grp.querySelector('.nav-top').getBoundingClientRect(), menu = grp.querySelector('.nav-menu');
+  menu.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 210)) + 'px';
+  menu.style.top = r.bottom + 'px';
+}
+document.addEventListener('click', e => { if(!e.target.closest || !e.target.closest('nav .nav-grp')) navClose(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape') navClose(); });
+window.addEventListener('resize', navClose);
+document.querySelector('nav').addEventListener('scroll', () => document.querySelectorAll('nav .nav-grp.open').forEach(navPlace));
 window.goTab = (name,btn) => {
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(e=>e.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  btn.classList.add('active');
+  navActivate(name);
   if(name==='dashboard') loadDashboard();
   if(name==='products')  loadProducts();
   if(name==='history')   loadHistory();
@@ -3719,9 +3764,8 @@ window.saveHistMemo = async (el) => {
 };
 window.editMonth = async (month) => {
   document.querySelectorAll('.tab').forEach(e=>e.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(e=>e.classList.remove('active'));
   document.getElementById('tab-input').classList.add('active');
-  document.querySelector('nav button:nth-child(2)').classList.add('active');
+  navActivate('input');
   document.getElementById('inputMonth').value=month;
   await loadExistingData();
   showToast(`✏️ ${month} 데이터 불러옴`);
