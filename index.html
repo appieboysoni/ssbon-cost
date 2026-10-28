@@ -145,7 +145,14 @@ tr.total td{background:var(--light);font-weight:700}
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
 @media(max-width:900px){.chart-grid{grid-template-columns:1fr}}
 .chart-card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
-.chart-card .card-hdr{background:var(--mid);color:#fff;padding:10px 16px;font-size:12px;font-weight:700}
+.chart-card .card-hdr{background:var(--mid);color:#fff;padding:10px 16px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.tg-btn{background:#fff;color:var(--primary);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.tg-btn:hover{background:#FFF2CC}
+.leg-dash{width:18px;height:0;border-top:2px dashed}
+.cum-line{display:flex;justify-content:flex-end;align-items:flex-start;padding:10px 16px 0;min-height:56px;box-sizing:border-box}
+.cum-box{border:1.2px solid #1F3864;border-radius:6px;padding:5px 10px;font-size:11px;color:#555;line-height:1.5;text-align:right}
+.cum-box b{color:#1F3864;font-size:13px}
+.cum-box .up{color:#C00000;font-weight:700}.cum-box .dn{color:#2E7D32;font-weight:700}
 .chart-wrap{padding:16px;position:relative;height:300px}
 .chart-wrap canvas{max-height:100%}
 .chart-empty{display:flex;align-items:center;justify-content:center;height:200px;color:#bbb;font-size:12px}
@@ -320,7 +327,8 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
   <div class="chart-grid">
     <!-- 원가율 트렌드 -->
     <div class="chart-card">
-      <div class="card-hdr">📈 제조원가율 트렌드 (원가 구성 비율)</div>
+      <div class="card-hdr"><span>📈 제조원가율 트렌드 (원가 구성 비율)</span><button class="tg-btn" type="button" id="tgBtnRate" onclick="openTargetModal('rate')">🎯 목표 입력</button></div>
+      <div class="cum-line" id="cumRate"></div>
       <div class="chart-wrap">
         <canvas id="chartCostRate"></canvas>
       </div>
@@ -330,17 +338,21 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
         <div class="leg-item"><div class="leg-sq" style="background:#90CAF9"></div><span>부재료비</span></div>
         <div class="leg-item"><div class="leg-sq" style="background:#FFC000"></div><span>원재료비</span></div>
         <div class="leg-item"><div class="leg-dot" style="background:#1F3864;border:2px solid #1F3864"></div><span>합계(꺾은선)</span></div>
+        <div class="leg-item tg-leg" id="tgLegRate" style="display:none"><div class="leg-dash" style="border-color:#C00000"></div><span id="tgLegRateTxt">목표</span></div>
       </div>
     </div>
     <!-- 생산량 트렌드 -->
     <div class="chart-card">
-      <div class="card-hdr">🏭 생산량 트렌드 (원육투입 vs 생산수량)</div>
+      <div class="card-hdr"><span>🏭 생산량 트렌드 (원육투입 vs 생산수량)</span><button class="tg-btn" type="button" id="tgBtnProd" onclick="openTargetModal('prod')">🎯 목표 입력</button></div>
+      <div class="cum-line"></div>
       <div class="chart-wrap">
         <canvas id="chartProduction"></canvas>
       </div>
       <div class="chart-legend" id="legendProduction">
         <div class="leg-item"><div class="leg-sq" style="background:#2F5496"></div><span>원육투입량 (kg, 좌축)</span></div>
         <div class="leg-item"><div class="leg-dot" style="background:#ED7D31"></div><span>생산수량 (파우치, 우축)</span></div>
+        <div class="leg-item tg-leg" id="tgLegQty" style="display:none"><div class="leg-dash" style="border-color:#C55A11"></div><span id="tgLegQtyTxt">생산수량 목표</span></div>
+        <div class="leg-item tg-leg" id="tgLegMeat" style="display:none"><div class="leg-dash" style="border-color:#1F3864"></div><span id="tgLegMeatTxt">원육투입 목표</span></div>
       </div>
     </div>
   </div>
@@ -2558,7 +2570,8 @@ function renderCostRateChart(allRows) {
           stacked: true,
           min: 0,
           max: (() => {
-            const mx = Math.max(...totals.filter(v=>v>0), 0);
+            const t = (window._dashTargets||{}).costRate;
+            const mx = Math.max(...totals.filter(v=>v>0), t>0 ? t : 0, 0);
             return mx>0 ? Math.ceil((mx*1.25)/10)*10 : 60;
           })(),
           ticks: {
@@ -2573,6 +2586,39 @@ function renderCostRateChart(allRows) {
 
   // afterDraw 플러그인으로 스택 바 내부 레이블 + 합계 꺾은선 레이블 동시 처리
   window._charts.costRate._labelData = { rawR, subR, labR, expR, totals };
+  renderCostRateCum(costRateCum(allRows));
+}
+// 누적 원가율: 조회 기준월이 속한 해의 1월 ~ 조회 기준월, Σ원가 ÷ Σ생산금액 (월 비율의 단순 평균 아님)
+function costRateCum(allRows){
+  const ym = (document.getElementById('dashMonth')||{}).value || '';
+  const y = ym.slice(0,4);
+  const rows = allRows.filter(r => r.month && r.month.slice(0,4)===y && r.month<=ym && r.prodAmt>0);
+  if(!rows.length) return null;
+  const S = k => rows.reduce((a,r) => a + (r.sum[k]||0), 0), P = rows.reduce((a,r) => a + r.prodAmt, 0);
+  const m = x => parseInt(x.month.slice(5),10);
+  return { from:m(rows[0]), to:m(rows[rows.length-1]), n:rows.length, prodAmt:P,
+    total:S('total')/P*100, raw:S('raw')/P*100, sub:S('sub')/P*100, labor:S('labor')/P*100, exp:S('exp')/P*100 };
+}
+window._costRateCum = costRateCum;
+// 목표 선: 수평 점선 (값은 범례·버튼에 표시 — 선 위 라벨은 데이터 라벨과 겹쳐서 뺌)
+function drawTargetLine(chart, scaleId, val, color, text){
+  const sc = chart.scales[scaleId], a = chart.chartArea;
+  if(!sc || !(val>0) || val > sc.max) return;
+  const y = sc.getPixelForValue(val), c = chart.ctx;
+  c.save();
+  c.strokeStyle = color; c.lineWidth = 2; c.setLineDash([7,5]);
+  c.beginPath(); c.moveTo(a.left, y); c.lineTo(a.right, y); c.stroke();
+  c.setLineDash([]);
+  c.restore();
+}
+// 차트 위 오른쪽: 누적 원가율 (그래프로는 안 그림)
+function renderCostRateCum(cum){
+  const el = document.getElementById('cumRate'); if(!el) return;
+  if(!cum){ el.innerHTML = ''; return; }
+  const t = (window._dashTargets||{}).costRate, f = v => v.toFixed(1)+'%', d = t>0 ? cum.total - t : null;
+  el.innerHTML = `<div class="cum-box"><b>${cum.from===cum.to ? cum.to+'월' : cum.from+'~'+cum.to+'월'} 누적 원가율 ${f(cum.total)}</b>`
+    + (d==null ? '' : ` <span class="${d>0?'up':'dn'}">(목표 ${f(t)} 대비 ${d>0?'+':''}${d.toFixed(1)}%p)</span>`)
+    + `<br>원재료 ${f(cum.raw)} · 부재료 ${f(cum.sub)} · 노무 ${f(cum.labor)} · 경비 ${f(cum.exp)}</div>`;
 }
 
 // 원가율 차트 데이터 레이블 플러그인 (afterDraw)
@@ -2582,6 +2628,8 @@ const costRateLabelPlugin = {
     if(chart.canvas.id !== 'chartCostRate') return;
     const ld = chart._labelData;
     if(!ld) return;
+    const tgR = (window._dashTargets||{}).costRate;
+    if(tgR > 0) drawTargetLine(chart, 'y', tgR, '#C00000', `목표 ${Number(tgR).toFixed(1)}%`);
     const ctx2 = chart.ctx;
     const { rawR, subR, labR, expR, totals } = ld;
 
@@ -2882,7 +2930,8 @@ function renderProductionChart(allRows) {
           position: 'left',
           min: 0,
           max: (() => {
-            const mx = Math.max(...meatKgs.filter(v=>v>0), 0);
+            const t = (window._dashTargets||{}).prodMeatKg;
+            const mx = Math.max(...meatKgs.filter(v=>v>0), t>0 ? t : 0, 0);
             return mx>0 ? Math.ceil((mx*1.2)/5000)*5000 : undefined;
           })(),
           ticks: {
@@ -2896,7 +2945,8 @@ function renderProductionChart(allRows) {
           position: 'right',
           min: 0,
           max: (() => {
-            const mx = Math.max(...qtys.filter(v=>v>0), 0);
+            const t = (window._dashTargets||{}).prodQty;
+            const mx = Math.max(...qtys.filter(v=>v>0), t>0 ? t : 0, 0);
             return mx>0 ? Math.ceil((mx*1.2)/50000)*50000 : undefined;
           })(),
           ticks: {
@@ -2919,6 +2969,9 @@ const productionLabelPlugin = {
     if(chart.canvas.id !== 'chartProduction') return;
     const ld = chart._labelData;
     if(!ld) return;
+    const TG = window._dashTargets || {};
+    if(TG.prodMeatKg > 0) drawTargetLine(chart, 'yLeft', TG.prodMeatKg, '#1F3864', `원육 목표 ${(TG.prodMeatKg/1000).toFixed(1)}t`);
+    if(TG.prodQty > 0) drawTargetLine(chart, 'yRight', TG.prodQty, '#C55A11', `생산 목표 ${(TG.prodQty/10000).toFixed(1)}만ea`);
     const { meatKgs, qtys } = ld;
     const ctx2 = chart.ctx;
 
@@ -2961,6 +3014,77 @@ const productionLabelPlugin = {
 if(!Chart.registry.plugins.get('productionLabels')) {
   Chart.registry.plugins.register(productionLabelPlugin);
 }
+
+// ════ 대시보드 목표 (2026-10-28) ════
+//  Firestore dashSettings/targets { costRate(%), prodQty(파우치/월), prodMeatKg(kg/월), updatedBy, updatedAt }
+//  값 하나가 모든 달에 같은 목표선으로 그려짐. 빈칸으로 저장하면 선을 지움.
+window._dashTargets = {};
+async function loadDashTargets(){
+  try{ const s = await getDoc(doc(db,'dashSettings','targets')); window._dashTargets = s.exists() ? s.data() : {}; }
+  catch(e){ console.warn('목표 불러오기 실패', e); }
+  renderTargetUI();
+}
+function renderTargetUI(){
+  const T = window._dashTargets || {}, f1 = v => Number(v).toFixed(1);
+  const set = (id, show) => { const el = document.getElementById(id); if(el) el.style.display = show ? '' : 'none'; };
+  const br = document.getElementById('tgBtnRate'), bp = document.getElementById('tgBtnProd');
+  if(br) br.textContent = T.costRate>0 ? `🎯 목표 ${f1(T.costRate)}%` : '🎯 목표 입력';
+  if(bp){ const parts = []; if(T.prodQty>0) parts.push(`${f1(T.prodQty/10000)}만ea`); if(T.prodMeatKg>0) parts.push(`${f1(T.prodMeatKg/1000)}t`);
+    bp.textContent = parts.length ? `🎯 목표 ${parts.join(' · ')}` : '🎯 목표 입력'; }
+  set('tgLegRate', T.costRate>0); set('tgLegQty', T.prodQty>0); set('tgLegMeat', T.prodMeatKg>0);
+  const tx = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  if(T.costRate>0) tx('tgLegRateTxt', `목표 ${f1(T.costRate)}%`);
+  if(T.prodQty>0) tx('tgLegQtyTxt', `생산수량 목표 ${f1(T.prodQty/10000)}만ea`);
+  if(T.prodMeatKg>0) tx('tgLegMeatTxt', `원육투입 목표 ${f1(T.prodMeatKg/1000)}t`);
+}
+window.openTargetModal = kind => {
+  const T = window._dashTargets || {};
+  const by = T.updatedBy ? `<div class="ro-note" style="margin-top:6px">마지막 수정: ${authEsc(T.updatedBy)} ${fmtDT(T.updatedAt)}</div>` : '';
+  const fields = kind==='rate'
+    ? `<div class="fg"><label for="tgRate">목표 제조원가율 (%) — 생산금액 대비</label><input id="tgRate" class="num-in" inputmode="decimal" value="${T.costRate>0?T.costRate:''}" placeholder="예: 40"></div>`
+    : `<div class="fg"><label for="tgQty">목표 생산수량 (파우치 ea / 월)</label><input id="tgQty" class="num-in" inputmode="numeric" value="${T.prodQty>0?ppComma(T.prodQty):''}" placeholder="예: 200,000"></div>
+       <div class="fg" style="margin-top:8px"><label for="tgMeat">목표 원육투입량 (kg / 월) — 선택</label><input id="tgMeat" class="num-in" inputmode="numeric" value="${T.prodMeatKg>0?ppComma(T.prodMeatKg):''}" placeholder="비우면 선 없음"></div>`;
+  let box = document.getElementById('tgBox');
+  if(!box){ box = document.createElement('div'); box.id = 'tgBox';
+    box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px';
+    box.addEventListener('click', e => { if(e.target===box) box.remove(); }); document.body.appendChild(box); }
+  box.innerHTML = `<div style="background:#fff;border-radius:10px;width:min(420px,96vw);padding:16px">
+    <div style="font-size:15px;font-weight:700;color:var(--primary);margin-bottom:10px">🎯 ${kind==='rate' ? '제조원가율 목표' : '생산량 목표'}</div>
+    ${fields}
+    <div class="ro-note" style="margin-top:6px">입력한 값으로 모든 달에 같은 목표선(점선)을 그립니다. 빈칸으로 저장하면 선을 지웁니다.</div>${by}
+    <div class="auth-msg" id="tgMsg" style="margin-top:4px"></div>
+    <div class="btn-row" style="margin-top:10px;justify-content:flex-end">
+      <button class="btn" type="button" onclick="document.getElementById('tgBox').remove()">닫기</button>
+      <button class="btn btn-primary" type="button" onclick="saveTarget('${kind}')">저장</button></div></div>`;
+  ppBindComma(box);
+  const first = box.querySelector('input'); if(first && first.focus) first.focus();
+};
+window.saveTarget = async kind => {
+  const num = id => { const v = (document.getElementById(id).value||'').replace(/,/g,'').trim(); return v==='' ? null : Number(v); };
+  const msg = t => { document.getElementById('tgMsg').textContent = t; };
+  const patch = {};
+  if(kind==='rate'){
+    const r = num('tgRate');
+    if(r!=null && !(r>0 && r<100)) return msg('목표 원가율은 0~100% 사이로 넣으세요.');
+    patch.costRate = r;
+  } else {
+    const q = num('tgQty'), m = num('tgMeat');
+    if(q!=null && !(q>0 && Number.isInteger(q))) return msg('목표 생산수량은 1 이상의 정수로 넣으세요.');
+    if(m!=null && !(m>0)) return msg('목표 원육투입량은 0보다 커야 합니다.');
+    patch.prodQty = q; patch.prodMeatKg = m;
+  }
+  patch.updatedBy = (window.authMe && window.authMe()) ? window.authMe().name : '';
+  patch.updatedAt = Date.now();
+  try{
+    await setDoc(doc(db,'dashSettings','targets'), patch, { merge:true });
+    window._dashTargets = { ...(window._dashTargets||{}), ...patch };
+    renderTargetUI();
+    document.getElementById('tgBox').remove();
+    showToast('✅ 목표 저장');
+    loadDashboard();
+  }catch(e){ msg('저장 실패: '+(e.message||e)); }
+};
+window._dashTest = { renderCostRateChart: r => renderCostRateChart(r), renderProductionChart: r => renderProductionChart(r), renderTargetUI };
 // ════════════════════════════════════
 window._quarterAllGroups = [];
 window._quarterData = {};
@@ -3806,6 +3930,8 @@ window.loadDashboard = async () => {
     return { month: d.month, sum: cc.sum, prodAmt: d.prodAmt||0, totalQty: cc.totalQty, totalMeatKg: cc.totalMeatKg };
   });
 
+  // 목표값 (차트 축 최대·목표선에 씀)
+  await loadDashTargets();
   // 차트 렌더
   renderCostRateChart(trendRows);
   renderProductionChart(trendRows);
