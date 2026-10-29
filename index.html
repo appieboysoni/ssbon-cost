@@ -639,9 +639,20 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
 
 <!-- ══ 제품별 원가 ══ -->
 <div id="tab-products" class="tab">
+  <style>
+    #tab-products td .pc{font-size:10.5px;color:#888;margin-left:2px}
+    #tab-products tr.cmp-base td{border-top:2px solid #c9d6ea}
+    #tab-products tr.cmp-prev td{background:#f6f7f9;color:#666}
+    #tab-products tr.cmp-diff td{background:#fff;font-size:11.5px}
+    #tab-products td.mo{font-size:11px;font-weight:700;color:var(--primary);white-space:nowrap}
+    #tab-products .up{color:#C00000}#tab-products .dn{color:#2E7D32}
+    #tab-products td.tg small{display:block;font-size:10.5px}
+  </style>
   <div class="month-bar">
     <label>조회 기준월</label>
-    <input type="month" id="prodMonth" onchange="loadProducts()">
+    <input type="month" id="prodMonth" onchange="_prodCmpReset(true);loadProducts()">
+    <label style="margin-left:10px">비교월</label>
+    <select id="prodCmp" onchange="loadProducts()"><option value="">비교 안 함</option></select>
     <button class="btn btn-bad btn-sm" onclick="deleteMonthDataFromProd()">🗑️ 이 달 삭제</button>
   </div>
 
@@ -649,7 +660,7 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     <div class="card-hdr">📦 제품별 원가 상세 (개당 단가) <span id="labor-method-badge" style="font-size:10px;font-weight:400;margin-left:8px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.2)"></span></div>
     <div class="card-body">
       <div class="tbl-wrap"><table>
-        <thead><tr><th>품목코드</th><th style="min-width:200px">품목명</th><th>생산수량</th><th>공급단가</th><th>원재료비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>부재료비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>노무비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>경비<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>제조원가<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>원가율</th></tr></thead>
+        <thead id="prod-detail-head"></thead>
         <tbody id="prod-detail-body"><tr><td colspan="10" class="loading">월을 선택하세요</td></tr></tbody>
       </table></div>
     </div>
@@ -659,7 +670,7 @@ body:not(.authed) > header, body:not(.authed) > nav, body:not(.authed) > main{vi
     <div class="card-body">
       <div class="info-box">같은 품목이 원육종류(설도/우둔/홍두께)로 나뉜 경우, 생산수량 가중평균한 개당 단가입니다.</div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th style="min-width:200px">품목 그룹</th><th>원육종류</th><th>총생산수량</th><th>공급단가</th><th>원재료비/EA</th><th>부재료비/EA</th><th>노무비/EA</th><th>경비/EA</th><th>제조원가/EA</th><th>원가율</th></tr></thead>
+        <thead id="prod-group-head"></thead>
         <tbody id="prod-group-body"><tr><td colspan="10" class="loading">월을 선택하세요</td></tr></tbody>
       </table></div>
     </div>
@@ -3516,97 +3527,131 @@ async function renderQuarterChart() {
   drawQuarterChart();
 }
 
+// ── 제품별 원가 (2026-10-29: 비교월, 요소별 공급단가 대비 %, 목표원가율)
+//  요소 % = 요소 원가/EA ÷ 공급단가 (네 요소 합 = 원가율). 합계 행 % = 요소 총액 ÷ Σ(생산수량×공급단가)
+//  목표원가율 = 목표 제조원가/EA(기획실 목표원가 시트, matchTargetCost) ÷ 공급단가. 맥스는 목표 없음
+//  비교: 같은 품목코드끼리(그룹 표는 같은 그룹명끼리) 기준월·비교월·증감 3줄
+let prodCmpReset = true;
+window._prodCmpReset = v => { prodCmpReset = v; };
+function prodMonthCalc(d){
+  const cc = computeMonthCost(d, window._bom);
+  const masterMap = {}; window._masters.forEach(m => masterMap[m.code] = m);
+  const bom = (d.bomSnapshot && Object.keys(d.bomSnapshot).length) ? d.bomSnapshot : window._bom;
+  const rows = cc.rows.map(r => {
+    const m = masterMap[r.code], name = m ? m.name : r.code;
+    return { key:r.code, code:r.code, name, gname: name.replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim(), meatType: m ? m.meatType : '',
+      noBom: !bom[r.code], qty:r.qty, sp: m ? m.supplyPrice : 0, raw:r.rawCost, sub:r.subCost, labor:r.laborAlloc, exp:r.expCost };
+  });
+  const groups = {};
+  rows.forEach(r => {
+    const g = groups[r.gname] || (groups[r.gname] = { key:r.gname, name:r.gname, qty:0, raw:0, sub:0, labor:0, exp:0, spSum:0, meats:[] });
+    g.qty += r.qty; g.raw += r.raw; g.sub += r.sub; g.labor += r.labor; g.exp += r.exp; g.spSum += r.sp*r.qty;
+    if(r.meatType) g.meats.push(r.meatType);
+  });
+  Object.values(groups).forEach(g => { g.sp = g.qty>0 ? g.spSum/g.qty : 0; g.meatType = [...new Set(g.meats)].join('+') || '—'; });
+  return { cc, rows, groups: Object.values(groups) };
+}
+// 한 줄 값: EA 단가·비율
+function prodEa(r){
+  const q = r.qty>0 ? r.qty : 0, f = k => q ? r[k]/q : 0;
+  const e = { raw:f('raw'), sub:f('sub'), labor:f('labor'), exp:f('exp') };
+  e.unit = e.raw + e.sub + e.labor + e.exp;
+  e.rate = r.sp>0 ? e.unit/r.sp : null;
+  const tg = /맥스/.test(r.name) ? null : matchTargetCost(r.name);
+  e.tgRate = (tg!=null && r.sp>0) ? tg/r.sp : null;
+  return e;
+}
+const prodMo = ym => `${parseInt(ym.slice(5),10)}월`;
+const prodPc = (v, base) => base>0 ? ` <span class="pc">(${(v/base*100).toFixed(1)}%)</span>` : '';
+const prodSign = (v, d=0) => (v>0?'+':'') + Number(v).toLocaleString('ko-KR', { minimumFractionDigits:d, maximumFractionDigits:d });
+const prodDiffCls = v => v>0.5 ? 'up' : v<-0.5 ? 'dn' : '';
+function prodHead(cmp, group){
+  const ea = '<br><span style="font-size:10px;font-weight:400">/EA (공급단가 대비)</span>';
+  return `<tr>${group ? '<th style="min-width:200px">품목 그룹</th><th>원육종류</th>' : '<th>품목코드</th><th style="min-width:200px">품목명</th>'}${cmp ? '<th>구분</th>' : ''}`
+    + `<th>${group?'총생산수량':'생산수량'}</th><th>공급단가</th><th>원재료비${ea}</th><th>부재료비${ea}</th><th>노무비${ea}</th><th>경비${ea}</th><th>제조원가<br><span style="font-size:10px;font-weight:400">/EA</span></th><th>원가율</th><th>목표원가율</th></tr>`;
+}
+// 값 칸 (기준월·비교월 줄)
+function prodCells(r, e, opt){
+  const tg = e.tgRate;
+  const tgCell = tg==null ? '<td class="c tg">—</td>'
+    : `<td class="c tg">${fmtP(tg)}${e.rate!=null && opt.showGap ? `<small class="${e.rate>tg?'up':'dn'}">${e.rate>tg?'초과 ':'달성 '}${(e.rate-tg>0?'+':'')}${((e.rate-tg)*100).toFixed(1)}%p</small>` : ''}</td>`;
+  return `<td class="c">${fmtN(r.qty)}</td><td>${fmtN(Math.round(r.sp))}</td>`
+    + `<td>${fmtN(Math.round(e.raw))}${prodPc(e.raw, r.sp)}</td><td>${fmtN(Math.round(e.sub))}${prodPc(e.sub, r.sp)}</td>`
+    + `<td style="color:var(--ok);font-weight:700">${fmtN(Math.round(e.labor))}${prodPc(e.labor, r.sp)}</td><td>${fmtN(Math.round(e.exp))}${prodPc(e.exp, r.sp)}</td>`
+    + `<td style="font-weight:700">${fmtN(Math.round(e.unit))}</td><td class="c ${rC(e.rate)}">${fmtP(e.rate)}</td>` + tgCell;
+}
+// 증감 줄: 금액(원/EA) 차이 + 공급단가 대비 %p 차이
+function prodDiffCells(r0, e0, r1, e1){
+  const d = k => { const dv = e1[k]-e0[k], dp = (r1.sp>0 && r0.sp>0) ? (e1[k]/r1.sp - e0[k]/r0.sp)*100 : null;
+    return `<td class="${prodDiffCls(dv)}">${prodSign(Math.round(dv))}${dp==null?'':` <span class="pc">(${dp>0?'+':''}${dp.toFixed(1)}%p)</span>`}</td>`; };
+  const dq = r1.qty - r0.qty, dsp = Math.round(r1.sp - r0.sp), du = e1.unit - e0.unit;
+  const dr = (e1.rate!=null && e0.rate!=null) ? (e1.rate - e0.rate)*100 : null;
+  return `<td class="c">${prodSign(dq)}</td><td>${dsp ? prodSign(dsp) : '0'}</td>${d('raw')}${d('sub')}${d('labor')}${d('exp')}`
+    + `<td class="${prodDiffCls(du)}" style="font-weight:700">${prodSign(Math.round(du))}</td>`
+    + `<td class="c ${dr==null?'':dr>0.05?'up':dr<-0.05?'dn':''}" style="font-weight:700">${dr==null?'—':(dr>0?'+':'')+dr.toFixed(1)+'%p'}</td><td></td>`;
+}
+// 표 그리기. list0 = 기준월, list1 = 비교월(없으면 null)
+function prodRenderTable(list0, list1, ym0, ym1, group){
+  const lead = r => group ? `<td class="l">${authEsc(r.name)}</td><td class="c">${r.meatType}</td>`
+                          : `<td class="c">${r.code}</td><td class="l">${authEsc(r.name)}${r.noBom?' <span class="badge b-warn">BOM없음</span>':''}</td>`;
+  const cols = 12 + (list1 ? 1 : 0);
+  if(!list1) return list0.map(r => `<tr>${lead(r)}${prodCells(r, prodEa(r), { showGap:true })}</tr>`).join('');
+  const m1 = {}; list1.forEach(r => m1[r.key] = r);
+  const keys = list0.map(r => r.key).concat(list1.filter(r => !list0.some(x => x.key===r.key)).map(r => r.key));
+  const m0 = {}; list0.forEach(r => m0[r.key] = r);
+  const none = `<td colspan="${cols-3}" class="c" style="color:#999">생산 없음</td>`;
+  return keys.map(k => {
+    const r0 = m0[k], r1 = m1[k], any = r0 || r1;
+    const head = group ? `<td class="l" rowspan="3">${authEsc(any.name)}</td><td class="c" rowspan="3">${any.meatType}</td>`
+                       : `<td class="c" rowspan="3">${any.code}</td><td class="l" rowspan="3">${authEsc(any.name)}${any.noBom?' <span class="badge b-warn">BOM없음</span>':''}</td>`;
+    const e0 = r0 && prodEa(r0), e1 = r1 && prodEa(r1);
+    return `<tr class="cmp-base">${head}<td class="mo">${prodMo(ym0)}</td>${r0 ? prodCells(r0, e0, { showGap:true }) : none}</tr>`
+      + `<tr class="cmp-prev"><td class="mo">${prodMo(ym1)}</td>${r1 ? prodCells(r1, e1, { showGap:true }) : none}</tr>`
+      + `<tr class="cmp-diff"><td class="mo">증감</td>${(r0 && r1) ? prodDiffCells(r1, e1, r0, e0) : `<td colspan="${cols-3}" class="c" style="color:#999">—</td>`}</tr>`;
+  }).join('');
+}
+// 합계(총액) 줄
+function prodTotalRow(rows, label, cmp){
+  const S = k => rows.reduce((a,r) => a + r[k], 0), qty = S('qty'), amt = rows.reduce((a,r) => a + r.qty*r.sp, 0);
+  const raw = S('raw'), sub = S('sub'), labor = S('labor'), exp = S('exp'), tot = raw+sub+labor+exp;
+  return `<tr class="total"><td class="c" colspan="2">합계 (총액)</td>${cmp ? `<td class="mo">${label}</td>` : ''}<td class="c">${fmtN(qty)}</td><td>—</td>`
+    + `<td>${fmtN(Math.round(raw))}${prodPc(raw, amt)}</td><td>${fmtN(Math.round(sub))}${prodPc(sub, amt)}</td><td>${fmtN(Math.round(labor))}${prodPc(labor, amt)}</td><td>${fmtN(Math.round(exp))}${prodPc(exp, amt)}</td>`
+    + `<td>${fmtN(Math.round(tot))}</td><td class="c">${amt>0 ? fmtP(tot/amt) : '—'}</td><td></td></tr>`;
+}
+window._prodCalc = { prodMonthCalc, prodEa, prodRenderTable };
+
 window.loadProducts = async () => {
   const month=document.getElementById('prodMonth').value||prevMonth();
   document.getElementById('prodMonth').value=month;
   await ensureMasters();
   await ensureBom();
-  const snap=await getDoc(doc(db,'costData',month));
+  // 비교월 목록: 데이터가 있는 달 (기준월 제외). 기준월을 바꾸면 전월로 맞춤(있을 때)
+  const allSnap = await getDocs(query(collection(db,'costData'), orderBy('month')));
+  const docs = {}; allSnap.forEach(x => { const v = x.data(); if(v && v.month) docs[v.month] = v; });
+  const sel = document.getElementById('prodCmp'), keep = sel.value;
+  const months = Object.keys(docs).filter(m => m!==month && Object.keys(docs[m].erpQty||{}).length).sort().reverse();
+  const pm = (() => { const [y,mm] = month.split('-').map(Number); const d0 = new Date(y, mm-2, 1); return `${d0.getFullYear()}-${String(d0.getMonth()+1).padStart(2,'0')}`; })();
+  sel.innerHTML = '<option value="">비교 안 함</option>' + months.map(m => `<option value="${m}">${m.slice(0,4)}년 ${parseInt(m.slice(5),10)}월${m===pm?' (전월)':''}</option>`).join('');
+  sel.value = prodCmpReset ? (months.includes(pm) ? pm : '') : (months.includes(keep) ? keep : '');
+  prodCmpReset = false;
+  const cmp = sel.value;
+
   const tbody=document.getElementById('prod-detail-body');
-  if(!snap.exists()){tbody.innerHTML='<tr><td colspan="10" class="empty">해당 월 데이터가 없습니다.</td></tr>';return;}
-  const d=snap.data();
-  const erpQty=d.erpQty||{};
-  if(!Object.keys(erpQty).length){
-    tbody.innerHTML='<tr><td colspan="10" class="empty">① 재고평가 데이터(생산실적)가 없습니다.</td></tr>';
-    return;
-  }
+  const gbody=document.getElementById('prod-group-body');
+  document.getElementById('prod-detail-head').innerHTML = prodHead(!!cmp, false);
+  document.getElementById('prod-group-head').innerHTML = prodHead(!!cmp, true);
+  const d = docs[month];
+  if(!d){ tbody.innerHTML='<tr><td colspan="13" class="empty">해당 월 데이터가 없습니다.</td></tr>'; gbody.innerHTML=''; return; }
+  if(!Object.keys(d.erpQty||{}).length){ tbody.innerHTML='<tr><td colspan="13" class="empty">① 재고평가 데이터(생산실적)가 없습니다.</td></tr>'; gbody.innerHTML=''; return; }
 
-  // computeMonthCost 통합 계산 (실공수 or 기존방식 자동 선택)
-  const cc = computeMonthCost(d, window._bom);
-
-  // 배부방식 배지 표시
+  const A = prodMonthCalc(d), B = cmp ? prodMonthCalc(docs[cmp]) : null;
   const badge = document.getElementById('labor-method-badge');
   if(badge) badge.textContent = '📐 노무비: 원육/파우치/외포장 (기획실 확정) | 경비: 생산횟수 비중'
-    + (cc.laborWarn ? ' | ' + cc.laborWarn : '')
-    + (cc.expWarn ? ' | ' + cc.expWarn : '');
+    + (A.cc.laborWarn ? ' | ' + A.cc.laborWarn : '') + (A.cc.expWarn ? ' | ' + A.cc.expWarn : '');
 
-  const masterMap={}; window._masters.forEach(m=>masterMap[m.code]=m);
-  const bom=(d.bomSnapshot&&Object.keys(d.bomSnapshot).length)?d.bomSnapshot:window._bom;
-
-  let sumRaw=0,sumSub=0,sumLabor=0,sumExp=0,sumTotal=0;
-  const calcRows=[];
-  const totalQty=cc.totalQty;
-
-  const rowsHtml=cc.rows.map(r=>{
-    const {code,qty,rawCost,subCost,laborAlloc,expCost,totalCost}=r;
-    const m=masterMap[code];
-    const b=bom[code];
-    const sp=m?m.supplyPrice:0;
-    const rawEa=qty>0?rawCost/qty:0,subEa=qty>0?subCost/qty:0;
-    const laborEa=qty>0?laborAlloc/qty:0,expEa=qty>0?expCost/qty:0;
-    const unitCost=rawEa+subEa+laborEa+expEa;
-    const rate=sp>0?unitCost/sp:0;
-    sumRaw+=rawCost;sumSub+=subCost;sumLabor+=laborAlloc;sumExp+=expCost;sumTotal+=totalCost;
-    const gname=(m?m.name:code).replace(/\s*\((설도|우둔|홍두께)\)\s*$/,'').trim();
-    calcRows.push({code,name:m?m.name:code,gname,meatType:m?m.meatType:'',qty,sp,rawCost,subCost,laborAlloc,expCost,totalCost});
-    return `<tr>
-      <td class="c">${code}</td>
-      <td class="l">${m?m.name:code}${!b?' <span class="badge b-warn">BOM없음</span>':''}</td>
-      <td class="c">${fmtN(qty)}</td><td>${fmtN(sp)}</td>
-      <td>${fmtN(Math.round(rawEa))}</td><td>${fmtN(Math.round(subEa))}</td>
-      <td style="color:var(--ok);font-weight:700">${fmtN(Math.round(laborEa))}</td>
-      <td>${fmtN(Math.round(expEa))}</td>
-      <td style="font-weight:700">${fmtN(Math.round(unitCost))}</td>
-      <td class="c ${rC(rate)}">${fmtP(rate)}</td>
-    </tr>`;
-  });
-  rowsHtml.push(`<tr class="total">
-    <td class="c" colspan="2">합계 (총액)</td>
-    <td class="c">${fmtN(totalQty)}</td><td>—</td>
-    <td>${fmtN(Math.round(sumRaw))}</td><td>${fmtN(Math.round(sumSub))}</td>
-    <td>${fmtN(Math.round(sumLabor))}</td><td>${fmtN(Math.round(sumExp))}</td>
-    <td>${fmtN(Math.round(sumTotal))}</td><td>—</td>
-  </tr>`);
-  tbody.innerHTML=rowsHtml.join('');
-
-  // 품목 그룹별 평균
-  const groups={};
-  for(const r of calcRows){
-    if(!groups[r.gname])groups[r.gname]={qty:0,raw:0,sub:0,labor:0,exp:0,total:0,spSum:0,meatTypes:[]};
-    const g=groups[r.gname];
-    g.qty+=r.qty;g.raw+=r.rawCost;g.sub+=r.subCost;g.labor+=r.laborAlloc;g.exp+=r.expCost;g.total+=r.totalCost;
-    g.spSum+=r.sp*r.qty;
-    if(r.meatType)g.meatTypes.push(r.meatType);
-  }
-  const gbody=document.getElementById('prod-group-body');
-  gbody.innerHTML=Object.entries(groups).map(([gname,g])=>{
-    const rawEa=g.qty>0?g.raw/g.qty:0,subEa=g.qty>0?g.sub/g.qty:0;
-    const laborEa=g.qty>0?g.labor/g.qty:0,expEa=g.qty>0?g.exp/g.qty:0;
-    const unitCost=rawEa+subEa+laborEa+expEa;
-    const spAvg=g.qty>0?g.spSum/g.qty:0;
-    const rate=spAvg>0?unitCost/spAvg:0;
-    const meats=[...new Set(g.meatTypes)].join('+')||'—';
-    return `<tr>
-      <td class="l">${gname}</td><td class="c">${meats}</td><td class="c">${fmtN(g.qty)}</td>
-      <td>${fmtN(Math.round(spAvg))}</td><td>${fmtN(Math.round(rawEa))}</td>
-      <td>${fmtN(Math.round(subEa))}</td>
-      <td style="color:var(--ok);font-weight:700">${fmtN(Math.round(laborEa))}</td>
-      <td>${fmtN(Math.round(expEa))}</td>
-      <td style="font-weight:700">${fmtN(Math.round(unitCost))}</td>
-      <td class="c ${rC(rate)}">${fmtP(rate)}</td>
-    </tr>`;
-  }).join('');
-
+  tbody.innerHTML = prodRenderTable(A.rows, B && B.rows, month, cmp, false)
+    + prodTotalRow(A.rows, prodMo(month), !!B) + (B ? prodTotalRow(B.rows, prodMo(cmp), true) : '');
+  gbody.innerHTML = prodRenderTable(A.groups, B && B.groups, month, cmp, true);
 };
 
 // ════════════════════════════════════
